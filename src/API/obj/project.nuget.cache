@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "dgSpecHash": "VQhlR/wXaj8=",
+  "success": true,
+  "projectFilePath": "/Users/orla/dev/metavix/src/API/API.csproj",
+  "expectedPackageFiles": [
+    "/Users/orla/.nuget/packages/microsoft.aspnetcore.openapi/9.0.14/microsoft.aspnetcore.openapi.9.0.14.nupkg.sha512",
+    "/Users/orla/.nuget/packages/microsoft.openapi/1.6.17/microsoft.openapi.1.6.17.nupkg.sha512",
+    "/Users/orla/.nuget/packages/microsoft.netcore.app.ref/9.0.15/microsoft.netcore.app.ref.9.0.15.nupkg.sha512",
+    "/Users/orla/.nuget/packages/microsoft.aspnetcore.app.ref/9.0.15/microsoft.aspnetcore.app.ref.9.0.15.nupkg.sha512",
+    "/Users/orla/.nuget/packages/microsoft.netcore.app.host.osx-arm64/9.0.15/microsoft.netcore.app.host.osx-arm64.9.0.15.nupkg.sha512"
+  ],
+  "logs": []
+}

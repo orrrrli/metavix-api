@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Common\Interfaces\Persistence\" />
+    <Folder Include="Common\Interfaces\Security\" />
+    <Folder Include="Services\" />
+    <Folder Include="UseCases\" />
+    <Folder Include="Utils\" />
+  </ItemGroup>
+
+</Project>
