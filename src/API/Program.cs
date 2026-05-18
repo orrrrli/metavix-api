@@ -1,23 +1,65 @@
-using Infrastructure.Common.Persistence;
-using Microsoft.EntityFrameworkCore;
+using Application.Common.Interfaces.Services;
+using Infrastructure;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
-
-
-builder.Services.AddOpenApi();
-builder.Services.AddDbContext<AppDbContext>(options => 
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
-        npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+try
 {
-    app.MapOpenApi();
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Services
+        //.AddPresentation(builder.Configuration)
+        //.AddApplication()
+        .AddInfrastructure(builder.Configuration);
+
+    var app = builder.Build();
+
+    // Validate database connection
+    using (IServiceScope scope = app.Services.CreateScope())
+    {
+        IDatabaseValidator databaseValidator = scope.ServiceProvider.GetRequiredService<IDatabaseValidator>();
+        await databaseValidator.ValidateAsync(); // Ensure DB connection
+    }
+
+    if (!app.Environment.IsDevelopment())
+        app.UseHttpsRedirection();
+    app.MapHealthChecks("/api/health", new HealthCheckOptions
+    {
+        Predicate = _ => true,
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+
+            var result = new
+            {
+                status = report.Status.ToString(),
+                details = report.Entries.ToDictionary(
+                    entry => entry.Key,
+                    entry => new
+                    {
+                        status = entry.Value.Status.ToString(),
+                        description = entry.Value.Description,
+                    })
+            };
+
+            await context.Response.WriteAsJsonAsync(result);
+        }
+    }).AllowAnonymous();
+
+    await app.RunAsync();
 }
+catch (Exception ex)
+{
+// Log any startup exceptions
+    Log.Logger = new LoggerConfiguration()
+        .WriteTo.Console()
+        .CreateLogger();
 
-app.UseHttpsRedirection();
-
-app.Run();
-
+    Log.Fatal(ex, "Application startup failed due to an unexpected error.");
+}
+finally
+{
+    // Ensure the logger is flushed and disposed properly
+    Log.CloseAndFlush();
+}
