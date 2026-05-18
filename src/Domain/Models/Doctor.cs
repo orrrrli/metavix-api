@@ -8,7 +8,7 @@ public class Doctor
     public string LicenseNumber { get; set; } = string.Empty;
     public string Speciality { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public int? Phone { get; set; }
+    public string? Phone { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
 

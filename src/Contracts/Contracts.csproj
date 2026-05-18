@@ -9,6 +9,7 @@
   <ItemGroup>
     <Folder Include="Doctor\Request\" />
     <Folder Include="Doctor\Response\" />
+    <Folder Include="Patient\Request\" />
     <Folder Include="Token\" />
   </ItemGroup>
 

@@ -1,4 +1,8 @@
+using API;
+using API.Extensions;
+using Application;
 using Application.Common.Interfaces.Services;
+using Carter;
 using Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
@@ -9,8 +13,8 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     builder.Services
-        //.AddPresentation(builder.Configuration)
-        //.AddApplication()
+        .AddPresentation(builder.Configuration)
+        .AddApplication()
         .AddInfrastructure(builder.Configuration);
 
     var app = builder.Build();
@@ -46,7 +50,13 @@ try
             await context.Response.WriteAsJsonAsync(result);
         }
     }).AllowAnonymous();
+    
+    app.ConfigureApi();
+    app.UseOpenApiDocs();
+    app.UseOutputCache();
 
+    RouteGroupBuilder apiGroup = app.MapGroup("/api");
+    apiGroup.MapCarter();
     await app.RunAsync();
 }
 catch (Exception ex)
