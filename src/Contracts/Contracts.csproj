@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Doctor\Request\" />
+    <Folder Include="Doctor\Response\" />
+    <Folder Include="Token\" />
+  </ItemGroup>
+
 </Project>
