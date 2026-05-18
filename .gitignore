@@ -18,7 +18,7 @@ packages/
 
 # Secrets & local config
 appsettings.Development.json
-appsettings.Local.json
+appsettings.json
 *.env
 .env
 .env.local
