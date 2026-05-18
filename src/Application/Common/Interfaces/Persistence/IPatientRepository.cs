@@ -6,4 +6,5 @@ namespace Application.Common.Interfaces.Persistence;
 public interface IPatientRepository
 {
     Task<List<PatientResult>> GetAllPatientByDoctorId(Guid doctorId);
+    Task<PatientResult?> GetPatientByPatientId(Guid patientId);
 }

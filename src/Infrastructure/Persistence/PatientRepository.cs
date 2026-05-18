@@ -22,4 +22,17 @@ public class PatientRepository : IPatientRepository
                 x.MedicalRecordNumber))
             .ToListAsync();
     }
+
+    public async Task<PatientResult?> GetPatientByPatientId(Guid patientId)
+    {
+        var patient = await _dbContext.Patients
+            .FirstOrDefaultAsync(x => x.Id == patientId);
+
+        if (patient is null) return null;
+
+        return new PatientResult(
+            patient.FirstName,
+            patient.LastName,
+            patient.MedicalRecordNumber);
+    }
 }

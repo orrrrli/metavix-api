@@ -20,6 +20,12 @@ public class PatientModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<List<PatientResponse>>>(StatusCodes.Status200OK)
             .WithName("GetAllPatient")
             .WithOpenApi();
+        
+        group.MapGet("get/{patientId:guid}", GetPatient)
+            .Produces<ApiSuccessResponse<PatientResponse>>(StatusCodes.Status200OK)
+            .WithName("GetPatientById")
+            .WithOpenApi();
+        
     }
 
     private static async Task<IResult> GetAllPatient(
@@ -41,6 +47,37 @@ public class PatientModule : MainModule, ICarterModule
                 value =>
                 {
                     List<PatientResponse> response = mapper.Map<List<PatientResponse>>(value);
+                    return ApiResults.Success(response, fullRoute);
+                },
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            ExceptionError = ex;
+        }
+
+        return ApiResults.Error(ExceptionError, fullRoute, parametros);
+    }
+
+    private static async Task<IResult> GetPatient(
+        IMediator mediator,
+        [FromServices] IMapper mapper,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"Doctor ID: {patientId} ";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            PatientByIdQuery query = new(patientId);
+            ErrorOr<PatientResult> result = await mediator.Send(query);
+
+            return result.Match(
+                value =>
+                {
+                    PatientResponse response = mapper.Map<PatientResponse>(value);
                     return ApiResults.Success(response, fullRoute);
                 },
                 errors => ApiResults.Problem(errors, fullRoute));
