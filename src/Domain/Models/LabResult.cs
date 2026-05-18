@@ -4,7 +4,6 @@ public class LabResult
 {
     public Guid Id { get; set; }
     public Guid PatientId { get; set; }
-    public Guid DoctorId { get; set; }
     public DateOnly SampleDate { get; set; }
     public decimal? Hba1c { get; set; }
     public decimal? TotalCholesterol { get; set; }
@@ -13,9 +12,10 @@ public class LabResult
     public decimal? Triglycerides { get; set; }
     public decimal? Creatinine { get; set; }
     public decimal? Bun { get; set; }
+    public string? EgoProteins { get; set; }
+    public string? EgoGlucose { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public Patient Patient { get; set; } = null!;
-    public Doctor Doctor { get; set; } = null!;
 }
