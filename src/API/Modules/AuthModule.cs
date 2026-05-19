@@ -22,10 +22,18 @@ public class AuthModule : MainModule, ICarterModule
             .AllowAnonymous()
             .WithName("Login")
             .WithOpenApi();
+
+        group.MapPost("/register", Register)
+            .Produces<ApiSuccessResponse<RegisterResult>>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status409Conflict)
+            .AllowAnonymous()
+            .WithName("Register")
+            .WithOpenApi();
     }
 
     private static async Task<IResult> Login(
-        IMediator mediator,
+        ISender sender,
         HttpContext httpContext,
         [FromBody] LoginRequest request)
     {
@@ -36,7 +44,7 @@ public class AuthModule : MainModule, ICarterModule
         try
         {
             LoginCommand command = new(request.Email, request.Password);
-            ErrorOr<LoginResult> result = await mediator.Send(command);
+            ErrorOr<LoginResult> result = await sender.Send(command);
 
             return result.Match(
                 value =>
@@ -53,9 +61,30 @@ public class AuthModule : MainModule, ICarterModule
         }
         catch (Exception ex)
         {
-            ExceptionError = ex;
+            return ApiResults.Error(ex, fullRoute, parametros);
         }
+    }
 
-        return ApiResults.Error(ExceptionError, fullRoute, parametros);
+    private static async Task<IResult> Register(
+        ISender sender,
+        HttpContext httpContext,
+        [FromBody] RegisterCommand command)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"Email: {command.Email}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            ErrorOr<RegisterResult> result = await sender.Send(command);
+
+            return result.Match(
+                value => TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResult> { Data = value }),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
     }
 }

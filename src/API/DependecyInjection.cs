@@ -30,6 +30,13 @@ public static class DependecyInjection
                 options.JsonSerializerOptions.Converters.Add(new Converters.TimeOnlyJsonConverter());
             });
 
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            options.SerializerOptions.Converters.Add(new Converters.DateOnlyJsonConverter());
+            options.SerializerOptions.Converters.Add(new Converters.TimeOnlyJsonConverter());
+        });
+
         services
             .AddResponseCompression(options =>
             {

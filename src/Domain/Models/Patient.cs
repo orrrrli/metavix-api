@@ -5,7 +5,7 @@ using Enums;
 public class Patient
 {
     public Guid Id { get; set; }
-    public Guid PrimaryDoctorId { get; set; }
+    public Guid? PrimaryDoctorId { get; set; }
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string MedicalRecordNumber { get; set; } = string.Empty;
@@ -21,7 +21,7 @@ public class Patient
 
     // Navigation properties
     public User? User { get; set; }
-    public Doctor PrimaryDoctor { get; set; } = null!;
+    public Doctor? PrimaryDoctor { get; set; }
     public ICollection<Admission> Admissions { get; set; } = [];
     public ICollection<DailyRecord> DailyRecords { get; set; } = [];
     public ICollection<LabResult> LabResults { get; set; } = [];
