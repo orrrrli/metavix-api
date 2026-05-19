@@ -12,15 +12,18 @@ internal sealed class RevokeDoctorAccessCommandHandler
 {
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IPatientRepository _patientRepository;
+    private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public RevokeDoctorAccessCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
+        ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
+        _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -28,12 +31,19 @@ internal sealed class RevokeDoctorAccessCommandHandler
         RevokeDoctorAccessCommand request,
         CancellationToken cancellationToken)
     {
+        if (_currentUser.UserId is null)
+            return AuthErrors.Forbidden;
+
         // 1. Find the link request
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
         if (linkRequest is null)
         {
             return LinkRequestErrors.RequestNotFound;
         }
+
+        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
+        if (callerPatientId != linkRequest.PatientId)
+            return AuthErrors.Forbidden;
 
         // 2. Verify it is accepted (only accepted links can be revoked)
         if (linkRequest.Status != RequestStatus.Accepted)

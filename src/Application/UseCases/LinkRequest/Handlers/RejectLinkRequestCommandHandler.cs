@@ -11,13 +11,19 @@ internal sealed class RejectLinkRequestCommandHandler
     : IRequestHandler<RejectLinkRequestCommand, ErrorOr<LinkRequestResult>>
 {
     private readonly IPatientDoctorRequestRepository _requestRepository;
+    private readonly IDoctorRepository _doctorRepository;
+    private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public RejectLinkRequestCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
+        IDoctorRepository doctorRepository,
+        ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider)
     {
         _requestRepository = requestRepository;
+        _doctorRepository = doctorRepository;
+        _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -25,12 +31,19 @@ internal sealed class RejectLinkRequestCommandHandler
         RejectLinkRequestCommand request,
         CancellationToken cancellationToken)
     {
+        if (_currentUser.UserId is null)
+            return AuthErrors.Forbidden;
+
         // 1. Find the link request
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
         if (linkRequest is null)
         {
             return LinkRequestErrors.RequestNotFound;
         }
+
+        var callerDoctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
+        if (callerDoctorId != linkRequest.DoctorId)
+            return AuthErrors.Forbidden;
 
         // 2. Verify it is still pending
         if (linkRequest.Status != RequestStatus.Pending)

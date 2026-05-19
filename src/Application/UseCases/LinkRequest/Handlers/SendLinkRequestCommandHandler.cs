@@ -13,17 +13,20 @@ internal sealed class SendLinkRequestCommandHandler
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IDoctorRepository _doctorRepository;
     private readonly IPatientRepository _patientRepository;
+    private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public SendLinkRequestCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IDoctorRepository doctorRepository,
         IPatientRepository patientRepository,
+        ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider)
     {
         _requestRepository = requestRepository;
         _doctorRepository = doctorRepository;
         _patientRepository = patientRepository;
+        _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -31,6 +34,13 @@ internal sealed class SendLinkRequestCommandHandler
         SendLinkRequestCommand request,
         CancellationToken cancellationToken)
     {
+        if (_currentUser.UserId is null)
+            return AuthErrors.Forbidden;
+
+        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
+        if (callerPatientId != request.PatientId)
+            return AuthErrors.Forbidden;
+
         // 1. Verify doctor exists
         var doctor = await _doctorRepository.GetByIdAsync(request.DoctorId);
         if (doctor is null)

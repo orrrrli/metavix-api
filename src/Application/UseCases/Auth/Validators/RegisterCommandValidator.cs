@@ -24,8 +24,14 @@ internal sealed class RegisterCommandValidator : AbstractValidator<RegisterComma
         RuleFor(x => x.Password)
             .NotEmpty()
             .WithMessage("La contraseña es requerida")
-            .MinimumLength(6)
-            .WithMessage("La contraseña debe tener al menos 6 caracteres");
+            .MinimumLength(12)
+            .WithMessage("La contraseña debe tener al menos 12 caracteres")
+            .Matches("[A-Z]")
+            .WithMessage("La contraseña debe contener al menos una mayúscula")
+            .Matches("[0-9]")
+            .WithMessage("La contraseña debe contener al menos un número")
+            .Matches("[^a-zA-Z0-9]")
+            .WithMessage("La contraseña debe contener al menos un carácter especial");
 
         RuleFor(x => x.Role)
             .IsInEnum()

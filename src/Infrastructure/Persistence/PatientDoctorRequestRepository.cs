@@ -62,6 +62,14 @@ public class PatientDoctorRequestRepository : IPatientDoctorRequestRepository
                         && r.Status == RequestStatus.Pending);
     }
 
+    public async Task<bool> IsAcceptedLinkAsync(Guid doctorId, Guid patientId)
+    {
+        return await _dbContext.PatientDoctorRequests
+            .AnyAsync(r => r.DoctorId == doctorId
+                        && r.PatientId == patientId
+                        && r.Status == RequestStatus.Accepted);
+    }
+
     public async Task UpdateAsync(PatientDoctorRequest request)
     {
         _dbContext.PatientDoctorRequests.Update(request);

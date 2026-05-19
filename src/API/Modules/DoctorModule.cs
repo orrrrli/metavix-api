@@ -19,7 +19,8 @@ public class DoctorModule : MainModule, ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        RouteGroupBuilder group = app.MapGroup("doctor");
+        RouteGroupBuilder group = app.MapGroup("doctor")
+            .RequireAuthorization(p => p.RequireRole("Doctor"));
 
         // === Doctor Profile ===
         group.MapGet("/get-profile/{doctorId:guid}", GetDoctorProfile)

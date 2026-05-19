@@ -46,4 +46,12 @@ public class PatientRepository : IPatientRepository
         _dbContext.Patients.Update(patient);
         await _dbContext.SaveChangesAsync();
     }
+
+    public async Task<Guid?> GetPatientIdByUserIdAsync(Guid userId)
+    {
+        return await _dbContext.Patients
+            .Where(p => p.UserId == userId)
+            .Select(p => (Guid?)p.Id)
+            .FirstOrDefaultAsync();
+    }
 }

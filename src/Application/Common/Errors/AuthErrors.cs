@@ -12,4 +12,8 @@ public static class AuthErrors
     public static readonly Error EmailAlreadyExists = Error.Conflict(
         code: "Auth.EmailAlreadyExists",
         description: "El correo electrónico ya está registrado.");
+
+    public static readonly Error Forbidden = Error.Forbidden(
+        code: "Auth.Forbidden",
+        description: "No tienes permiso para acceder a este recurso.");
 }

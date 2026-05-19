@@ -1,9 +1,11 @@
 using System.IO.Compression;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using API.Extensions;
 using API.GlobalException;
 using Carter;
 using Contracts.Common;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 
 
@@ -35,6 +37,41 @@ public static class DependecyInjection
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
             options.SerializerOptions.Converters.Add(new Converters.DateOnlyJsonConverter());
             options.SerializerOptions.Converters.Add(new Converters.TimeOnlyJsonConverter());
+        });
+
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.AddPolicy("login", httpContext =>
+            {
+                string ip = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                    ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown";
+
+                return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = 10,
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                });
+            });
+
+            options.AddPolicy("register", httpContext =>
+            {
+                string ip = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                    ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown";
+
+                return RateLimitPartition.GetFixedWindowLimiter($"register:{ip}", _ => new FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = 5,
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                });
+            });
         });
 
         services

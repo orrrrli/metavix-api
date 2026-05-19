@@ -22,7 +22,8 @@ public class PatientModule : MainModule, ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        RouteGroupBuilder group = app.MapGroup("patient");
+        RouteGroupBuilder group = app.MapGroup("patient")
+            .RequireAuthorization(p => p.RequireRole("Patient"));
 
         // === Doctor Discovery (Patient perspective) ===
         group.MapGet("/get-all-doctors", GetAllDoctors)
@@ -239,7 +240,7 @@ public class PatientModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new GetDailyRecordByIdQuery(recordId));
+            var result = await sender.Send(new GetDailyRecordByIdQuery(patientId, recordId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
@@ -313,7 +314,7 @@ public class PatientModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new GetLabResultByIdQuery(recordId));
+            var result = await sender.Send(new GetLabResultByIdQuery(patientId, recordId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),

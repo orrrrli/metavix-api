@@ -19,7 +19,9 @@ public class AuthModule : MainModule, ICarterModule
         group.MapPost("/login", Login)
             .Produces<ApiSuccessResponse<AuthResponse>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous()
+            .RequireRateLimiting("login")
             .WithName("Login")
             .WithOpenApi();
 
@@ -27,7 +29,9 @@ public class AuthModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<RegisterResult>>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous()
+            .RequireRateLimiting("register")
             .WithName("Register")
             .WithOpenApi();
     }

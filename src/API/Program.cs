@@ -28,35 +28,24 @@ try
 
     if (!app.Environment.IsDevelopment())
         app.UseHttpsRedirection();
+
+    app.ConfigureApi();
+    app.UseCors("ProductionPolicy");
+    app.UseRateLimiter();
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseOutputCache();
+    app.UseOpenApiDocs();
+
     app.MapHealthChecks("/api/health", new HealthCheckOptions
     {
         Predicate = _ => true,
         ResponseWriter = async (context, report) =>
         {
             context.Response.ContentType = "application/json";
-
-            var result = new
-            {
-                status = report.Status.ToString(),
-                details = report.Entries.ToDictionary(
-                    entry => entry.Key,
-                    entry => new
-                    {
-                        status = entry.Value.Status.ToString(),
-                        description = entry.Value.Description,
-                    })
-            };
-
-            await context.Response.WriteAsJsonAsync(result);
+            await context.Response.WriteAsJsonAsync(new { status = report.Status.ToString() });
         }
     }).AllowAnonymous();
-    
-    app.ConfigureApi();
-    app.UseOpenApiDocs();
-    app.UseOutputCache();
-
-    app.UseAuthentication();
-    app.UseAuthorization();
 
     RouteGroupBuilder apiGroup = app.MapGroup("/api");
     apiGroup.MapCarter();

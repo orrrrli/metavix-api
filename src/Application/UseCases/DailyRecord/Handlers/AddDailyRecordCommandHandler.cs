@@ -11,15 +11,18 @@ internal sealed class AddDailyRecordCommandHandler
 {
     private readonly IDailyRecordRepository _dailyRecordRepository;
     private readonly IPatientRepository _patientRepository;
+    private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public AddDailyRecordCommandHandler(
         IDailyRecordRepository dailyRecordRepository,
         IPatientRepository patientRepository,
+        ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider)
     {
         _dailyRecordRepository = dailyRecordRepository;
         _patientRepository = patientRepository;
+        _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -27,6 +30,13 @@ internal sealed class AddDailyRecordCommandHandler
         AddDailyRecordCommand request,
         CancellationToken cancellationToken)
     {
+        if (_currentUser.UserId is null)
+            return AuthErrors.Forbidden;
+
+        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
+        if (callerPatientId != request.PatientId)
+            return AuthErrors.Forbidden;
+
         var patient = await _patientRepository.GetByIdAsync(request.PatientId);
         if (patient is null)
         {

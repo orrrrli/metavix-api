@@ -25,8 +25,10 @@ public static class DependencyInjection
 
     private static IServiceCollection AddServices(this IServiceCollection services)
     {
+        services.AddHttpContextAccessor();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
         services.AddScoped<IDatabaseValidator, DatabaseValidator>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
         return services;
     }
 

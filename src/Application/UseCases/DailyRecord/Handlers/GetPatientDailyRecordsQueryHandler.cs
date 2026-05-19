@@ -1,5 +1,6 @@
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
+using Application.Common.Interfaces.Services;
 using Application.UseCases.DailyRecord.Common;
 using Application.UseCases.DailyRecord.Queries;
 
@@ -10,19 +11,29 @@ internal sealed class GetPatientDailyRecordsQueryHandler
 {
     private readonly IDailyRecordRepository _dailyRecordRepository;
     private readonly IPatientRepository _patientRepository;
+    private readonly ICurrentUserService _currentUser;
 
     public GetPatientDailyRecordsQueryHandler(
         IDailyRecordRepository dailyRecordRepository,
-        IPatientRepository patientRepository)
+        IPatientRepository patientRepository,
+        ICurrentUserService currentUser)
     {
         _dailyRecordRepository = dailyRecordRepository;
         _patientRepository = patientRepository;
+        _currentUser = currentUser;
     }
 
     public async Task<ErrorOr<List<DailyRecordResult>>> Handle(
         GetPatientDailyRecordsQuery request,
         CancellationToken cancellationToken)
     {
+        if (_currentUser.UserId is null)
+            return AuthErrors.Forbidden;
+
+        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
+        if (callerPatientId != request.PatientId)
+            return AuthErrors.Forbidden;
+
         var patient = await _patientRepository.GetByIdAsync(request.PatientId);
         if (patient is null)
         {
