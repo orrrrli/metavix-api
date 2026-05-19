@@ -6,6 +6,8 @@ using API.Common;
 using API.Helpers;
 using Application.UseCases.Patient.Common;
 using Application.UseCases.Patient.Queries;
+using Application.UseCases.LinkRequest.Commands;
+using Application.UseCases.LinkRequest.Common;
 using Contracts.Patient.Response;
 
 namespace API.Modules;
@@ -25,7 +27,12 @@ public class PatientModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<PatientResponse>>(StatusCodes.Status200OK)
             .WithName("GetPatientById")
             .WithOpenApi();
-        
+
+        group.MapPost("/requests-link", SendLinkRequest)
+            .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status409Conflict)
+            .WithName("SendLinkRequest")
+            .WithOpenApi();
     }
 
     private static async Task<IResult> GetAllPatient(
@@ -88,5 +95,28 @@ public class PatientModule : MainModule, ICarterModule
         }
 
         return ApiResults.Error(ExceptionError, fullRoute, parametros);
+    }
+
+    private static async Task<IResult> SendLinkRequest(
+        ISender sender,
+        HttpContext httpContext,
+        [FromBody] SendLinkRequestCommand command)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {command.PatientId}, DoctorId: {command.DoctorId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            ErrorOr<LinkRequestResult> result = await sender.Send(command);
+
+            return result.Match(
+                value => TypedResults.Created($"/api/patient/requests/{value.RequestId}", new ApiSuccessResponse<LinkRequestResult> { Data = value }),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
     }
 }

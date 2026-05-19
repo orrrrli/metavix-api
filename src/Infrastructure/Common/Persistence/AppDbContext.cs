@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<LabResult> LabResults => Set<LabResult>();
     public DbSet<ToolResult> ToolResults => Set<ToolResult>();
 
+    public DbSet<PatientDoctorRequest> PatientDoctorRequests => Set<PatientDoctorRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // User configuration
@@ -41,5 +43,21 @@ public class AppDbContext : DbContext
             .WithOne(u => u.Patient)
             .HasForeignKey<Patient>(p => p.UserId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // PatientDoctorRequest configuration
+        modelBuilder.Entity<PatientDoctorRequest>(entity =>
+        {
+            entity.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasOne(r => r.Patient)
+                .WithMany(p => p.LinkRequests)
+                .HasForeignKey(r => r.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.Doctor)
+                .WithMany(d => d.LinkRequests)
+                .HasForeignKey(r => r.DoctorId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

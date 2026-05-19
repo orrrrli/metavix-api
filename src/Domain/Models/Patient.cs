@@ -26,4 +26,5 @@ public class Patient
     public ICollection<DailyRecord> DailyRecords { get; set; } = [];
     public ICollection<LabResult> LabResults { get; set; } = [];
     public ICollection<ToolResult> ToolResults { get; set; } = [];
+    public ICollection<PatientDoctorRequest> LinkRequests { get; set; } = [];
 }

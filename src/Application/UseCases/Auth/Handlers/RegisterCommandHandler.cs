@@ -53,7 +53,7 @@ internal sealed class RegisterCommandHandler
         // 3. Create associated profile
         if (request.Role == UserRole.Doctor)
         {
-            user.Doctor = new Doctor
+            user.Doctor = new Domain.Models.Doctor
             {
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
@@ -75,7 +75,7 @@ internal sealed class RegisterCommandHandler
                 Email = request.Email,
                 CreatedAt = _dateTimeProvider.UtcNow,
                 IsActive = true,
-                PrimaryDoctorId = null // Intentionally null per new workflow
+                PrimaryDoctorId = null // Intentionally null by design
             };
         }
 

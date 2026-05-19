@@ -35,4 +35,15 @@ public class PatientRepository : IPatientRepository
             patient.LastName,
             patient.MedicalRecordNumber);
     }
+
+    public async Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId)
+    {
+        return await _dbContext.Patients.FirstOrDefaultAsync(x => x.Id == patientId);
+    }
+
+    public async Task UpdateAsync(Domain.Models.Patient patient)
+    {
+        _dbContext.Patients.Update(patient);
+        await _dbContext.SaveChangesAsync();
+    }
 }
