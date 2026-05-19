@@ -1,3 +1,4 @@
+using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.UseCases.LinkRequest.Common;
 using Application.UseCases.LinkRequest.Queries;
@@ -27,6 +28,11 @@ internal sealed class GetPendingRequestsQueryHandler
             r.Patient.LastName,
             r.Patient.Email,
             r.CreatedAt)).ToList();
+
+        if (results.Count == 0)
+        {
+            return LinkRequestErrors.RequestNotFound;
+        }
 
         return results;
     }
