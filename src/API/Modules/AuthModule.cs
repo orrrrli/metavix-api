@@ -4,7 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using API.Common;
 using API.Helpers;
-using Application.UseCases.Auth.Login;
+using Application.UseCases.Auth.Commands;
+using Application.UseCases.Auth.Common;
 using Contracts.Auth;
 
 namespace API.Modules;

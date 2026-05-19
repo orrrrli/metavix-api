@@ -2,42 +2,12 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
 using Application.Common.Interfaces.Services;
+using Application.UseCases.Auth.Commands;
+using Application.UseCases.Auth.Common;
 using Domain.Enums;
-using FluentValidation;
 
-namespace Application.UseCases.Auth.Login;
+namespace Application.UseCases.Auth.Handlers;
 
-// ═══════════════════════════════════════════════════════════════
-// COMMAND RECORD
-// ═══════════════════════════════════════════════════════════════
-public sealed record LoginCommand(
-    string Email,
-    string Password) : IRequest<ErrorOr<LoginResult>>;
-
-// ═══════════════════════════════════════════════════════════════
-// VALIDATOR
-// ═══════════════════════════════════════════════════════════════
-internal sealed class LoginCommandValidator : AbstractValidator<LoginCommand>
-{
-    public LoginCommandValidator()
-    {
-        RuleFor(x => x.Email)
-            .NotEmpty()
-            .WithMessage("El email es requerido")
-            .EmailAddress()
-            .WithMessage("El formato del email no es válido");
-
-        RuleFor(x => x.Password)
-            .NotEmpty()
-            .WithMessage("La contraseña es requerida")
-            .MinimumLength(6)
-            .WithMessage("La contraseña debe tener al menos 6 caracteres");
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// HANDLER
-// ═══════════════════════════════════════════════════════════════
 internal sealed class LoginCommandHandler
     : IRequestHandler<LoginCommand, ErrorOr<LoginResult>>
 {

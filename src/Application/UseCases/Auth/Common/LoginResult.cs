@@ -1,4 +1,4 @@
-namespace Application.UseCases.Auth.Login;
+namespace Application.UseCases.Auth.Common;
 
 public sealed record LoginResult(
     string AccessToken,

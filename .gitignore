@@ -45,6 +45,7 @@ coverage/
 .windsurf/
 docs/brain/
 docs/brain
+ARCHITECTURE.md
 
 # Scratch files and scripts
 scratch.cs
