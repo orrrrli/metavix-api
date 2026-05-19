@@ -55,8 +55,12 @@ try
     app.UseOpenApiDocs();
     app.UseOutputCache();
 
+    app.UseAuthentication();
+    app.UseAuthorization();
+
     RouteGroupBuilder apiGroup = app.MapGroup("/api");
     apiGroup.MapCarter();
+    apiGroup.RequireAuthorization();
     await app.RunAsync();
 }
 catch (Exception ex)

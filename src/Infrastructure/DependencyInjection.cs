@@ -1,8 +1,14 @@
+using System.Text;
+using Application.Common.Interfaces.Security;
 using Application.Common.Interfaces.Services;
 using Infrastructure.HealthChecks;
+using Infrastructure.Security;
 using Infrastructure.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure;
 
@@ -12,7 +18,7 @@ public static class DependencyInjection
     {
         services
             .AddServices()
-            //.AddAuth(configuration)
+            .AddAuth(configuration)
             .AddPersistence(configuration);
         return services;
     }
@@ -21,6 +27,36 @@ public static class DependencyInjection
     {
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
         services.AddScoped<IDatabaseValidator, DatabaseValidator>();
+        return services;
+    }
+
+    private static IServiceCollection AddAuth(this IServiceCollection services, IConfiguration configuration)
+    {
+        JwtSettings jwtSettings = new();
+        configuration.Bind(JwtSettings.SectionName, jwtSettings);
+
+        services.AddSingleton(Options.Create(jwtSettings));
+
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
+
+        services.AddAuthentication(defaultScheme: JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtSettings.Issuer,
+                    ValidAudience = jwtSettings.Audience,
+                    ClockSkew = TimeSpan.Zero,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(jwtSettings.Secret)),
+                });
+
+        services.AddAuthorization();
+
         return services;
     }
 
@@ -53,36 +89,6 @@ public static class DependencyInjection
         return services;
     }
 
-    /* private static IServiceCollection AddAuth(this IServiceCollection services, IConfiguration configuration)
-    
-    {
-        JwtSettings jwtSettings = new();
-        configuration.Bind(JwtSettings.SectionName, jwtSettings);
-
-        services.AddSingleton(Options.Create(jwtSettings));
-
-        services.AddSingleton<ICriptography, Criptography>();
-        services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
-
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtSettings.Issuer,
-                ValidAudience = jwtSettings.Audience,
-                ClockSkew = TimeSpan.Zero,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
-            });
-        services.AddAuthorization(options => options.FallbackPolicy = options.DefaultPolicy);
-
-        return services;
-    }
-    */
-    
     private static IServiceCollection AddRepositories(this IServiceCollection services)
     {
         IEnumerable<Type> repositoryTypes = typeof(DependencyInjection).Assembly.GetTypes()
@@ -99,3 +105,4 @@ public static class DependencyInjection
         return services;
     }
 }
+

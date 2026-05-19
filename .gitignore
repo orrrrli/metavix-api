@@ -37,3 +37,16 @@ TestResults/
 coverage/
 *.coverage
 *.coveragexml
+
+# AI Engineering Stack & Obsidian Brain
+.agents/
+.claude/
+.opencode/
+.windsurf/
+docs/brain/
+docs/brain
+
+# Scratch files and scripts
+scratch.cs
+hash.csx
+seed.sql
