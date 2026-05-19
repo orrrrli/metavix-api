@@ -36,6 +36,24 @@ public class PatientDoctorRequestRepository : IPatientDoctorRequestRepository
             .ToListAsync();
     }
 
+    public async Task<List<PatientDoctorRequest>> GetAcceptedByPatientIdAsync(Guid patientId)
+    {
+        return await _dbContext.PatientDoctorRequests
+            .Include(r => r.Doctor)
+            .Where(r => r.PatientId == patientId && r.Status == RequestStatus.Accepted)
+            .OrderByDescending(r => r.ResolvedAt)
+            .ToListAsync();
+    }
+
+    public async Task<List<PatientDoctorRequest>> GetAcceptedByDoctorIdAsync(Guid doctorId)
+    {
+        return await _dbContext.PatientDoctorRequests
+            .Include(r => r.Patient)
+            .Where(r => r.DoctorId == doctorId && r.Status == RequestStatus.Accepted)
+            .OrderByDescending(r => r.ResolvedAt)
+            .ToListAsync();
+    }
+
     public async Task<bool> HasPendingRequestAsync(Guid patientId, Guid doctorId)
     {
         return await _dbContext.PatientDoctorRequests

@@ -4,17 +4,17 @@ using Microsoft.AspNetCore.Mvc;
 
 using API.Common;
 using API.Helpers;
-using Application.UseCases.Patient.Common;
-using Application.UseCases.Patient.Queries;
+using Application.UseCases.Doctor.Common;
+using Application.UseCases.Doctor.Queries;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Common;
+using Application.UseCases.LinkRequest.Queries;
 using Application.UseCases.DailyRecord.Commands;
 using Application.UseCases.DailyRecord.Common;
 using Application.UseCases.DailyRecord.Queries;
 using Application.UseCases.LabResult.Commands;
 using Application.UseCases.LabResult.Common;
 using Application.UseCases.LabResult.Queries;
-using Contracts.Patient.Response;
 
 namespace API.Modules;
 
@@ -24,23 +24,31 @@ public class PatientModule : MainModule, ICarterModule
     {
         RouteGroupBuilder group = app.MapGroup("patient");
 
-        group.MapGet("/get-all/{doctorId:guid}", GetAllPatient)
-            .Produces<ApiSuccessResponse<List<PatientResponse>>>(StatusCodes.Status200OK)
-            .WithName("GetAllPatient")
-            .WithOpenApi();
-        
-        group.MapGet("get/{patientId:guid}", GetPatient)
-            .Produces<ApiSuccessResponse<PatientResponse>>(StatusCodes.Status200OK)
-            .WithName("GetPatientById")
+        // === Doctor Discovery (Patient perspective) ===
+        group.MapGet("/get-all-doctors", GetAllDoctors)
+            .Produces<ApiSuccessResponse<List<DoctorResult>>>(StatusCodes.Status200OK)
+            .WithName("GetAllDoctors")
             .WithOpenApi();
 
+        group.MapGet("/{patientId:guid}/get-linked-doctors", GetLinkedDoctors)
+            .Produces<ApiSuccessResponse<List<LinkedDoctorResult>>>(StatusCodes.Status200OK)
+            .WithName("GetLinkedDoctors")
+            .WithOpenApi();
+
+        // === Link Requests ===
         group.MapPost("/requests-link", SendLinkRequest)
             .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status409Conflict)
             .WithName("SendLinkRequest")
             .WithOpenApi();
 
-        // Daily Records
+        group.MapPost("/requests/{requestId:guid}/revoke", RevokeDoctorAccess)
+            .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("RevokeDoctorAccess")
+            .WithOpenApi();
+
+        // === Daily Records ===
         group.MapPost("/{patientId:guid}/records/daily", AddDailyRecord)
             .Produces<ApiSuccessResponse<DailyRecordResult>>(StatusCodes.Status201Created)
             .WithName("AddDailyRecord")
@@ -57,7 +65,7 @@ public class PatientModule : MainModule, ICarterModule
             .WithName("GetDailyRecordById")
             .WithOpenApi();
 
-        // Lab Results
+        // === Lab Results ===
         group.MapPost("/{patientId:guid}/records/lab", AddLabResult)
             .Produces<ApiSuccessResponse<LabResultResult>>(StatusCodes.Status201Created)
             .WithName("AddLabResult")
@@ -75,67 +83,53 @@ public class PatientModule : MainModule, ICarterModule
             .WithOpenApi();
     }
 
-    private static async Task<IResult> GetAllPatient(
-        IMediator mediator,
-        [FromServices] IMapper mapper,
-        HttpContext httpContext, 
-        [FromRoute] Guid doctorId)
+    // === Doctor Discovery ===
+
+    private static async Task<IResult> GetAllDoctors(
+        ISender sender,
+        HttpContext httpContext)
     {
         string fullRoute = $"{httpContext.Request.Path}";
-        string parametros = $"Doctor ID: {doctorId} ";
-        LoggingHelper.LogRequest(fullRoute, parametros);
+        LoggingHelper.LogRequest(fullRoute, "");
 
         try
         {
-            PatientByDoctorIdQuery query = new(doctorId);
-            ErrorOr<List<PatientResult>> result = await mediator.Send(query);
+            var result = await sender.Send(new GetAllDoctorsQuery());
 
             return result.Match(
-                value =>
-                {
-                    List<PatientResponse> response = mapper.Map<List<PatientResponse>>(value);
-                    return ApiResults.Success(response, fullRoute);
-                },
+                value => ApiResults.Success(value, fullRoute),
                 errors => ApiResults.Problem(errors, fullRoute));
         }
         catch (Exception ex)
         {
-            ExceptionError = ex;
+            return ApiResults.Error(ex, fullRoute, "");
         }
-
-        return ApiResults.Error(ExceptionError, fullRoute, parametros);
     }
 
-    private static async Task<IResult> GetPatient(
-        IMediator mediator,
-        [FromServices] IMapper mapper,
+    private static async Task<IResult> GetLinkedDoctors(
+        ISender sender,
         HttpContext httpContext,
         [FromRoute] Guid patientId)
     {
         string fullRoute = $"{httpContext.Request.Path}";
-        string parametros = $"Doctor ID: {patientId} ";
+        string parametros = $"PatientId: {patientId}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
         try
         {
-            PatientByIdQuery query = new(patientId);
-            ErrorOr<PatientResult> result = await mediator.Send(query);
+            var result = await sender.Send(new GetLinkedDoctorsQuery(patientId));
 
             return result.Match(
-                value =>
-                {
-                    PatientResponse response = mapper.Map<PatientResponse>(value);
-                    return ApiResults.Success(response, fullRoute);
-                },
+                value => ApiResults.Success(value, fullRoute),
                 errors => ApiResults.Problem(errors, fullRoute));
         }
         catch (Exception ex)
         {
-            ExceptionError = ex;
+            return ApiResults.Error(ex, fullRoute, parametros);
         }
-
-        return ApiResults.Error(ExceptionError, fullRoute, parametros);
     }
+
+    // === Link Requests ===
 
     private static async Task<IResult> SendLinkRequest(
         ISender sender,
@@ -159,6 +153,31 @@ public class PatientModule : MainModule, ICarterModule
             return ApiResults.Error(ex, fullRoute, parametros);
         }
     }
+
+    private static async Task<IResult> RevokeDoctorAccess(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid requestId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"RequestId: {requestId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new RevokeDoctorAccessCommand(requestId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    // === Daily Records ===
 
     private static async Task<IResult> AddDailyRecord(
         ISender sender,
@@ -231,6 +250,8 @@ public class PatientModule : MainModule, ICarterModule
             return ApiResults.Error(ex, fullRoute, parametros);
         }
     }
+
+    // === Lab Results ===
 
     private static async Task<IResult> AddLabResult(
         ISender sender,

@@ -7,6 +7,8 @@ public interface IPatientDoctorRequestRepository
     Task AddAsync(PatientDoctorRequest request);
     Task<PatientDoctorRequest?> GetByIdAsync(Guid id);
     Task<List<PatientDoctorRequest>> GetPendingByDoctorIdAsync(Guid doctorId);
+    Task<List<PatientDoctorRequest>> GetAcceptedByPatientIdAsync(Guid patientId);
+    Task<List<PatientDoctorRequest>> GetAcceptedByDoctorIdAsync(Guid doctorId);
     Task<bool> HasPendingRequestAsync(Guid patientId, Guid doctorId);
     Task UpdateAsync(PatientDoctorRequest request);
 }

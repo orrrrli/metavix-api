@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <Folder Include="Common\Interfaces\Security\" />
-    <Folder Include="Services\" />
     <Folder Include="UseCases\Patient\Validators\" />
     <Folder Include="Utils\" />
   </ItemGroup>

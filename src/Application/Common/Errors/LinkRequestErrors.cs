@@ -17,4 +17,8 @@ public static class LinkRequestErrors
     public static readonly Error NotPending = Error.Validation(
         code: "LinkRequest.NotPending",
         description: "Solo se pueden aceptar solicitudes en estado Pendiente.");
+
+    public static readonly Error NotAccepted = Error.Validation(
+        code: "LinkRequest.NotAccepted",
+        description: "Solo se puede revocar o desvincular una solicitud en estado Aceptada.");
 }
