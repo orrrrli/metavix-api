@@ -26,7 +26,9 @@ public static class DependencyInjection
     private static IServiceCollection AddServices(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
+        services.AddMemoryCache();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+        services.AddSingleton<ILoginAttemptTracker, LoginAttemptTracker>();
         services.AddScoped<IDatabaseValidator, DatabaseValidator>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         return services;
@@ -44,6 +46,7 @@ public static class DependencyInjection
 
         services.AddAuthentication(defaultScheme: JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
+            {
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -55,7 +58,18 @@ public static class DependencyInjection
                     ClockSkew = TimeSpan.Zero,
                     IssuerSigningKey = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(jwtSettings.Secret)),
-                });
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        if (context.Request.Cookies.TryGetValue("access_token", out string? token))
+                            context.Token = token;
+                        return Task.CompletedTask;
+                    }
+                };
+            });
 
         services.AddAuthorization();
 

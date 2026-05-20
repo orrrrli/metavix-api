@@ -19,6 +19,8 @@ internal sealed class GetLogsQueryHandler
         GetLogsQuery request,
         CancellationToken cancellationToken)
     {
+        int pageSize = Math.Clamp(request.PageSize, 1, 200);
+
         return await _logRepository.GetLogsAsync(
             request.Level,
             request.Endpoint,
@@ -26,6 +28,6 @@ internal sealed class GetLogsQueryHandler
             request.From,
             request.To,
             request.Page,
-            request.PageSize);
+            pageSize);
     }
 }

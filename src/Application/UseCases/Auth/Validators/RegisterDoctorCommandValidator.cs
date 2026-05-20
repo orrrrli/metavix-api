@@ -3,9 +3,9 @@ using FluentValidation;
 
 namespace Application.UseCases.Auth.Validators;
 
-internal sealed class RegisterCommandValidator : AbstractValidator<RegisterCommand>
+internal sealed class RegisterDoctorCommandValidator : AbstractValidator<RegisterDoctorCommand>
 {
-    public RegisterCommandValidator()
+    public RegisterDoctorCommandValidator()
     {
         RuleFor(x => x.FirstName)
             .NotEmpty()
@@ -32,9 +32,5 @@ internal sealed class RegisterCommandValidator : AbstractValidator<RegisterComma
             .WithMessage("La contraseña debe contener al menos un número")
             .Matches("[^a-zA-Z0-9]")
             .WithMessage("La contraseña debe contener al menos un carácter especial");
-
-        RuleFor(x => x.Role)
-            .IsInEnum()
-            .WithMessage("El rol proporcionado no es válido");
     }
 }

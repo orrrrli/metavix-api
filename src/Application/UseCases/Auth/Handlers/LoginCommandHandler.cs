@@ -15,42 +15,53 @@ internal sealed class LoginCommandHandler
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ILoginAttemptTracker _attemptTracker;
 
     public LoginCommandHandler(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        ILoginAttemptTracker attemptTracker)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
         _dateTimeProvider = dateTimeProvider;
+        _attemptTracker = attemptTracker;
     }
 
     public async Task<ErrorOr<LoginResult>> Handle(
         LoginCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Find user by email (includes Doctor/Patient navigation)
+        // 1. Check per-account lockout before hitting the database
+        if (_attemptTracker.IsBlocked(request.Email))
+            return AuthErrors.TooManyFailedAttempts;
+
+        // 2. Find user by email (includes Doctor/Patient navigation)
         var user = await _userRepository.GetByEmailAsync(request.Email);
 
         if (user is null)
         {
+            _attemptTracker.RegisterFailure(request.Email);
             return AuthErrors.InvalidCredentials;
         }
 
-        // 2. Verify password
+        // 3. Verify password
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
+            _attemptTracker.RegisterFailure(request.Email);
             return AuthErrors.InvalidCredentials;
         }
 
-        // 3. Check if account is active
+        // 4. Check if account is active
         if (!user.IsActive)
         {
             return AuthErrors.AccountInactive;
         }
+
+        _attemptTracker.ResetAttempts(request.Email);
 
         // 4. Resolve full name based on role
         string fullName = user.Role switch

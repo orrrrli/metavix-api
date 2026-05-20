@@ -25,14 +25,24 @@ public class AuthModule : MainModule, ICarterModule
             .WithName("Login")
             .WithOpenApi();
 
-        group.MapPost("/register", Register)
+        group.MapPost("/register/patient", RegisterPatient)
             .Produces<ApiSuccessResponse<RegisterResult>>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous()
             .RequireRateLimiting("register")
-            .WithName("Register")
+            .WithName("RegisterPatient")
+            .WithOpenApi();
+
+        group.MapPost("/register/doctor", RegisterDoctor)
+            .Produces<ApiSuccessResponse<RegisterResult>>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status429TooManyRequests)
+            .AllowAnonymous()
+            .RequireRateLimiting("register")
+            .WithName("RegisterDoctor")
             .WithOpenApi();
     }
 
@@ -53,8 +63,15 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
+                    httpContext.Response.Cookies.Append("access_token", value.AccessToken, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure   = true,
+                        SameSite = SameSiteMode.Lax,
+                        Expires  = DateTimeOffset.UtcNow.AddMinutes(15)
+                    });
+
                     AuthResponse response = new(
-                        value.AccessToken,
                         value.ExpiresAt,
                         value.Email,
                         value.Role,
@@ -69,10 +86,33 @@ public class AuthModule : MainModule, ICarterModule
         }
     }
 
-    private static async Task<IResult> Register(
+    private static async Task<IResult> RegisterPatient(
         ISender sender,
         HttpContext httpContext,
-        [FromBody] RegisterCommand command)
+        [FromBody] RegisterPatientCommand command)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"Email: {command.Email}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            ErrorOr<RegisterResult> result = await sender.Send(command);
+
+            return result.Match(
+                value => TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResult> { Data = value }),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> RegisterDoctor(
+        ISender sender,
+        HttpContext httpContext,
+        [FromBody] RegisterDoctorCommand command)
     {
         string fullRoute = $"{httpContext.Request.Path}";
         string parametros = $"Email: {command.Email}";

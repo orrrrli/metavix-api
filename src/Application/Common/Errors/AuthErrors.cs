@@ -16,4 +16,8 @@ public static class AuthErrors
     public static readonly Error Forbidden = Error.Forbidden(
         code: "Auth.Forbidden",
         description: "No tienes permiso para acceder a este recurso.");
+
+    public static readonly Error TooManyFailedAttempts = Error.Forbidden(
+        code: "Auth.TooManyFailedAttempts",
+        description: "Cuenta bloqueada temporalmente por demasiados intentos fallidos. Intenta de nuevo en 15 minutos.");
 }
