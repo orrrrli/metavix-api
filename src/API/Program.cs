@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using API;
 using API.Extensions;
 using Application;
@@ -5,11 +6,11 @@ using Application.Common.Interfaces.Services;
 using Carter;
 using Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using NpgsqlTypes;
+using API.Logging;
+using API.Middleware;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.PostgreSQL;
-using Serilog.Sinks.PostgreSQL.ColumnWriters;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -24,16 +25,6 @@ try
         string connectionString = context.Configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
-        IDictionary<string, ColumnWriterBase> columns = new Dictionary<string, ColumnWriterBase>
-        {
-            { "message",          new RenderedMessageColumnWriter() },
-            { "message_template", new MessageTemplateColumnWriter() },
-            { "level",            new LevelColumnWriter(true, NpgsqlDbType.Varchar) },
-            { "raise_date",       new TimestampColumnWriter() },
-            { "exception",        new ExceptionColumnWriter() },
-            { "properties",       new LogEventSerializedColumnWriter() },
-        };
-
         config
             .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -44,7 +35,7 @@ try
             .WriteTo.PostgreSQL(
                 connectionString: connectionString,
                 tableName: "Logs",
-                columnOptions: columns,
+                columnOptions: LogTableColumns.Default,
                 needAutoCreateTable: true,
                 batchSizeLimit: 50,
                 period: TimeSpan.FromSeconds(5));
@@ -66,12 +57,23 @@ try
     if (!app.Environment.IsDevelopment())
         app.UseHttpsRedirection();
 
+    app.UseMiddleware<CorrelationIdMiddleware>();
+
     app.UseSerilogRequestLogging(options =>
     {
         options.GetLevel = (httpContext, _, _) =>
             httpContext.Request.Path.StartsWithSegments("/api/health")
                 ? LogEventLevel.Verbose
                 : LogEventLevel.Information;
+
+        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+        {
+            string? userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            string? role   = httpContext.User.FindFirstValue(ClaimTypes.Role);
+
+            if (userId is not null) diagnosticContext.Set("UserId", userId);
+            if (role   is not null) diagnosticContext.Set("Role",   role);
+        };
     });
 
     app.ConfigureApi();

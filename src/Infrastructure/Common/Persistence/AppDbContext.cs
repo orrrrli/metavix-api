@@ -1,4 +1,5 @@
 using Domain.Models;
+using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Common.Persistence;
@@ -15,8 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<GlucoseReading> GlucoseReadings => Set<GlucoseReading>();
     public DbSet<LabResult> LabResults => Set<LabResult>();
     public DbSet<ToolResult> ToolResults => Set<ToolResult>();
-
     public DbSet<PatientDoctorRequest> PatientDoctorRequests => Set<PatientDoctorRequest>();
+    public DbSet<LogEntry> Logs => Set<LogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,6 +44,25 @@ public class AppDbContext : DbContext
             .WithOne(u => u.Patient)
             .HasForeignKey<Patient>(p => p.UserId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // LogEntry — table managed by Serilog, excluded from migrations
+        modelBuilder.Entity<LogEntry>(entity =>
+        {
+            entity.ToTable("Logs", t => t.ExcludeFromMigrations());
+            entity.HasKey(l => l.Id);
+            entity.Property(l => l.Id).HasColumnName("id");
+            entity.Property(l => l.Message).HasColumnName("message");
+            entity.Property(l => l.MessageTemplate).HasColumnName("message_template");
+            entity.Property(l => l.Level).HasColumnName("level");
+            entity.Property(l => l.RaiseDate).HasColumnName("raise_date");
+            entity.Property(l => l.Exception).HasColumnName("exception");
+            entity.Property(l => l.Properties).HasColumnName("properties");
+            entity.Property(l => l.HttpMethod).HasColumnName("http_method");
+            entity.Property(l => l.Endpoint).HasColumnName("endpoint");
+            entity.Property(l => l.CorrelationId).HasColumnName("correlation_id");
+            entity.Property(l => l.UserId).HasColumnName("user_id");
+            entity.Property(l => l.Role).HasColumnName("role");
+        });
 
         // PatientDoctorRequest configuration
         modelBuilder.Entity<PatientDoctorRequest>(entity =>

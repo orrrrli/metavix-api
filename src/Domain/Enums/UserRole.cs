@@ -3,5 +3,6 @@ namespace Domain.Enums;
 public enum UserRole
 {
     Doctor,
-    Patient
+    Patient,
+    Admin
 }
