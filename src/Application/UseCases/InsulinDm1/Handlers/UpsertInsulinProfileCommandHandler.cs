@@ -1,0 +1,75 @@
+using Application.Common.Errors;
+using Application.Common.Interfaces.Persistence;
+using Application.Common.Interfaces.Services;
+using Application.UseCases.InsulinDm1.Commands;
+using Application.UseCases.InsulinDm1.Common;
+
+namespace Application.UseCases.InsulinDm1.Handlers;
+
+internal sealed class UpsertInsulinProfileCommandHandler
+    : IRequestHandler<UpsertInsulinProfileCommand, ErrorOr<InsulinDm1ProfileResult>>
+{
+    private readonly IInsulinDm1Repository _insulinRepository;
+    private readonly IPatientRepository _patientRepository;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
+
+    public UpsertInsulinProfileCommandHandler(
+        IInsulinDm1Repository insulinRepository,
+        IPatientRepository patientRepository,
+        ICurrentUserService currentUser,
+        IDateTimeProvider dateTimeProvider)
+    {
+        _insulinRepository = insulinRepository;
+        _patientRepository = patientRepository;
+        _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
+    }
+
+    public async Task<ErrorOr<InsulinDm1ProfileResult>> Handle(
+        UpsertInsulinProfileCommand request,
+        CancellationToken cancellationToken)
+    {
+        if (_currentUser.UserId is null)
+            return AuthErrors.Forbidden;
+
+        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
+        if (callerPatientId != request.PatientId)
+            return AuthErrors.Forbidden;
+
+        var existing = await _insulinRepository.GetProfileByPatientIdAsync(request.PatientId);
+        var now = _dateTimeProvider.UtcNow;
+
+        if (existing is null)
+        {
+            existing = new Domain.Models.InsulinDm1Profile
+            {
+                Id = Guid.NewGuid(),
+                PatientId = request.PatientId,
+                CreatedAt = now,
+            };
+        }
+
+        existing.InsulinName = request.InsulinName;
+        existing.Ric = request.Ric;
+        existing.SensitivityFactor = request.SensitivityFactor;
+        existing.TargetGlucose = request.TargetGlucose;
+        existing.DoctorName = request.DoctorName;
+        existing.DoctorPhone = request.DoctorPhone;
+        existing.UpdatedAt = now;
+
+        await _insulinRepository.UpsertProfileAsync(existing);
+
+        return new InsulinDm1ProfileResult(
+            existing.Id,
+            existing.PatientId,
+            existing.InsulinName,
+            existing.Ric,
+            existing.SensitivityFactor,
+            existing.TargetGlucose,
+            existing.DoctorName,
+            existing.DoctorPhone,
+            existing.CreatedAt,
+            existing.UpdatedAt);
+    }
+}

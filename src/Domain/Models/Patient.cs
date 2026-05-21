@@ -27,4 +27,6 @@ public class Patient
     public ICollection<LabResult> LabResults { get; set; } = [];
     public ICollection<ToolResult> ToolResults { get; set; } = [];
     public ICollection<PatientDoctorRequest> LinkRequests { get; set; } = [];
+    public InsulinDm1Profile? InsulinDm1Profile { get; set; }
+    public ICollection<InsulinDm1Record> InsulinDm1Records { get; set; } = [];
 }

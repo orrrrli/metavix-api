@@ -15,6 +15,9 @@ using Application.UseCases.DailyRecord.Queries;
 using Application.UseCases.LabResult.Commands;
 using Application.UseCases.LabResult.Common;
 using Application.UseCases.LabResult.Queries;
+using Application.UseCases.InsulinDm1.Commands;
+using Application.UseCases.InsulinDm1.Common;
+using Application.UseCases.InsulinDm1.Queries;
 
 namespace API.Modules;
 
@@ -81,6 +84,41 @@ public class PatientModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<LabResultResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("GetLabResultById")
+            .WithOpenApi();
+
+        // === Insulin DM1 Tool ===
+        group.MapPut("/{patientId:guid}/insulin-dm1/profile", UpsertInsulinProfile)
+            .Produces<ApiSuccessResponse<InsulinDm1ProfileResult>>(StatusCodes.Status200OK)
+            .WithName("UpsertInsulinProfile")
+            .WithOpenApi();
+
+        group.MapGet("/{patientId:guid}/insulin-dm1/profile", GetInsulinProfile)
+            .Produces<ApiSuccessResponse<InsulinDm1ProfileResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetInsulinProfile")
+            .WithOpenApi();
+
+        group.MapPost("/{patientId:guid}/insulin-dm1/records", AddInsulinRecord)
+            .Produces<ApiSuccessResponse<InsulinDm1RecordResult>>(StatusCodes.Status201Created)
+            .WithName("AddInsulinRecord")
+            .WithOpenApi();
+
+        group.MapGet("/{patientId:guid}/insulin-dm1/records", GetInsulinRecords)
+            .Produces<ApiSuccessResponse<List<InsulinDm1RecordResult>>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetInsulinRecords")
+            .WithOpenApi();
+
+        group.MapGet("/{patientId:guid}/insulin-dm1/records/{recordId:guid}", GetInsulinRecordById)
+            .Produces<ApiSuccessResponse<InsulinDm1RecordResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetInsulinRecordById")
+            .WithOpenApi();
+
+        group.MapDelete("/{patientId:guid}/insulin-dm1/records/{recordId:guid}", DeleteInsulinRecord)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("DeleteInsulinRecord")
             .WithOpenApi();
     }
 
@@ -318,6 +356,152 @@ public class PatientModule : MainModule, ICarterModule
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    // === Insulin DM1 Tool ===
+
+    private static async Task<IResult> UpsertInsulinProfile(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId,
+        [FromBody] UpsertInsulinProfileCommand command)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var commandWithId = command with { PatientId = patientId };
+            var result = await sender.Send(commandWithId);
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> GetInsulinProfile(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetInsulinProfileQuery(patientId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> AddInsulinRecord(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId,
+        [FromBody] AddInsulinRecordCommand command)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var commandWithId = command with { PatientId = patientId };
+            ErrorOr<InsulinDm1RecordResult> result = await sender.Send(commandWithId);
+
+            return result.Match(
+                value => TypedResults.Created($"/api/patient/{patientId}/insulin-dm1/records/{value.Id}", new ApiSuccessResponse<InsulinDm1RecordResult> { Data = value }),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> GetInsulinRecords(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetInsulinRecordsQuery(patientId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> GetInsulinRecordById(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId,
+        [FromRoute] Guid recordId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}, RecordId: {recordId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetInsulinRecordByIdQuery(patientId, recordId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> DeleteInsulinRecord(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId,
+        [FromRoute] Guid recordId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}, RecordId: {recordId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new DeleteInsulinRecordCommand(patientId, recordId));
+
+            return result.Match(
+                _ => TypedResults.NoContent(),
                 errors => ApiResults.Problem(errors, fullRoute));
         }
         catch (Exception ex)
