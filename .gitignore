@@ -51,3 +51,6 @@ ARCHITECTURE.md
 scratch.cs
 hash.csx
 seed.sql
+
+# Local deploy scripts (may contain secrets)
+docs/azure-deploy.sh

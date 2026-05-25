@@ -1,0 +1,11 @@
+**/.git
+**/.gitignore
+**/.vs
+**/bin
+**/obj
+**/*.user
+**/*.md
+**/docs
+scratch.cs
+hash.csx
+seed.sql

@@ -16,6 +16,9 @@
   - [GET /doctor/get-profile/{doctorId}](#get-doctorget-profiledoctorid)
   - [GET /doctor/{doctorId}/get-all-patients](#get-doctordoctoridget-all-patients)
   - [GET /doctor/{doctorId}/get-patient/{patientId}](#get-doctordoctoridget-patientpatientid)
+  - [GET /doctor/{doctorId}/patients/{patientId}/profile](#get-doctordoctoridpatientspatientidprofile)
+  - [GET /doctor/{doctorId}/patients/{patientId}/records/daily](#get-doctordoctoridpatientspatientidrecordsdaily)
+  - [GET /doctor/{doctorId}/patients/{patientId}/records/lab](#get-doctordoctoridpatientspatientidrecordslab)
   - [GET /doctor/requests/pending/{doctorId}](#get-doctorrequestspendingdoctorid)
   - [POST /doctor/requests/{requestId}/accept](#post-doctorrequestsrequestidaccept)
   - [POST /doctor/requests/{requestId}/reject](#post-doctorrequestsrequestidreject)
@@ -25,6 +28,8 @@
   - [GET /patient/{patientId}/get-linked-doctors](#get-patientpatientidget-linked-doctors)
   - [POST /patient/requests-link](#post-patientrequests-link)
   - [POST /patient/requests/{requestId}/revoke](#post-patientrequestsrequestidrevoke)
+  - [GET /patient/{patientId}/profile](#get-patientpatientidprofile)
+  - [PATCH /patient/{patientId}/profile](#patch-patientpatientidprofile)
   - [GET /patient/{patientId}/resumen](#get-patientpatientidresumen)
   - [POST /patient/{patientId}/records/daily](#post-patientpatientidrecordsdaily)
   - [GET /patient/{patientId}/get-all/records/daily](#get-patientpatientidget-allrecordsdaily)
@@ -85,6 +90,7 @@ Authenticates a user and returns a JWT access token.
 {
   "data": {
     "userId": "9de34f00-...",
+    "patientId": "7cb12a11-...",
     "expiresAt": "2026-05-21T00:00:00Z",
     "email": "doctor@example.com",
     "role": "Doctor",
@@ -94,6 +100,7 @@ Authenticates a user and returns a JWT access token.
 ```
 
 > The JWT access token is delivered via an HTTP-Only `access_token` cookie, not in the response body.
+> `patientId` is only set when `role` is `"Patient"`. It is `null` for Doctor and Admin accounts.
 
 ---
 
@@ -307,6 +314,79 @@ Returns a single patient linked to the doctor.
   }
 }
 ```
+
+---
+
+### GET /doctor/{doctorId}/patients/{patientId}/profile
+
+Returns the full profile of a patient linked to the doctor.
+
+**Authentication:** JWT — role `Doctor` required. Link must be `Accepted`.
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| doctorId  | guid | Doctor's user ID  |
+| patientId | guid | Patient's user ID |
+
+**Responses**
+
+| Code | Description                   |
+|------|-------------------------------|
+| 200  | Patient profile returned      |
+| 403  | No accepted link exists       |
+| 404  | Patient not found             |
+
+**Response Body (200):** Same shape as `GET /patient/{patientId}/profile`.
+
+---
+
+### GET /doctor/{doctorId}/patients/{patientId}/records/daily
+
+Returns all daily records of a patient linked to the doctor.
+
+**Authentication:** JWT — role `Doctor` required. Link must be `Accepted`.
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| doctorId  | guid | Doctor's user ID  |
+| patientId | guid | Patient's user ID |
+
+**Responses**
+
+| Code | Description                          |
+|------|--------------------------------------|
+| 200  | List of daily records (may be empty) |
+| 403  | No accepted link exists              |
+
+**Response Body (200):** Same shape as `GET /patient/{patientId}/get-all/records/daily`.
+
+---
+
+### GET /doctor/{doctorId}/patients/{patientId}/records/lab
+
+Returns all lab results of a patient linked to the doctor.
+
+**Authentication:** JWT — role `Doctor` required. Link must be `Accepted`.
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| doctorId  | guid | Doctor's user ID  |
+| patientId | guid | Patient's user ID |
+
+**Responses**
+
+| Code | Description                           |
+|------|---------------------------------------|
+| 200  | List of lab results (may be empty)    |
+| 403  | No accepted link exists               |
+
+**Response Body (200):** Same shape as `GET /patient/{patientId}/get-all/records/lab`.
 
 ---
 
@@ -592,16 +672,39 @@ Adds a new daily health record for the patient.
 
 **Request Body**
 
-| Field            | Type    | Required | Description                        |
-|------------------|---------|----------|------------------------------------|
-| recordDate       | date    | Yes      | Date of the record (`YYYY-MM-DD`)  |
-| recordTime       | time    | No       | Time of the record (`HH:mm:ss`)    |
-| systolicPressure | int     | No       | Systolic blood pressure (mmHg)     |
-| diastolicPressure| int     | No       | Diastolic blood pressure (mmHg)    |
-| heartRate        | int     | No       | Heart rate (bpm)                   |
-| weightKg         | decimal | No       | Weight in kilograms                |
-| waistCm          | int     | No       | Waist circumference in centimeters |
-| notes            | string  | No       | Free-text notes                    |
+| Field              | Type                  | Required | Description                                         |
+|--------------------|-----------------------|----------|-----------------------------------------------------|
+| recordDate         | date                  | Yes      | Date of the record (`YYYY-MM-DD`)                   |
+| recordTime         | time                  | No       | Time of the record (`HH:mm:ss` or `HH:mm:ss.fff`)   |
+| systolicPressure   | int                   | No       | Systolic blood pressure (mmHg)                      |
+| diastolicPressure  | int                   | No       | Diastolic blood pressure (mmHg)                     |
+| heartRate          | int                   | No       | Heart rate (bpm)                                    |
+| weightKg           | decimal               | No       | Weight in kilograms                                 |
+| waistCm            | int                   | No       | Waist circumference in centimeters                  |
+| notes              | string                | No       | Free-text notes                                     |
+| glucoseReadings    | GlucoseReading[]      | No       | List of blood glucose readings for the day          |
+
+**GlucoseReading object**
+
+| Field       | Type   | Required | Description                                                |
+|-------------|--------|----------|------------------------------------------------------------|
+| readingType | int    | Yes      | Meal context — see enum below                              |
+| valueMgDl   | int    | Yes      | Blood glucose value (mg/dL)                                |
+| time        | time   | No       | Time of reading (`HH:mm:ss`)                               |
+| foods       | string | No       | Foods consumed at this reading                             |
+
+**GlucoseReadingType enum**
+
+| Value | Name           |
+|-------|----------------|
+| 0     | Fasting        |
+| 1     | PostBreakfast  |
+| 2     | PreLunch       |
+| 3     | PostLunch      |
+| 4     | PreDinner      |
+| 5     | PostDinner     |
+| 6     | Snack          |
+| 7     | Overnight      |
 
 ```json
 {
@@ -612,7 +715,11 @@ Adds a new daily health record for the patient.
   "heartRate": 72,
   "weightKg": 75.5,
   "waistCm": 88,
-  "notes": "Felt fine after breakfast"
+  "notes": "Día normal",
+  "glucoseReadings": [
+    { "readingType": 0, "valueMgDl": 95, "time": "07:30:00", "foods": null },
+    { "readingType": 1, "valueMgDl": 140, "time": "09:00:00", "foods": "avena con fruta" }
+  ]
 }
 ```
 
@@ -630,18 +737,24 @@ Adds a new daily health record for the patient.
   "data": {
     "id": "aabbcc-...",
     "patientId": "7cb12a11-...",
-    "recordDate": "2026-05-20",
-    "recordTime": "08:30:00",
+    "recordDate": "20/05/2026",
+    "recordTime": "08:30:00.000",
     "systolicPressure": 120,
     "diastolicPressure": 80,
     "heartRate": 72,
     "weightKg": 75.5,
     "waistCm": 88,
-    "notes": "Felt fine after breakfast",
-    "createdAt": "2026-05-20T08:31:00Z"
+    "notes": "Día normal",
+    "createdAt": "2026-05-20T08:31:00Z",
+    "glucoseReadings": [
+      { "id": "ff001122-...", "readingType": 0, "valueMgDl": 95, "time": "07:30:00.000", "foods": null },
+      { "id": "ff001133-...", "readingType": 1, "valueMgDl": 140, "time": "09:00:00.000", "foods": "avena con fruta" }
+    ]
   }
 }
 ```
+
+> `recordDate` is returned as `"dd/MM/yyyy"`. `recordTime` is returned as `"HH:mm:ss.fff"`.
 
 ---
 
@@ -812,6 +925,87 @@ Returns a single lab result by its ID.
 | 404  | Record not found    |
 
 **Response Body (200):** Same object as [Add Lab Result (201)](#post-patientpatientidrecordslab).
+
+---
+
+### GET /patient/{patientId}/profile
+
+Returns the patient's own profile data.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description        |
+|-----------|------|--------------------|
+| patientId | guid | Patient's entity ID |
+
+**Responses**
+
+| Code | Description         |
+|------|---------------------|
+| 200  | Profile returned    |
+| 403  | Access denied       |
+| 404  | Patient not found   |
+
+**Response Body (200)**
+
+```json
+{
+  "data": {
+    "id": "7cb12a11-...",
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "email": "jane@example.com",
+    "phone": null,
+    "dateOfBirth": "1990-03-15",
+    "heightCm": 165.0,
+    "gender": "Female",
+    "isPregnant": false,
+    "diabetesType": "DM2",
+    "medicalRecordNumber": "MRN-0042",
+    "createdAt": "2026-05-18T10:00:00Z"
+  }
+}
+```
+
+---
+
+### PATCH /patient/{patientId}/profile
+
+Updates the patient's self-managed profile fields. Only fields provided in the request body are updated — omitted fields are left unchanged.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description        |
+|-----------|------|--------------------|
+| patientId | guid | Patient's entity ID |
+
+**Request Body** *(all fields optional)*
+
+| Field      | Type    | Description                          |
+|------------|---------|--------------------------------------|
+| isPregnant | bool    | Pregnancy status                     |
+| heightCm   | decimal | Height in centimeters                |
+| phone      | string  | Contact phone number                 |
+
+```json
+{
+  "isPregnant": true
+}
+```
+
+**Responses**
+
+| Code | Description               |
+|------|---------------------------|
+| 200  | Profile updated — returns updated profile |
+| 403  | Access denied             |
+| 404  | Patient not found         |
+
+**Response Body (200):** Same shape as [GET /patient/{patientId}/profile](#get-patientpatientidprofile).
 
 ---
 
