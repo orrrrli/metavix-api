@@ -43,11 +43,6 @@ internal sealed class GetPendingRequestsQueryHandler
             r.Patient.Email,
             r.CreatedAt)).ToList();
 
-        if (results.Count == 0)
-        {
-            return LinkRequestErrors.RequestNotFound;
-        }
-
         return results;
     }
 }

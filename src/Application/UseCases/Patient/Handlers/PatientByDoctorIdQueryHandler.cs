@@ -8,8 +8,8 @@ using MediatR;
 namespace Application.UseCases.Patient.Handlers;
 
 public class PatientByDoctorIdQueryHandler(
-    IPatientRepository patientRepository,
     IDoctorRepository doctorRepository,
+    IPatientDoctorRequestRepository requestRepository,
     ICurrentUserService currentUser)
     : IRequestHandler<PatientByDoctorIdQuery, ErrorOr<List<PatientResult>>>
 {
@@ -24,7 +24,14 @@ public class PatientByDoctorIdQueryHandler(
         if (callerDoctorId != request.doctorId)
             return AuthErrors.Forbidden;
 
-        List<PatientResult> result = await patientRepository.GetAllPatientByDoctorId(request.doctorId);
-        return result.Count == 0 ? (ErrorOr<List<PatientResult>>)PatientErrors.PatientsNotFound : (ErrorOr<List<PatientResult>>)result;
+        var accepted = await requestRepository.GetAcceptedByDoctorIdAsync(request.doctorId);
+
+        var result = accepted.Select(r => new PatientResult(
+            r.Patient.Id,
+            r.Patient.FirstName,
+            r.Patient.LastName,
+            r.Patient.MedicalRecordNumber)).ToList();
+
+        return result;
     }
 }

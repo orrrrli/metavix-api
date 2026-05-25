@@ -73,6 +73,8 @@ public class AuthModule : MainModule, ICarterModule
 
                     AuthResponse response = new(
                         value.UserId,
+                        value.PatientId,
+                        value.DoctorId,
                         value.ExpiresAt,
                         value.Email,
                         value.Role,

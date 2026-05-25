@@ -11,4 +11,5 @@ public sealed record DailyRecordResult(
     decimal? WeightKg,
     int? WaistCm,
     string? Notes,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    List<GlucoseReadingResult> GlucoseReadings);

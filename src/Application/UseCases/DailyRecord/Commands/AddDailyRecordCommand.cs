@@ -1,6 +1,13 @@
 using Application.UseCases.DailyRecord.Common;
+using Domain.Enums;
 
 namespace Application.UseCases.DailyRecord.Commands;
+
+public sealed record GlucoseReadingDto(
+    GlucoseReadingType ReadingType,
+    int ValueMgDl,
+    TimeOnly? Time,
+    string? Foods);
 
 public sealed record AddDailyRecordCommand(
     Guid PatientId,
@@ -11,4 +18,5 @@ public sealed record AddDailyRecordCommand(
     int? HeartRate,
     decimal? WeightKg,
     int? WaistCm,
-    string? Notes) : IRequest<ErrorOr<DailyRecordResult>>;
+    string? Notes,
+    List<GlucoseReadingDto>? GlucoseReadings) : IRequest<ErrorOr<DailyRecordResult>>;

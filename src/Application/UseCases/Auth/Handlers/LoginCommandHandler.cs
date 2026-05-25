@@ -81,6 +81,8 @@ internal sealed class LoginCommandHandler
         // 6. Return result
         return new LoginResult(
             UserId: user.Id,
+            PatientId: user.Patient?.Id,
+            DoctorId: user.Doctor?.Id,
             AccessToken: token,
             ExpiresAt: _dateTimeProvider.UtcNow.AddMinutes(15),
             Email: user.Email,

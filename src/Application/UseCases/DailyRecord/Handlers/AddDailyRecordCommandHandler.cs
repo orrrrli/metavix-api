@@ -43,9 +43,22 @@ internal sealed class AddDailyRecordCommandHandler
             return PatientErrors.PatientsNotFound;
         }
 
+        var recordId = Guid.NewGuid();
+
+        var glucoseReadings = request.GlucoseReadings?
+            .Select(g => new Domain.Models.GlucoseReading
+            {
+                Id = Guid.NewGuid(),
+                DailyRecordId = recordId,
+                ReadingType = g.ReadingType,
+                ValueMgDl = g.ValueMgDl,
+                Time = g.Time,
+                Foods = g.Foods
+            }).ToList() ?? [];
+
         var record = new Domain.Models.DailyRecord
         {
-            Id = Guid.NewGuid(),
+            Id = recordId,
             PatientId = request.PatientId,
             RecordDate = request.RecordDate,
             RecordTime = request.RecordTime,
@@ -55,7 +68,8 @@ internal sealed class AddDailyRecordCommandHandler
             WeightKg = request.WeightKg,
             WaistCm = request.WaistCm,
             Notes = request.Notes,
-            CreatedAt = _dateTimeProvider.UtcNow
+            CreatedAt = _dateTimeProvider.UtcNow,
+            GlucoseReadings = glucoseReadings
         };
 
         await _dailyRecordRepository.AddAsync(record);
@@ -71,6 +85,8 @@ internal sealed class AddDailyRecordCommandHandler
             record.WeightKg,
             record.WaistCm,
             record.Notes,
-            record.CreatedAt);
+            record.CreatedAt,
+            glucoseReadings.Select(g => new GlucoseReadingResult(
+                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods)).ToList());
     }
 }

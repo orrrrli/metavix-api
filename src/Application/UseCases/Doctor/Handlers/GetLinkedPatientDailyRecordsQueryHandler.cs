@@ -2,44 +2,44 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.DailyRecord.Common;
-using Application.UseCases.DailyRecord.Queries;
-using Domain.Enums;
+using Application.UseCases.Doctor.Queries;
 
-namespace Application.UseCases.DailyRecord.Handlers;
+namespace Application.UseCases.Doctor.Handlers;
 
-internal sealed class GetPatientDailyRecordsQueryHandler
-    : IRequestHandler<GetPatientDailyRecordsQuery, ErrorOr<List<DailyRecordResult>>>
+internal sealed class GetLinkedPatientDailyRecordsQueryHandler
+    : IRequestHandler<GetLinkedPatientDailyRecordsQuery, ErrorOr<List<DailyRecordResult>>>
 {
     private readonly IDailyRecordRepository _dailyRecordRepository;
-    private readonly IPatientRepository _patientRepository;
+    private readonly IDoctorRepository _doctorRepository;
+    private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly ICurrentUserService _currentUser;
 
-    public GetPatientDailyRecordsQueryHandler(
+    public GetLinkedPatientDailyRecordsQueryHandler(
         IDailyRecordRepository dailyRecordRepository,
-        IPatientRepository patientRepository,
+        IDoctorRepository doctorRepository,
+        IPatientDoctorRequestRepository requestRepository,
         ICurrentUserService currentUser)
     {
         _dailyRecordRepository = dailyRecordRepository;
-        _patientRepository = patientRepository;
+        _doctorRepository = doctorRepository;
+        _requestRepository = requestRepository;
         _currentUser = currentUser;
     }
 
     public async Task<ErrorOr<List<DailyRecordResult>>> Handle(
-        GetPatientDailyRecordsQuery request,
+        GetLinkedPatientDailyRecordsQuery request,
         CancellationToken cancellationToken)
     {
         if (_currentUser.UserId is null)
             return AuthErrors.Forbidden;
 
-        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerPatientId != request.PatientId)
+        var callerDoctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
+        if (callerDoctorId != request.DoctorId)
             return AuthErrors.Forbidden;
 
-        var patient = await _patientRepository.GetByIdAsync(request.PatientId);
-        if (patient is null)
-        {
-            return PatientErrors.PatientsNotFound;
-        }
+        var isLinked = await _requestRepository.IsAcceptedLinkAsync(request.DoctorId, request.PatientId);
+        if (!isLinked)
+            return AuthErrors.Forbidden;
 
         var records = await _dailyRecordRepository.GetAllByPatientIdAsync(request.PatientId);
 
@@ -59,9 +59,7 @@ internal sealed class GetPatientDailyRecordsQueryHandler
                 g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods)).ToList())).ToList();
 
         if (results.Count == 0)
-        {
             return RecordErrors.RecordsNotFound;
-        }
 
         return results;
     }

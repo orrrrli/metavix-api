@@ -17,6 +17,7 @@ public class PatientRepository : IPatientRepository
         return await _dbContext.Patients
             .Where(x => x.PrimaryDoctorId == doctorId)
             .Select(x => new PatientResult(
+                x.Id,
                 x.FirstName,
                 x.LastName,
                 x.MedicalRecordNumber))
@@ -31,6 +32,7 @@ public class PatientRepository : IPatientRepository
         if (patient is null) return null;
 
         return new PatientResult(
+            patient.Id,
             patient.FirstName,
             patient.LastName,
             patient.MedicalRecordNumber);

@@ -18,8 +18,10 @@ using Application.UseCases.LabResult.Queries;
 using Application.UseCases.InsulinDm1.Commands;
 using Application.UseCases.InsulinDm1.Common;
 using Application.UseCases.InsulinDm1.Queries;
+using Application.UseCases.Patient.Commands;
 using Application.UseCases.Patient.Common;
 using Application.UseCases.Patient.Queries;
+using Contracts.Patient.Request;
 
 namespace API.Modules;
 
@@ -52,6 +54,21 @@ public class PatientModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("RevokeDoctorAccess")
+            .WithOpenApi();
+
+        // === Patient Profile ===
+        group.MapGet("/{patientId:guid}/profile", GetPatientProfile)
+            .Produces<ApiSuccessResponse<PatientProfileResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetPatientProfile")
+            .WithOpenApi();
+
+        group.MapPatch("/{patientId:guid}/profile", UpdatePatientProfile)
+            .Produces<ApiSuccessResponse<PatientProfileResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("UpdatePatientProfile")
             .WithOpenApi();
 
         // === Resumen Clínico ===
@@ -485,6 +502,61 @@ public class PatientModule : MainModule, ICarterModule
         try
         {
             var result = await sender.Send(new GetInsulinRecordByIdQuery(patientId, recordId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    // === Patient Profile ===
+
+    private static async Task<IResult> GetPatientProfile(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetPatientProfileQuery(patientId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> UpdatePatientProfile(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId,
+        [FromBody] UpdatePatientProfileRequest request)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var command = new UpdatePatientProfileCommand(
+                patientId,
+                request.IsPregnant,
+                request.HeightCm,
+                request.Phone);
+
+            var result = await sender.Send(command);
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),

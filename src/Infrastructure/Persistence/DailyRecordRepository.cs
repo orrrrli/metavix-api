@@ -21,6 +21,7 @@ public class DailyRecordRepository : IDailyRecordRepository
     public async Task<List<DailyRecord>> GetAllByPatientIdAsync(Guid patientId)
     {
         return await _dbContext.DailyRecords
+            .Include(r => r.GlucoseReadings)
             .Where(x => x.PatientId == patientId)
             .OrderByDescending(x => x.RecordDate)
             .ThenByDescending(x => x.RecordTime)
@@ -30,6 +31,7 @@ public class DailyRecordRepository : IDailyRecordRepository
     public async Task<DailyRecord?> GetByIdAsync(Guid recordId)
     {
         return await _dbContext.DailyRecords
+            .Include(r => r.GlucoseReadings)
             .FirstOrDefaultAsync(x => x.Id == recordId);
     }
 

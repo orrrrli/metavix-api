@@ -16,11 +16,18 @@ public class Converters
 
                 if (timeString != null)
                 {
-                    return TimeOnly.ParseExact(timeString, "HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                    if (TimeOnly.TryParseExact(timeString, "HH:mm:ss.fff", CultureInfo.InvariantCulture, DateTimeStyles.None, out var withMs))
+                        return withMs;
+
+                    if (TimeOnly.TryParseExact(timeString, "HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var withoutMs))
+                        return withoutMs;
+
+                    if (TimeOnly.TryParseExact(timeString, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var hoursOnly))
+                        return hoursOnly;
                 }
             }
 
-            throw new JsonException("Expected a string.");
+            throw new JsonException("Expected a time string in HH:mm:ss or HH:mm:ss.fff format.");
         }
 
         public override void Write(Utf8JsonWriter writer, TimeOnly value, JsonSerializerOptions options)

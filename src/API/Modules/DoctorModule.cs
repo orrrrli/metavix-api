@@ -11,6 +11,8 @@ using Application.UseCases.Patient.Queries;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Common;
 using Application.UseCases.LinkRequest.Queries;
+using Application.UseCases.DailyRecord.Common;
+using Application.UseCases.LabResult.Common;
 using Contracts.Patient.Response;
 
 namespace API.Modules;
@@ -39,6 +41,28 @@ public class DoctorModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<PatientResponse>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("GetPatientById")
+            .WithOpenApi();
+
+        // === Linked Patient Records ===
+        group.MapGet("/{doctorId:guid}/patients/{patientId:guid}/profile", GetLinkedPatientProfile)
+            .Produces<ApiSuccessResponse<PatientProfileResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetLinkedPatientProfile")
+            .WithOpenApi();
+
+        group.MapGet("/{doctorId:guid}/patients/{patientId:guid}/records/daily", GetLinkedPatientDailyRecords)
+            .Produces<ApiSuccessResponse<List<DailyRecordResult>>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetLinkedPatientDailyRecords")
+            .WithOpenApi();
+
+        group.MapGet("/{doctorId:guid}/patients/{patientId:guid}/records/lab", GetLinkedPatientLabResults)
+            .Produces<ApiSuccessResponse<List<LabResultResult>>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetLinkedPatientLabResults")
             .WithOpenApi();
 
         // === Link Requests ===
@@ -239,6 +263,80 @@ public class DoctorModule : MainModule, ICarterModule
         try
         {
             var result = await sender.Send(new UnlinkPatientCommand(requestId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    // === Linked Patient Records ===
+
+    private static async Task<IResult> GetLinkedPatientProfile(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}, PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetLinkedPatientProfileQuery(doctorId, patientId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> GetLinkedPatientDailyRecords(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}, PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetLinkedPatientDailyRecordsQuery(doctorId, patientId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> GetLinkedPatientLabResults(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}, PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetLinkedPatientLabResultsQuery(doctorId, patientId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
