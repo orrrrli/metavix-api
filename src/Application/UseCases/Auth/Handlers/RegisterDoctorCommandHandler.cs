@@ -13,17 +13,20 @@ internal sealed class RegisterDoctorCommandHandler
     : IRequestHandler<RegisterDoctorCommand, ErrorOr<RegisterResult>>
 {
     private readonly IUserRepository _userRepository;
+    private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public RegisterDoctorCommandHandler(
         IUserRepository userRepository,
+        IRefreshTokenRepository refreshTokenRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
         IDateTimeProvider dateTimeProvider)
     {
         _userRepository = userRepository;
+        _refreshTokenRepository = refreshTokenRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
         _dateTimeProvider = dateTimeProvider;
@@ -39,33 +42,44 @@ internal sealed class RegisterDoctorCommandHandler
         Guid userId = Guid.NewGuid();
         var user = new User
         {
-            Id = userId,
-            Email = request.Email,
+            Id           = userId,
+            Email        = request.Email,
             PasswordHash = _passwordHasher.Hash(request.Password),
-            Role = UserRole.Doctor,
-            IsActive = true,
-            CreatedAt = _dateTimeProvider.UtcNow,
-            Doctor = new Domain.Models.Doctor
+            Role         = UserRole.Doctor,
+            IsActive     = true,
+            CreatedAt    = _dateTimeProvider.UtcNow,
+            Doctor       = new Domain.Models.Doctor
             {
-                Id = Guid.NewGuid(),
-                UserId = userId,
+                Id        = Guid.NewGuid(),
+                UserId    = userId,
                 FirstName = request.FirstName,
-                LastName = request.LastName,
-                Email = request.Email,
+                LastName  = request.LastName,
+                Email     = request.Email,
                 CreatedAt = _dateTimeProvider.UtcNow,
-                IsActive = true
+                IsActive  = true
             }
         };
 
         await _userRepository.AddAsync(user);
 
-        string fullName = $"{request.FirstName} {request.LastName}";
-        string token = _jwtTokenGenerator.GenerateToken(user, fullName);
+        string fullName     = $"{request.FirstName} {request.LastName}";
+        string accessToken  = _jwtTokenGenerator.GenerateToken(user, fullName);
+        string refreshToken = _jwtTokenGenerator.GenerateRefreshToken();
+
+        await _refreshTokenRepository.AddAsync(new RefreshToken
+        {
+            Id        = Guid.NewGuid(),
+            UserId    = user.Id,
+            Token     = refreshToken,
+            ExpiresAt = _dateTimeProvider.UtcNow.AddDays(7),
+            CreatedAt = _dateTimeProvider.UtcNow,
+        });
 
         return new RegisterResult(
-            UserId: user.Id,
-            Email: user.Email,
-            Role: user.Role.ToString(),
-            Token: token);
+            UserId:       user.Id,
+            Email:        user.Email,
+            Role:         user.Role.ToString(),
+            Token:        accessToken,
+            RefreshToken: refreshToken);
     }
 }

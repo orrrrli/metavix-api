@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<LogEntry> Logs => Set<LogEntry>();
     public DbSet<InsulinDm1Profile> InsulinDm1Profiles => Set<InsulinDm1Profile>();
     public DbSet<InsulinDm1Record> InsulinDm1Records => Set<InsulinDm1Record>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -93,6 +94,17 @@ public class AppDbContext : DbContext
             entity.HasOne(r => r.Patient)
                 .WithMany(p => p.InsulinDm1Records)
                 .HasForeignKey(r => r.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // RefreshToken configuration
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasIndex(r => r.Token).IsUnique();
+
+            entity.HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

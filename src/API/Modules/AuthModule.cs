@@ -44,14 +44,44 @@ public class AuthModule : MainModule, ICarterModule
             .RequireRateLimiting("register")
             .WithName("RegisterDoctor")
             .WithOpenApi();
+
+        group.MapPost("/refresh", Refresh)
+            .Produces<ApiSuccessResponse<RefreshResponse>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .AllowAnonymous()
+            .WithName("Refresh")
+            .WithOpenApi();
+
+        group.MapPost("/logout", Logout)
+            .Produces(StatusCodes.Status200OK)
+            .AllowAnonymous()
+            .WithName("Logout")
+            .WithOpenApi();
     }
+
+    private static CookieOptions AccessTokenCookie() => new()
+    {
+        HttpOnly = true,
+        Secure   = true,
+        SameSite = SameSiteMode.None,
+        Expires  = DateTimeOffset.UtcNow.AddMinutes(15),
+    };
+
+    private static CookieOptions RefreshTokenCookie() => new()
+    {
+        HttpOnly = true,
+        Secure   = true,
+        SameSite = SameSiteMode.None,
+        Expires  = DateTimeOffset.UtcNow.AddDays(7),
+        Path     = "/api/auth",
+    };
 
     private static async Task<IResult> Login(
         ISender sender,
         HttpContext httpContext,
         [FromBody] LoginRequest request)
     {
-        string fullRoute = $"{httpContext.Request.Path}";
+        string fullRoute  = $"{httpContext.Request.Path}";
         string parametros = $"Email: {request.Email}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
@@ -63,13 +93,8 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
-                    httpContext.Response.Cookies.Append("access_token", value.AccessToken, new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure   = true,
-                        SameSite = SameSiteMode.None,
-                        Expires  = DateTimeOffset.UtcNow.AddMinutes(15)
-                    });
+                    httpContext.Response.Cookies.Append("access_token",  value.AccessToken,  AccessTokenCookie());
+                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken, RefreshTokenCookie());
 
                     AuthResponse response = new(
                         value.UserId,
@@ -89,12 +114,68 @@ public class AuthModule : MainModule, ICarterModule
         }
     }
 
+    private static async Task<IResult> Refresh(
+        ISender sender,
+        HttpContext httpContext)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+
+        try
+        {
+            string? refreshToken = httpContext.Request.Cookies["refresh_token"];
+
+            if (string.IsNullOrEmpty(refreshToken))
+                return ApiResults.Problem([Application.Common.Errors.AuthErrors.InvalidRefreshToken], fullRoute);
+
+            RefreshCommand command = new(refreshToken);
+            ErrorOr<RefreshResult> result = await sender.Send(command);
+
+            return result.Match(
+                value =>
+                {
+                    httpContext.Response.Cookies.Append("access_token",  value.AccessToken,     AccessTokenCookie());
+                    httpContext.Response.Cookies.Append("refresh_token", value.NewRefreshToken, RefreshTokenCookie());
+
+                    return ApiResults.Success(new RefreshResponse(value.ExpiresAt), fullRoute);
+                },
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, string.Empty);
+        }
+    }
+
+    private static async Task<IResult> Logout(
+        ISender sender,
+        HttpContext httpContext)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+
+        try
+        {
+            string? refreshToken = httpContext.Request.Cookies["refresh_token"];
+
+            if (!string.IsNullOrEmpty(refreshToken))
+                await sender.Send(new LogoutCommand(refreshToken));
+
+            httpContext.Response.Cookies.Delete("access_token",  new CookieOptions { SameSite = SameSiteMode.None, Secure = true });
+            httpContext.Response.Cookies.Delete("refresh_token", new CookieOptions { SameSite = SameSiteMode.None, Secure = true, Path = "/api/auth" });
+
+            return Results.Ok();
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, string.Empty);
+        }
+    }
+
     private static async Task<IResult> RegisterPatient(
         ISender sender,
         HttpContext httpContext,
         [FromBody] RegisterPatientCommand command)
     {
-        string fullRoute = $"{httpContext.Request.Path}";
+        string fullRoute  = $"{httpContext.Request.Path}";
         string parametros = $"Email: {command.Email}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
@@ -105,13 +186,8 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
-                    httpContext.Response.Cookies.Append("access_token", value.Token, new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure   = true,
-                        SameSite = SameSiteMode.None,
-                        Expires  = DateTimeOffset.UtcNow.AddMinutes(15)
-                    });
+                    httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie());
+                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie());
 
                     RegisterResponse response = new(value.UserId, value.Email, value.Role);
                     return TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResponse> { Data = response });
@@ -129,7 +205,7 @@ public class AuthModule : MainModule, ICarterModule
         HttpContext httpContext,
         [FromBody] RegisterDoctorCommand command)
     {
-        string fullRoute = $"{httpContext.Request.Path}";
+        string fullRoute  = $"{httpContext.Request.Path}";
         string parametros = $"Email: {command.Email}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
@@ -140,13 +216,8 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
-                    httpContext.Response.Cookies.Append("access_token", value.Token, new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure   = true,
-                        SameSite = SameSiteMode.None,
-                        Expires  = DateTimeOffset.UtcNow.AddMinutes(15)
-                    });
+                    httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie());
+                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie());
 
                     RegisterResponse response = new(value.UserId, value.Email, value.Role);
                     return TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResponse> { Data = response });

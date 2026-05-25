@@ -20,4 +20,8 @@ public static class AuthErrors
     public static readonly Error TooManyFailedAttempts = Error.Forbidden(
         code: "Auth.TooManyFailedAttempts",
         description: "Cuenta bloqueada temporalmente por demasiados intentos fallidos. Intenta de nuevo en 15 minutos.");
+
+    public static readonly Error InvalidRefreshToken = Error.Unauthorized(
+        code: "Auth.InvalidRefreshToken",
+        description: "El refresh token es inválido o ha expirado.");
 }

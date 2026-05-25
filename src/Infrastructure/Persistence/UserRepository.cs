@@ -19,6 +19,14 @@ public class UserRepository : IUserRepository
             .FirstOrDefaultAsync(u => u.Email == email);
     }
 
+    public async Task<Domain.Models.User?> GetByIdAsync(Guid id)
+    {
+        return await _dbContext.Users
+            .Include(u => u.Doctor)
+            .Include(u => u.Patient)
+            .FirstOrDefaultAsync(u => u.Id == id);
+    }
+
     public async Task<bool> ExistsByEmailAsync(string email)
     {
         return await _dbContext.Users.AnyAsync(u => u.Email == email);

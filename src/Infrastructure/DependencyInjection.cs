@@ -1,7 +1,9 @@
 using System.Text;
+using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
 using Application.Common.Interfaces.Services;
 using Infrastructure.HealthChecks;
+using Infrastructure.Persistence;
 using Infrastructure.Security;
 using Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -97,6 +99,7 @@ public static class DependencyInjection
             }
         });
 
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddRepositories();
         services
           .AddHealthChecks()

@@ -5,6 +5,7 @@ using Application.Common.Interfaces.Services;
 using Application.UseCases.Auth.Commands;
 using Application.UseCases.Auth.Common;
 using Domain.Enums;
+using Domain.Models;
 
 namespace Application.UseCases.Auth.Handlers;
 
@@ -12,6 +13,7 @@ internal sealed class LoginCommandHandler
     : IRequestHandler<LoginCommand, ErrorOr<LoginResult>>
 {
     private readonly IUserRepository _userRepository;
+    private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -19,12 +21,14 @@ internal sealed class LoginCommandHandler
 
     public LoginCommandHandler(
         IUserRepository userRepository,
+        IRefreshTokenRepository refreshTokenRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
         IDateTimeProvider dateTimeProvider,
         ILoginAttemptTracker attemptTracker)
     {
         _userRepository = userRepository;
+        _refreshTokenRepository = refreshTokenRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
         _dateTimeProvider = dateTimeProvider;
@@ -35,11 +39,9 @@ internal sealed class LoginCommandHandler
         LoginCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Check per-account lockout before hitting the database
         if (_attemptTracker.IsBlocked(request.Email))
             return AuthErrors.TooManyFailedAttempts;
 
-        // 2. Find user by email (includes Doctor/Patient navigation)
         var user = await _userRepository.GetByEmailAsync(request.Email);
 
         if (user is null)
@@ -48,45 +50,45 @@ internal sealed class LoginCommandHandler
             return AuthErrors.InvalidCredentials;
         }
 
-        // 3. Verify password
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             _attemptTracker.RegisterFailure(request.Email);
             return AuthErrors.InvalidCredentials;
         }
 
-        // 4. Check if account is active
         if (!user.IsActive)
-        {
             return AuthErrors.AccountInactive;
-        }
 
         _attemptTracker.ResetAttempts(request.Email);
 
-        // 4. Resolve full name based on role
         string fullName = user.Role switch
         {
-            UserRole.Doctor => user.Doctor is not null
-                ? $"{user.Doctor.FirstName} {user.Doctor.LastName}"
-                : user.Email,
-            UserRole.Patient => user.Patient is not null
-                ? $"{user.Patient.FirstName} {user.Patient.LastName}"
-                : user.Email,
-            _ => user.Email
+            UserRole.Doctor  => user.Doctor  is not null ? $"{user.Doctor.FirstName} {user.Doctor.LastName}"   : user.Email,
+            UserRole.Patient => user.Patient is not null ? $"{user.Patient.FirstName} {user.Patient.LastName}" : user.Email,
+            _                => user.Email
         };
 
-        // 5. Generate JWT token
-        string token = _jwtTokenGenerator.GenerateToken(user, fullName);
+        string accessToken   = _jwtTokenGenerator.GenerateToken(user, fullName);
+        string refreshToken  = _jwtTokenGenerator.GenerateRefreshToken();
 
-        // 6. Return result
+        await _refreshTokenRepository.AddAsync(new RefreshToken
+        {
+            Id        = Guid.NewGuid(),
+            UserId    = user.Id,
+            Token     = refreshToken,
+            ExpiresAt = _dateTimeProvider.UtcNow.AddDays(7),
+            CreatedAt = _dateTimeProvider.UtcNow,
+        });
+
         return new LoginResult(
-            UserId: user.Id,
-            PatientId: user.Patient?.Id,
-            DoctorId: user.Doctor?.Id,
-            AccessToken: token,
-            ExpiresAt: _dateTimeProvider.UtcNow.AddMinutes(15),
-            Email: user.Email,
-            Role: user.Role.ToString(),
-            FullName: fullName);
+            UserId:       user.Id,
+            PatientId:    user.Patient?.Id,
+            DoctorId:     user.Doctor?.Id,
+            AccessToken:  accessToken,
+            RefreshToken: refreshToken,
+            ExpiresAt:    _dateTimeProvider.UtcNow.AddMinutes(15),
+            Email:        user.Email,
+            Role:         user.Role.ToString(),
+            FullName:     fullName);
     }
 }

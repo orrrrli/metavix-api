@@ -5,6 +5,7 @@ public sealed record LoginResult(
     Guid? PatientId,
     Guid? DoctorId,
     string AccessToken,
+    string RefreshToken,
     DateTime ExpiresAt,
     string Email,
     string Role,
