@@ -11,6 +11,8 @@ public class Patient
     public string MedicalRecordNumber { get; set; } = string.Empty;
     public DateOnly DateOfBirth { get; set; }
     public decimal? HeightCm { get; set; }
+    public Gender? Gender { get; set; }
+    public bool IsPregnant { get; set; } = false;
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public DiabetesType DiabetesType { get; set; } = DiabetesType.None;

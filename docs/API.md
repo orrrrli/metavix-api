@@ -10,7 +10,8 @@
 
 - [Auth](#auth)
   - [POST /auth/login](#post-authlogin)
-  - [POST /auth/register](#post-authregister)
+  - [POST /auth/register/patient](#post-authregisterpatient)
+  - [POST /auth/register/doctor](#post-authregisterdoctor)
 - [Doctor](#doctor)
   - [GET /doctor/get-profile/{doctorId}](#get-doctorget-profiledoctorid)
   - [GET /doctor/{doctorId}/get-all-patients](#get-doctordoctoridget-all-patients)
@@ -24,12 +25,19 @@
   - [GET /patient/{patientId}/get-linked-doctors](#get-patientpatientidget-linked-doctors)
   - [POST /patient/requests-link](#post-patientrequests-link)
   - [POST /patient/requests/{requestId}/revoke](#post-patientrequestsrequestidrevoke)
+  - [GET /patient/{patientId}/resumen](#get-patientpatientidresumen)
   - [POST /patient/{patientId}/records/daily](#post-patientpatientidrecordsdaily)
   - [GET /patient/{patientId}/get-all/records/daily](#get-patientpatientidget-allrecordsdaily)
   - [GET /patient/{patientId}/record/daily/{recordId}](#get-patientpatientidrecorddailyrecordid)
   - [POST /patient/{patientId}/records/lab](#post-patientpatientidrecordslab)
   - [GET /patient/{patientId}/get-all/records/lab](#get-patientpatientidget-allrecordslab)
   - [GET /patient/{patientId}/records/lab/{recordId}](#get-patientpatientidrecordslabrecordid)
+  - [PUT /patient/{patientId}/insulin-dm1/profile](#put-patientpatientidinsulindm1profile)
+  - [GET /patient/{patientId}/insulin-dm1/profile](#get-patientpatientidinsulindm1profile)
+  - [POST /patient/{patientId}/insulin-dm1/records](#post-patientpatientidinsulindm1records)
+  - [GET /patient/{patientId}/insulin-dm1/records](#get-patientpatientidinsulindm1records)
+  - [GET /patient/{patientId}/insulin-dm1/records/{recordId}](#get-patientpatientidinsulindm1recordsrecordid)
+  - [DELETE /patient/{patientId}/insulin-dm1/records/{recordId}](#delete-patientpatientidinsulindm1recordsrecordid)
 - [Admin](#admin)
   - [GET /admin/logs](#get-adminlogs)
   - [GET /admin/logs/{correlationId}](#get-adminlogscorrelationid)
@@ -76,7 +84,7 @@ Authenticates a user and returns a JWT access token.
 ```json
 {
   "data": {
-    "accessToken": "eyJhbGci...",
+    "userId": "9de34f00-...",
     "expiresAt": "2026-05-21T00:00:00Z",
     "email": "doctor@example.com",
     "role": "Doctor",
@@ -85,45 +93,43 @@ Authenticates a user and returns a JWT access token.
 }
 ```
 
+> The JWT access token is delivered via an HTTP-Only `access_token` cookie, not in the response body.
+
 ---
 
-### POST /auth/register
+### POST /auth/register/patient
 
-Registers a new user account (Doctor, Patient, or Admin).
+Registers a new Patient account.
 
 **Authentication:** None (public)  
 **Rate limit:** `register` policy applies
 
-> **Note:** The `role` field must be sent as a valid enum value. Accepted values: `0` (Doctor), `1` (Patient), `2` (Admin).
-
 **Request Body**
 
-| Field     | Type   | Required | Description                            |
-|-----------|--------|----------|----------------------------------------|
-| firstName | string | Yes      | First name                             |
-| lastName  | string | Yes      | Last name                              |
-| email     | string | Yes      | Email address                          |
-| password  | string | Yes      | Password                               |
-| role      | int    | Yes      | `0` = Doctor, `1` = Patient, `2` = Admin |
+| Field     | Type   | Required | Description   |
+|-----------|--------|----------|---------------|
+| firstName | string | Yes      | First name    |
+| lastName  | string | Yes      | Last name     |
+| email     | string | Yes      | Email address |
+| password  | string | Yes      | Password      |
 
 ```json
 {
   "firstName": "Jane",
   "lastName": "Smith",
   "email": "jane@example.com",
-  "password": "secure456",
-  "role": 1
+  "password": "secure456"
 }
 ```
 
 **Responses**
 
-| Code | Description                                |
-|------|--------------------------------------------|
-| 201  | User created — `Location` header included  |
-| 400  | Validation error                           |
-| 409  | Email already in use                       |
-| 429  | Too many requests                          |
+| Code | Description                               |
+|------|-------------------------------------------|
+| 201  | User created — `Location` header included |
+| 400  | Validation error                          |
+| 409  | Email already in use                      |
+| 429  | Too many requests                         |
 
 **Response Body (201)**
 
@@ -132,11 +138,62 @@ Registers a new user account (Doctor, Patient, or Admin).
   "data": {
     "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     "email": "jane@example.com",
-    "role": "Patient",
-    "token": "eyJhbGci..."
+    "role": "Patient"
   }
 }
 ```
+
+> The JWT access token is delivered via an HTTP-Only `access_token` cookie, not in the response body.
+
+---
+
+### POST /auth/register/doctor
+
+Registers a new Doctor account.
+
+**Authentication:** None (public)  
+**Rate limit:** `register` policy applies
+
+**Request Body**
+
+| Field     | Type   | Required | Description   |
+|-----------|--------|----------|---------------|
+| firstName | string | Yes      | First name    |
+| lastName  | string | Yes      | Last name     |
+| email     | string | Yes      | Email address |
+| password  | string | Yes      | Password      |
+
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john@clinic.com",
+  "password": "secure789"
+}
+```
+
+**Responses**
+
+| Code | Description                               |
+|------|-------------------------------------------|
+| 201  | User created — `Location` header included |
+| 400  | Validation error                          |
+| 409  | Email already in use                      |
+| 429  | Too many requests                         |
+
+**Response Body (201)**
+
+```json
+{
+  "data": {
+    "userId": "9de34f00-4421-4710-b3fc-1a963f44bca1",
+    "email": "john@clinic.com",
+    "role": "Doctor"
+  }
+}
+```
+
+> The JWT access token is delivered via an HTTP-Only `access_token` cookie, not in the response body.
 
 ---
 
@@ -755,6 +812,279 @@ Returns a single lab result by its ID.
 | 404  | Record not found    |
 
 **Response Body (200):** Same object as [Add Lab Result (201)](#post-patientpatientidrecordslab).
+
+---
+
+### GET /patient/{patientId}/resumen
+
+Returns a clinical summary for the patient — their profile and the most recent value for each tracked metric.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| patientId | guid | Patient's user ID |
+
+**Responses**
+
+| Code | Description              |
+|------|--------------------------|
+| 200  | Clinical summary returned |
+| 403  | Access denied            |
+| 404  | Patient not found        |
+
+**Response Body (200)**
+
+```json
+{
+  "data": {
+    "perfil": {
+      "nombre": "Jane Smith",
+      "tipoDiabetes": "DM2",
+      "embarazada": false,
+      "sexo": "Female"
+    },
+    "metricas": {
+      "glucosaAyuno":        { "valor": 98.0, "fecha": "2026-05-20" },
+      "presionSistolica":    { "valor": 120,  "fecha": "2026-05-20" },
+      "presionDiastolica":   { "valor": 80,   "fecha": "2026-05-20" },
+      "frecuenciaCardiaca":  { "valor": 72,   "fecha": "2026-05-20" },
+      "peso":                { "valor": 75.5, "fecha": "2026-05-20" },
+      "estaturasCm":         { "valor": null, "fecha": null },
+      "imc":                 { "valor": null, "fecha": null },
+      "cintura":             { "valor": 88,   "fecha": "2026-05-20" },
+      "hba1c":               { "valor": 6.5,  "fecha": "2026-05-18" },
+      "colesterolTotal":     { "valor": 185,  "fecha": "2026-05-18" },
+      "colesterolLdl":       { "valor": 110,  "fecha": "2026-05-18" },
+      "colesterolHdl":       { "valor": 50,   "fecha": "2026-05-18" },
+      "trigliceridos":       { "valor": 130,  "fecha": "2026-05-18" },
+      "creatinina":          { "valor": 0.9,  "fecha": "2026-05-18" },
+      "bun":                 { "valor": 14,   "fecha": "2026-05-18" }
+    }
+  }
+}
+```
+
+---
+
+### PUT /patient/{patientId}/insulin-dm1/profile
+
+Creates or updates the insulin dosing profile for a DM1 patient (upsert).
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| patientId | guid | Patient's user ID |
+
+**Request Body**
+
+| Field           | Type    | Required | Description                              |
+|-----------------|---------|----------|------------------------------------------|
+| insulinName     | string  | No       | Name of the insulin used                 |
+| ric             | decimal | No       | Ratio insulina:carbohidratos             |
+| sensitivityFactor | int   | No       | Insulin sensitivity factor (mg/dL per unit) |
+| targetGlucose   | int     | No       | Target blood glucose (mg/dL)             |
+| doctorName      | string  | No       | Treating doctor's name                   |
+| doctorPhone     | string  | No       | Treating doctor's phone                  |
+
+```json
+{
+  "insulinName": "Humalog",
+  "ric": 15.0,
+  "sensitivityFactor": 50,
+  "targetGlucose": 100,
+  "doctorName": "Dr. John Doe",
+  "doctorPhone": "+52-664-000-0000"
+}
+```
+
+**Responses**
+
+| Code | Description             |
+|------|-------------------------|
+| 200  | Profile saved           |
+
+**Response Body (200)**
+
+```json
+{
+  "data": {
+    "id": "aabbcc-...",
+    "patientId": "7cb12a11-...",
+    "insulinName": "Humalog",
+    "ric": 15.0,
+    "sensitivityFactor": 50,
+    "targetGlucose": 100,
+    "doctorName": "Dr. John Doe",
+    "doctorPhone": "+52-664-000-0000",
+    "createdAt": "2026-05-10T09:00:00Z",
+    "updatedAt": "2026-05-20T11:00:00Z"
+  }
+}
+```
+
+---
+
+### GET /patient/{patientId}/insulin-dm1/profile
+
+Returns the insulin dosing profile for a DM1 patient.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| patientId | guid | Patient's user ID |
+
+**Responses**
+
+| Code | Description          |
+|------|----------------------|
+| 200  | Profile returned     |
+| 404  | Profile not found    |
+
+**Response Body (200):** Same object as [Upsert Insulin Profile (200)](#put-patientpatientidinsulindm1profile).
+
+---
+
+### POST /patient/{patientId}/insulin-dm1/records
+
+Adds a new insulin dosing record for the patient.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| patientId | guid | Patient's user ID |
+
+**Request Body**
+
+| Field           | Type    | Required | Description                           |
+|-----------------|---------|----------|---------------------------------------|
+| recordDate      | date    | Yes      | Date of the record (`YYYY-MM-DD`)     |
+| glucoseBefore   | int     | No       | Blood glucose before meal (mg/dL)     |
+| glucoseAfter    | int     | No       | Blood glucose after meal (mg/dL)      |
+| totalCarbs      | decimal | No       | Total carbohydrates consumed (grams)  |
+| doseApplied     | decimal | No       | Insulin dose applied (units)          |
+| mealDescription | string  | No       | Description of the meal               |
+| howIFelt        | string  | No       | Patient's subjective feeling          |
+
+```json
+{
+  "recordDate": "2026-05-20",
+  "glucoseBefore": 130,
+  "glucoseAfter": 95,
+  "totalCarbs": 45.0,
+  "doseApplied": 3.0,
+  "mealDescription": "Lunch — rice and chicken",
+  "howIFelt": "Good, no hypoglycemia"
+}
+```
+
+**Responses**
+
+| Code | Description                                  |
+|------|----------------------------------------------|
+| 201  | Record created — `Location` header included  |
+| 400  | Validation error                             |
+
+**Response Body (201)**
+
+```json
+{
+  "data": {
+    "id": "ddeeff-...",
+    "patientId": "7cb12a11-...",
+    "recordDate": "2026-05-20",
+    "glucoseBefore": 130,
+    "glucoseAfter": 95,
+    "totalCarbs": 45.0,
+    "doseApplied": 3.0,
+    "mealDescription": "Lunch — rice and chicken",
+    "howIFelt": "Good, no hypoglycemia",
+    "createdAt": "2026-05-20T13:05:00Z"
+  }
+}
+```
+
+---
+
+### GET /patient/{patientId}/insulin-dm1/records
+
+Returns all insulin dosing records for a patient.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| patientId | guid | Patient's user ID |
+
+**Responses**
+
+| Code | Description                             |
+|------|-----------------------------------------|
+| 200  | List of insulin records (may be empty)  |
+| 404  | Patient not found                       |
+
+**Response Body (200):** Array of the same object as [Add Insulin Record (201)](#post-patientpatientidinsulindm1records).
+
+---
+
+### GET /patient/{patientId}/insulin-dm1/records/{recordId}
+
+Returns a single insulin dosing record by its ID.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| patientId | guid | Patient's user ID |
+| recordId  | guid | Insulin record ID |
+
+**Responses**
+
+| Code | Description       |
+|------|-------------------|
+| 200  | Record returned   |
+| 404  | Record not found  |
+
+**Response Body (200):** Same object as [Add Insulin Record (201)](#post-patientpatientidinsulindm1records).
+
+---
+
+### DELETE /patient/{patientId}/insulin-dm1/records/{recordId}
+
+Deletes a single insulin dosing record.
+
+**Authentication:** JWT — role `Patient` required
+
+**Path Parameters**
+
+| Name      | Type | Description       |
+|-----------|------|-------------------|
+| patientId | guid | Patient's user ID |
+| recordId  | guid | Insulin record ID |
+
+**Request Body:** None
+
+**Responses**
+
+| Code | Description       |
+|------|-------------------|
+| 204  | Record deleted    |
+| 404  | Record not found  |
 
 ---
 

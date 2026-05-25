@@ -80,6 +80,7 @@ internal sealed class LoginCommandHandler
 
         // 6. Return result
         return new LoginResult(
+            UserId: user.Id,
             AccessToken: token,
             ExpiresAt: _dateTimeProvider.UtcNow.AddMinutes(15),
             Email: user.Email,

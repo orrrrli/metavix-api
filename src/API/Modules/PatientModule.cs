@@ -18,6 +18,8 @@ using Application.UseCases.LabResult.Queries;
 using Application.UseCases.InsulinDm1.Commands;
 using Application.UseCases.InsulinDm1.Common;
 using Application.UseCases.InsulinDm1.Queries;
+using Application.UseCases.Patient.Common;
+using Application.UseCases.Patient.Queries;
 
 namespace API.Modules;
 
@@ -50,6 +52,14 @@ public class PatientModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("RevokeDoctorAccess")
+            .WithOpenApi();
+
+        // === Resumen Clínico ===
+        group.MapGet("/{patientId:guid}/resumen", GetPatientResumen)
+            .Produces<ApiSuccessResponse<PatientResumenResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetPatientResumen")
             .WithOpenApi();
 
         // === Daily Records ===
@@ -475,6 +485,31 @@ public class PatientModule : MainModule, ICarterModule
         try
         {
             var result = await sender.Send(new GetInsulinRecordByIdQuery(patientId, recordId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    // === Resumen Clínico ===
+
+    private static async Task<IResult> GetPatientResumen(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetPatientResumenQuery(patientId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),

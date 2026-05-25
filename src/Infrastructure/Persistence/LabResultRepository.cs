@@ -31,4 +31,12 @@ public class LabResultRepository : ILabResultRepository
         return await _dbContext.LabResults
             .FirstOrDefaultAsync(x => x.Id == resultId);
     }
+
+    public async Task<LabResult?> GetLatestByPatientIdAsync(Guid patientId)
+    {
+        return await _dbContext.LabResults
+            .Where(x => x.PatientId == patientId)
+            .OrderByDescending(x => x.SampleDate)
+            .FirstOrDefaultAsync();
+    }
 }

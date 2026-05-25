@@ -32,4 +32,14 @@ public class DailyRecordRepository : IDailyRecordRepository
         return await _dbContext.DailyRecords
             .FirstOrDefaultAsync(x => x.Id == recordId);
     }
+
+    public async Task<DailyRecord?> GetLatestByPatientIdAsync(Guid patientId)
+    {
+        return await _dbContext.DailyRecords
+            .Include(r => r.GlucoseReadings)
+            .Where(r => r.PatientId == patientId)
+            .OrderByDescending(r => r.RecordDate)
+            .ThenByDescending(r => r.RecordTime)
+            .FirstOrDefaultAsync();
+    }
 }

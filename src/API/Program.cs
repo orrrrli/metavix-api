@@ -76,8 +76,8 @@ try
         };
     });
 
-    app.ConfigureApi();
     app.UseCors("ProductionPolicy");
+    app.ConfigureApi();
     app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();

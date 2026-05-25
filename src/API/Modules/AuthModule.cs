@@ -26,7 +26,7 @@ public class AuthModule : MainModule, ICarterModule
             .WithOpenApi();
 
         group.MapPost("/register/patient", RegisterPatient)
-            .Produces<ApiSuccessResponse<RegisterResult>>(StatusCodes.Status201Created)
+            .Produces<ApiSuccessResponse<RegisterResponse>>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status429TooManyRequests)
@@ -36,7 +36,7 @@ public class AuthModule : MainModule, ICarterModule
             .WithOpenApi();
 
         group.MapPost("/register/doctor", RegisterDoctor)
-            .Produces<ApiSuccessResponse<RegisterResult>>(StatusCodes.Status201Created)
+            .Produces<ApiSuccessResponse<RegisterResponse>>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status429TooManyRequests)
@@ -72,6 +72,7 @@ public class AuthModule : MainModule, ICarterModule
                     });
 
                     AuthResponse response = new(
+                        value.UserId,
                         value.ExpiresAt,
                         value.Email,
                         value.Role,
@@ -100,7 +101,19 @@ public class AuthModule : MainModule, ICarterModule
             ErrorOr<RegisterResult> result = await sender.Send(command);
 
             return result.Match(
-                value => TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResult> { Data = value }),
+                value =>
+                {
+                    httpContext.Response.Cookies.Append("access_token", value.Token, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure   = true,
+                        SameSite = SameSiteMode.Lax,
+                        Expires  = DateTimeOffset.UtcNow.AddMinutes(15)
+                    });
+
+                    RegisterResponse response = new(value.UserId, value.Email, value.Role);
+                    return TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResponse> { Data = response });
+                },
                 errors => ApiResults.Problem(errors, fullRoute));
         }
         catch (Exception ex)
@@ -123,7 +136,19 @@ public class AuthModule : MainModule, ICarterModule
             ErrorOr<RegisterResult> result = await sender.Send(command);
 
             return result.Match(
-                value => TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResult> { Data = value }),
+                value =>
+                {
+                    httpContext.Response.Cookies.Append("access_token", value.Token, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure   = true,
+                        SameSite = SameSiteMode.Lax,
+                        Expires  = DateTimeOffset.UtcNow.AddMinutes(15)
+                    });
+
+                    RegisterResponse response = new(value.UserId, value.Email, value.Role);
+                    return TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResponse> { Data = response });
+                },
                 errors => ApiResults.Problem(errors, fullRoute));
         }
         catch (Exception ex)
