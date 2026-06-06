@@ -21,6 +21,7 @@ jobs:
           envs: GH_PAT
           script: |
             set -e
+            echo "PAT length: ${#GH_PAT}"
             cd /home/rokev-dynamics/metavix-api
             git pull https://x-access-token:${GH_PAT}@github.com/orrrrli/metavix-api.git main
             dotnet publish src/API/API.csproj -c Release -o /home/rokev-dynamics/metavix-api/publish
