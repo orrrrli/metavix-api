@@ -38,6 +38,9 @@ public static class DependencyInjection
         services.AddSingleton<IAppSettings, AppSettings>();
         services.AddHttpClient<IEmailService, BrevoEmailService>();
 
+        services.Configure<GoogleOAuthSettings>(configuration.GetSection(GoogleOAuthSettings.SectionName));
+        services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
+
         return services;
     }
 

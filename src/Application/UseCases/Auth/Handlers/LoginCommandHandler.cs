@@ -50,6 +50,9 @@ internal sealed class LoginCommandHandler
             return AuthErrors.InvalidCredentials;
         }
 
+        if (string.IsNullOrEmpty(user.PasswordHash))
+            return AuthErrors.GoogleAccountOnly;
+
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             _attemptTracker.RegisterFailure(request.Email);

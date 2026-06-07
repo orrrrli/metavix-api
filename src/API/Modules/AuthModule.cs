@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 
 using API.Common;
 using API.Helpers;
+using Application.Common.Interfaces.Services;
 using Application.UseCases.Auth.Commands;
 using Application.UseCases.Auth.Common;
+using Application.UseCases.Auth.Queries;
 using Contracts.Auth;
 
 namespace API.Modules;
@@ -69,6 +71,26 @@ public class AuthModule : MainModule, ICarterModule
             .Produces(StatusCodes.Status400BadRequest)
             .AllowAnonymous()
             .WithName("ResetPassword")
+            .WithOpenApi();
+
+        group.MapGet("/google", InitiateGoogleLogin)
+            .Produces(StatusCodes.Status302Found)
+            .Produces(StatusCodes.Status400BadRequest)
+            .AllowAnonymous()
+            .WithName("GoogleLogin")
+            .WithOpenApi();
+
+        group.MapGet("/google/callback", HandleGoogleCallback)
+            .Produces(StatusCodes.Status302Found)
+            .AllowAnonymous()
+            .WithName("GoogleCallback")
+            .WithOpenApi();
+
+        group.MapGet("/me", GetMe)
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .RequireAuthorization()
+            .WithName("Me")
             .WithOpenApi();
     }
 
@@ -280,5 +302,68 @@ public class AuthModule : MainModule, ICarterModule
         {
             return ApiResults.Error(ex, fullRoute, string.Empty);
         }
+    }
+
+    private static IResult InitiateGoogleLogin(
+        [FromQuery] string? role,
+        IGoogleOAuthService googleOAuthService)
+    {
+        if (role is not ("patient" or "doctor"))
+            return Results.BadRequest("role must be 'patient' or 'doctor'.");
+
+        string authUrl = googleOAuthService.BuildAuthorizationUrl(role, out _);
+        return Results.Redirect(authUrl);
+    }
+
+    private static async Task<IResult> HandleGoogleCallback(
+        [FromQuery] string? code,
+        [FromQuery] string? state,
+        ISender sender,
+        HttpContext httpContext,
+        IGoogleOAuthService googleOAuthService)
+    {
+        string frontendUrl = googleOAuthService.FrontendUrl;
+
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
+            return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+
+        try
+        {
+            ErrorOr<LoginResult> result = await sender.Send(
+                new GoogleCallbackCommand(code, state));
+
+            if (result.IsError)
+                return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+
+            LoginResult login = result.Value;
+
+            httpContext.Response.Cookies.Append("access_token",  login.AccessToken,  AccessTokenCookie());
+            httpContext.Response.Cookies.Append("refresh_token", login.RefreshToken, RefreshTokenCookie());
+
+            return Results.Redirect($"{frontendUrl}/auth/callback");
+        }
+        catch
+        {
+            return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+        }
+    }
+
+    private static async Task<IResult> GetMe(
+        ISender sender,
+        HttpContext httpContext)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+
+        ErrorOr<MeResult> result = await sender.Send(new MeQuery());
+
+        return result.Match(
+            value => ApiResults.Success(new MeResponse(
+                value.UserId,
+                value.PatientId,
+                value.DoctorId,
+                value.Email,
+                value.Role,
+                value.FullName), fullRoute),
+            errors => ApiResults.Problem(errors, fullRoute));
     }
 }

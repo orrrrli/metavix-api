@@ -28,4 +28,12 @@ public static class AuthErrors
     public static readonly Error InvalidOrExpiredResetToken = Error.Validation(
         code: "Auth.InvalidOrExpiredResetToken",
         description: "El enlace para restablecer contraseña es inválido o ha expirado.");
+
+    public static readonly Error GoogleAccountOnly = Error.Validation(
+        code: "Auth.GoogleAccountOnly",
+        description: "Esta cuenta fue creada con Google. Usa el botón 'Continuar con Google' para acceder.");
+
+    public static readonly Error GoogleOAuthFailed = Error.Failure(
+        code: "Auth.GoogleOAuthFailed",
+        description: "No se pudo completar el inicio de sesión con Google.");
 }
