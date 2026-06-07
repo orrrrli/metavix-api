@@ -49,6 +49,7 @@ public sealed class BrevoEmailService : IEmailService
             </a>
           </p>
           <p style="color:#666;font-size:14px">Este enlace expira en 1 hora. Si no solicitaste este cambio, ignora este correo.</p>
+          <p style="color:#999;font-size:13px">Si el botón no funciona, copia y pega este enlace en tu navegador:<br/><a href="{resetLink}" style="color:#14b8a6;word-break:break-all">{resetLink}</a></p>
           <hr style="border:none;border-top:1px solid #eee;margin:32px 0"/>
           <p style="color:#999;font-size:12px">Metavix — metavix.com.mx</p>
         </div>

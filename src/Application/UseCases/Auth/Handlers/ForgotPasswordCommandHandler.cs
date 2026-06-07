@@ -51,7 +51,7 @@ internal sealed class ForgotPasswordCommandHandler
         });
 
         string fullName  = user.Patient?.FirstName ?? user.Doctor?.FirstName ?? user.Email;
-        string resetLink = $"{_appSettings.AppBaseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
+        string resetLink = $"{_appSettings.AppBaseUrl}/reset-password?token={rawToken}";
 
         await _emailService.SendPasswordResetEmailAsync(user.Email, fullName, resetLink);
 
@@ -61,7 +61,10 @@ internal sealed class ForgotPasswordCommandHandler
     private static string GenerateToken()
     {
         byte[] bytes = RandomNumberGenerator.GetBytes(32);
-        return Convert.ToBase64String(bytes);
+        return Convert.ToBase64String(bytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
     }
 
     private static string HashToken(string token)
