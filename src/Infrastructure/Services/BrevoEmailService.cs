@@ -34,7 +34,11 @@ public sealed class BrevoEmailService : IEmailService
         });
 
         var response = await _http.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            string body = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"Brevo {(int)response.StatusCode}: {body}");
+        }
     }
 
     private static string BuildHtml(string name, string resetLink) => $"""
