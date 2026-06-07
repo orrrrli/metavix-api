@@ -76,6 +76,7 @@ try
         };
     });
 
+    app.UseRouting();
     app.UseCors("ProductionPolicy");
     app.ConfigureApi();
     app.UseRateLimiter();
