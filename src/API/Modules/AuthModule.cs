@@ -57,6 +57,19 @@ public class AuthModule : MainModule, ICarterModule
             .AllowAnonymous()
             .WithName("Logout")
             .WithOpenApi();
+
+        group.MapPost("/forgot-password", ForgotPassword)
+            .Produces(StatusCodes.Status200OK)
+            .AllowAnonymous()
+            .WithName("ForgotPassword")
+            .WithOpenApi();
+
+        group.MapPost("/reset-password", ResetPassword)
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .AllowAnonymous()
+            .WithName("ResetPassword")
+            .WithOpenApi();
     }
 
     private static CookieOptions AccessTokenCookie() => new()
@@ -227,6 +240,45 @@ public class AuthModule : MainModule, ICarterModule
         catch (Exception ex)
         {
             return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> ForgotPassword(
+        ISender sender,
+        HttpContext httpContext,
+        [FromBody] ForgotPasswordCommand command)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+
+        try
+        {
+            await sender.Send(command);
+            return Results.Ok();
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, $"Email: {command.Email}");
+        }
+    }
+
+    private static async Task<IResult> ResetPassword(
+        ISender sender,
+        HttpContext httpContext,
+        [FromBody] ResetPasswordCommand command)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+
+        try
+        {
+            ErrorOr<Unit> result = await sender.Send(command);
+
+            return result.Match(
+                _ => Results.Ok(),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, string.Empty);
         }
     }
 }

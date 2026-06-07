@@ -19,13 +19,13 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services
-            .AddServices()
+            .AddServices(configuration)
             .AddAuth(configuration)
             .AddPersistence(configuration);
         return services;
     }
 
-    private static IServiceCollection AddServices(this IServiceCollection services)
+    private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
@@ -33,6 +33,11 @@ public static class DependencyInjection
         services.AddSingleton<ILoginAttemptTracker, LoginAttemptTracker>();
         services.AddScoped<IDatabaseValidator, DatabaseValidator>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        services.Configure<BrevoSettings>(configuration.GetSection(BrevoSettings.SectionName));
+        services.AddSingleton<IAppSettings, AppSettings>();
+        services.AddHttpClient<IEmailService, BrevoEmailService>();
+
         return services;
     }
 

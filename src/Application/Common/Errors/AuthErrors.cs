@@ -24,4 +24,8 @@ public static class AuthErrors
     public static readonly Error InvalidRefreshToken = Error.Unauthorized(
         code: "Auth.InvalidRefreshToken",
         description: "El refresh token es inválido o ha expirado.");
+
+    public static readonly Error InvalidOrExpiredResetToken = Error.Validation(
+        code: "Auth.InvalidOrExpiredResetToken",
+        description: "El enlace para restablecer contraseña es inválido o ha expirado.");
 }

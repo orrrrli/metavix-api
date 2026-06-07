@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<InsulinDm1Profile> InsulinDm1Profiles => Set<InsulinDm1Profile>();
     public DbSet<InsulinDm1Record> InsulinDm1Records => Set<InsulinDm1Record>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

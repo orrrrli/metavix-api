@@ -21,7 +21,7 @@ jobs:
           envs: GH_PAT
           script: |
             set -e
-            cd /home/rokev-dynamics/metavix-api
+            cd /home/rokev-dynamics/metavix/metavix-api
             git pull https://x-access-token:${GH_PAT}@github.com/orrrrli/metavix-api.git main
-            dotnet publish src/API/API.csproj -c Release -o /home/rokev-dynamics/metavix-api/publish
-            sudo systemctl restart metavix-api
+            docker compose -f /home/rokev-dynamics/metavix/docker-compose.yml build metavix-api
+            docker compose -f /home/rokev-dynamics/metavix/docker-compose.yml up -d metavix-api
