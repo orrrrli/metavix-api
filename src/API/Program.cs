@@ -54,9 +54,6 @@ try
         await databaseValidator.ValidateAsync();
     }
 
-    if (!app.Environment.IsDevelopment())
-        app.UseHttpsRedirection();
-
     app.UseMiddleware<CorrelationIdMiddleware>();
 
     app.UseSerilogRequestLogging(options =>
