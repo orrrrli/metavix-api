@@ -85,8 +85,9 @@ internal sealed class GoogleCallbackCommandHandler
                 {
                     Id            = Guid.NewGuid(),
                     UserId        = userId,
-                    FirstName     = googleUser.FirstName,
-                    LastName      = googleUser.LastName,
+                    FirstName        = googleUser.FirstName,
+                    PaternalLastName = googleUser.LastName,
+                    MaternalLastName = string.Empty,
                     Email         = googleUser.Email,
                     LicenseNumber = string.Empty,
                     Speciality    = string.Empty,
@@ -101,7 +102,7 @@ internal sealed class GoogleCallbackCommandHandler
         string fullName = user.Role switch
         {
             UserRole.Doctor  => user.Doctor  is not null
-                ? $"{user.Doctor.FirstName} {user.Doctor.LastName}"
+                ? $"{user.Doctor.FirstName} {user.Doctor.PaternalLastName}"
                 : user.Email,
             UserRole.Patient => user.Patient is not null
                 ? $"{user.Patient.FirstName} {user.Patient.LastName}"

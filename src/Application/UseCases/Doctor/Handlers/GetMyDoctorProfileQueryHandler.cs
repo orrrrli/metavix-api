@@ -38,7 +38,9 @@ internal sealed class GetMyDoctorProfileQueryHandler
         return new DoctorProfileResult(
             doctor.Id,
             doctor.FirstName,
-            doctor.LastName,
+            doctor.MiddleName,
+            doctor.PaternalLastName,
+            doctor.MaternalLastName,
             doctor.LicenseNumber,
             doctor.Speciality,
             doctor.Email,

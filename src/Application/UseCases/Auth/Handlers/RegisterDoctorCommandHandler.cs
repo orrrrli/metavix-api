@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
@@ -42,9 +44,12 @@ internal sealed class RegisterDoctorCommandHandler
         if (await _userRepository.ExistsByEmailAsync(request.Email))
             return AuthErrors.EmailAlreadyExists;
 
-        bool isValid = await _cedulaVerification.VerifyAsync(request.LicenseNumber, cancellationToken);
-        if (!isValid)
+        var sepResult = await _cedulaVerification.VerifyAsync(request.LicenseNumber, cancellationToken);
+        if (sepResult is null)
             return DoctorErrors.InvalidLicense;
+
+        if (!NamesMatch(sepResult, request))
+            return DoctorErrors.NameMismatch;
 
         Guid userId = Guid.NewGuid();
         var user = new User
@@ -57,22 +62,24 @@ internal sealed class RegisterDoctorCommandHandler
             CreatedAt    = _dateTimeProvider.UtcNow,
             Doctor       = new Domain.Models.Doctor
             {
-                Id            = Guid.NewGuid(),
-                UserId        = userId,
-                FirstName     = request.FirstName,
-                LastName      = request.LastName,
-                Email         = request.Email,
-                LicenseNumber = request.LicenseNumber,
-                Speciality    = request.Speciality,
-                IsVerified    = true,
-                CreatedAt     = _dateTimeProvider.UtcNow,
-                IsActive      = true
+                Id               = Guid.NewGuid(),
+                UserId           = userId,
+                FirstName        = request.FirstName,
+                MiddleName       = request.MiddleName,
+                PaternalLastName = request.PaternalLastName,
+                MaternalLastName = request.MaternalLastName,
+                Email            = request.Email,
+                LicenseNumber    = request.LicenseNumber,
+                Speciality       = request.Speciality,
+                IsVerified       = true,
+                CreatedAt        = _dateTimeProvider.UtcNow,
+                IsActive         = true
             }
         };
 
         await _userRepository.AddAsync(user);
 
-        string fullName     = $"{request.FirstName} {request.LastName}";
+        string fullName     = $"{request.FirstName} {request.PaternalLastName}";
         string accessToken  = _jwtTokenGenerator.GenerateToken(user, fullName);
         string refreshToken = _jwtTokenGenerator.GenerateRefreshToken();
 
@@ -92,4 +99,23 @@ internal sealed class RegisterDoctorCommandHandler
             Token:        accessToken,
             RefreshToken: refreshToken);
     }
+
+    private static bool NamesMatch(CedulaVerificationResult sep, RegisterDoctorCommand cmd)
+    {
+        string sepNombre = Normalize(sep.Nombre);
+        string regNombre = string.IsNullOrWhiteSpace(cmd.MiddleName)
+            ? Normalize(cmd.FirstName)
+            : Normalize($"{cmd.FirstName} {cmd.MiddleName}");
+
+        return sepNombre == regNombre
+            && Normalize(sep.ApellidoPaterno) == Normalize(cmd.PaternalLastName)
+            && Normalize(sep.ApellidoMaterno) == Normalize(cmd.MaternalLastName);
+    }
+
+    private static string Normalize(string input) =>
+        new string(
+            input.Normalize(NormalizationForm.FormD)
+                 .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                 .ToArray()
+        ).ToUpperInvariant().Trim();
 }

@@ -4,7 +4,9 @@ namespace Application.UseCases.Auth.Commands;
 
 public sealed record RegisterDoctorCommand(
     string FirstName,
-    string LastName,
+    string? MiddleName,
+    string PaternalLastName,
+    string MaternalLastName,
     string Email,
     string Password,
     string LicenseNumber,

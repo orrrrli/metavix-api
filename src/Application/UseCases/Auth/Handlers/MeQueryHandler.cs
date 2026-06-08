@@ -30,7 +30,7 @@ internal sealed class MeQueryHandler : IRequestHandler<MeQuery, ErrorOr<MeResult
         string fullName = user.Role switch
         {
             UserRole.Doctor  => user.Doctor  is not null
-                ? $"{user.Doctor.FirstName} {user.Doctor.LastName}"
+                ? $"{user.Doctor.FirstName} {user.Doctor.PaternalLastName}"
                 : user.Email,
             UserRole.Patient => user.Patient is not null
                 ? $"{user.Patient.FirstName} {user.Patient.LastName}"

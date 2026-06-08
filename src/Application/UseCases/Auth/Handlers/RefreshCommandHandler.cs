@@ -46,7 +46,7 @@ internal sealed class RefreshCommandHandler
 
         string fullName = user.Role switch
         {
-            UserRole.Doctor  => user.Doctor  is not null ? $"{user.Doctor.FirstName} {user.Doctor.LastName}"   : user.Email,
+            UserRole.Doctor  => user.Doctor  is not null ? $"{user.Doctor.FirstName} {user.Doctor.PaternalLastName}"   : user.Email,
             UserRole.Patient => user.Patient is not null ? $"{user.Patient.FirstName} {user.Patient.LastName}" : user.Email,
             _                => user.Email
         };

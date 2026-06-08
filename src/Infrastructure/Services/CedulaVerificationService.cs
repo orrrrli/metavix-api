@@ -22,12 +22,12 @@ internal sealed class CedulaVerificationService : ICedulaVerificationService
         _logger   = logger;
     }
 
-    public async Task<bool> VerifyAsync(string licenseNumber, CancellationToken cancellationToken = default)
+    public async Task<CedulaVerificationResult?> VerifyAsync(string licenseNumber, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_settings.InternalKey))
         {
             _logger.LogWarning("CedulaScraper InternalKey not configured — skipping cedula verification.");
-            return false;
+            return null;
         }
 
         try
@@ -45,19 +45,28 @@ internal sealed class CedulaVerificationService : ICedulaVerificationService
                 _logger.LogWarning(
                     "CedulaScraper returned {StatusCode} for license {LicenseNumber}",
                     (int)response.StatusCode, licenseNumber);
-                return false;
+                return null;
             }
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
             using JsonDocument doc = JsonDocument.Parse(body);
 
-            return doc.RootElement.TryGetProperty("isValid", out JsonElement isValid)
-                && isValid.GetBoolean();
+            JsonElement root = doc.RootElement;
+
+            if (!root.TryGetProperty("isValid", out JsonElement isValid) || !isValid.GetBoolean())
+                return null;
+
+            return new CedulaVerificationResult(
+                Nombre:          root.TryGetProperty("nombre",          out var n)  ? n.GetString()  ?? "" : "",
+                ApellidoPaterno: root.TryGetProperty("apellidoPaterno", out var ap) ? ap.GetString() ?? "" : "",
+                ApellidoMaterno: root.TryGetProperty("apellidoMaterno", out var am) ? am.GetString() ?? "" : "",
+                Institucion:     root.TryGetProperty("institucion",     out var i)  ? i.GetString()  ?? "" : "",
+                Carrera:         root.TryGetProperty("carrera",         out var c)  ? c.GetString()  ?? "" : "");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error calling CedulaScraper for license {LicenseNumber}", licenseNumber);
-            return false;
+            return null;
         }
     }
 }

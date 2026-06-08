@@ -16,7 +16,7 @@ public class DoctorRepository : IDoctorRepository
     {
         return await _dbContext.Doctors
             .Where(d => d.IsActive)
-            .OrderBy(d => d.LastName)
+            .OrderBy(d => d.PaternalLastName)
             .ThenBy(d => d.FirstName)
             .ToListAsync();
     }

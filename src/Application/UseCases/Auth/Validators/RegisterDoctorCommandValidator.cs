@@ -11,9 +11,13 @@ internal sealed class RegisterDoctorCommandValidator : AbstractValidator<Registe
             .NotEmpty()
             .WithMessage("El nombre es requerido");
 
-        RuleFor(x => x.LastName)
+        RuleFor(x => x.PaternalLastName)
             .NotEmpty()
-            .WithMessage("El apellido es requerido");
+            .WithMessage("El apellido paterno es requerido");
+
+        RuleFor(x => x.MaternalLastName)
+            .NotEmpty()
+            .WithMessage("El apellido materno es requerido");
 
         RuleFor(x => x.Email)
             .NotEmpty()

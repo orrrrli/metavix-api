@@ -23,7 +23,7 @@ internal sealed class GetAllDoctorsQueryHandler
         var results = doctors.Select(d => new DoctorResult(
             d.Id,
             d.FirstName,
-            d.LastName,
+            d.PaternalLastName,
             d.Speciality,
             d.Email)).ToList();
 

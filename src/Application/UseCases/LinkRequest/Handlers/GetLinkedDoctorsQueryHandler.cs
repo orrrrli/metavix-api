@@ -39,7 +39,7 @@ internal sealed class GetLinkedDoctorsQueryHandler
             r.Id,
             r.DoctorId,
             r.Doctor.FirstName,
-            r.Doctor.LastName,
+            r.Doctor.PaternalLastName,
             r.Doctor.Speciality,
             r.Doctor.Email,
             r.ResolvedAt ?? r.CreatedAt)).ToList();

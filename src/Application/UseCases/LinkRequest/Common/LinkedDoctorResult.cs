@@ -4,7 +4,7 @@ public sealed record LinkedDoctorResult(
     Guid RequestId,
     Guid DoctorId,
     string DoctorFirstName,
-    string DoctorLastName,
+    string DoctorPaternalLastName,
     string Speciality,
     string Email,
     DateTime LinkedAt);
