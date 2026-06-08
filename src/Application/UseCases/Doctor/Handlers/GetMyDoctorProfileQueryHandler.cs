@@ -6,36 +6,34 @@ using Application.UseCases.Doctor.Queries;
 
 namespace Application.UseCases.Doctor.Handlers;
 
-internal sealed class GetDoctorProfileQueryHandler
-    : IRequestHandler<GetDoctorProfileQuery, ErrorOr<DoctorProfileResult>>
+internal sealed class GetMyDoctorProfileQueryHandler
+    : IRequestHandler<GetMyDoctorProfileQuery, ErrorOr<DoctorProfileResult>>
 {
     private readonly IDoctorRepository _doctorRepository;
     private readonly ICurrentUserService _currentUser;
 
-    public GetDoctorProfileQueryHandler(
+    public GetMyDoctorProfileQueryHandler(
         IDoctorRepository doctorRepository,
         ICurrentUserService currentUser)
     {
         _doctorRepository = doctorRepository;
-        _currentUser = currentUser;
+        _currentUser      = currentUser;
     }
 
     public async Task<ErrorOr<DoctorProfileResult>> Handle(
-        GetDoctorProfileQuery request,
+        GetMyDoctorProfileQuery request,
         CancellationToken cancellationToken)
     {
         if (_currentUser.UserId is null)
             return AuthErrors.Forbidden;
 
-        var callerDoctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerDoctorId != request.DoctorId)
-            return AuthErrors.Forbidden;
-
-        var doctor = await _doctorRepository.GetByIdAsync(request.DoctorId);
-        if (doctor is null)
-        {
+        Guid? doctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
+        if (doctorId is null)
             return DoctorErrors.DoctorNotFound;
-        }
+
+        var doctor = await _doctorRepository.GetByIdAsync(doctorId.Value);
+        if (doctor is null)
+            return DoctorErrors.DoctorNotFound;
 
         return new DoctorProfileResult(
             doctor.Id,
@@ -45,6 +43,9 @@ internal sealed class GetDoctorProfileQueryHandler
             doctor.Speciality,
             doctor.Email,
             doctor.Phone,
+            doctor.Curp,
+            doctor.IneNumber,
+            doctor.IsVerified,
             doctor.IsActive,
             doctor.CreatedAt);
     }

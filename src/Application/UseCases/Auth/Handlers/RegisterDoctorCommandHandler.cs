@@ -17,19 +17,22 @@ internal sealed class RegisterDoctorCommandHandler
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICedulaVerificationService _cedulaVerification;
 
     public RegisterDoctorCommandHandler(
         IUserRepository userRepository,
         IRefreshTokenRepository refreshTokenRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        ICedulaVerificationService cedulaVerification)
     {
-        _userRepository = userRepository;
+        _userRepository         = userRepository;
         _refreshTokenRepository = refreshTokenRepository;
-        _passwordHasher = passwordHasher;
-        _jwtTokenGenerator = jwtTokenGenerator;
-        _dateTimeProvider = dateTimeProvider;
+        _passwordHasher         = passwordHasher;
+        _jwtTokenGenerator      = jwtTokenGenerator;
+        _dateTimeProvider       = dateTimeProvider;
+        _cedulaVerification     = cedulaVerification;
     }
 
     public async Task<ErrorOr<RegisterResult>> Handle(
@@ -38,6 +41,10 @@ internal sealed class RegisterDoctorCommandHandler
     {
         if (await _userRepository.ExistsByEmailAsync(request.Email))
             return AuthErrors.EmailAlreadyExists;
+
+        bool isValid = await _cedulaVerification.VerifyAsync(request.LicenseNumber, cancellationToken);
+        if (!isValid)
+            return DoctorErrors.InvalidLicense;
 
         Guid userId = Guid.NewGuid();
         var user = new User
@@ -50,13 +57,16 @@ internal sealed class RegisterDoctorCommandHandler
             CreatedAt    = _dateTimeProvider.UtcNow,
             Doctor       = new Domain.Models.Doctor
             {
-                Id        = Guid.NewGuid(),
-                UserId    = userId,
-                FirstName = request.FirstName,
-                LastName  = request.LastName,
-                Email     = request.Email,
-                CreatedAt = _dateTimeProvider.UtcNow,
-                IsActive  = true
+                Id            = Guid.NewGuid(),
+                UserId        = userId,
+                FirstName     = request.FirstName,
+                LastName      = request.LastName,
+                Email         = request.Email,
+                LicenseNumber = request.LicenseNumber,
+                Speciality    = request.Speciality,
+                IsVerified    = true,
+                CreatedAt     = _dateTimeProvider.UtcNow,
+                IsActive      = true
             }
         };
 

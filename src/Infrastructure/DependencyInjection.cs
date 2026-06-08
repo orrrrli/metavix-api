@@ -41,6 +41,14 @@ public static class DependencyInjection
         services.Configure<GoogleOAuthSettings>(configuration.GetSection(GoogleOAuthSettings.SectionName));
         services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
 
+        services.Configure<CedulaScraperSettings>(configuration.GetSection(CedulaScraperSettings.SectionName));
+        services.AddHttpClient<ICedulaVerificationService, CedulaVerificationService>(client =>
+        {
+            client.BaseAddress = new Uri(configuration[$"{CedulaScraperSettings.SectionName}:BaseUrl"]
+                ?? "http://cedula-scraper:3000");
+            client.Timeout = TimeSpan.FromSeconds(60);
+        });
+
         return services;
     }
 

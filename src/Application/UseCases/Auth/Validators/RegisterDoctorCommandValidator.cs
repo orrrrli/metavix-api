@@ -32,5 +32,15 @@ internal sealed class RegisterDoctorCommandValidator : AbstractValidator<Registe
             .WithMessage("La contraseña debe contener al menos un número")
             .Matches("[^a-zA-Z0-9]")
             .WithMessage("La contraseña debe contener al menos un carácter especial");
+
+        RuleFor(x => x.LicenseNumber)
+            .NotEmpty()
+            .WithMessage("El número de cédula profesional es requerido")
+            .Matches(@"^\d{5,12}$")
+            .WithMessage("El número de cédula debe contener entre 5 y 12 dígitos");
+
+        RuleFor(x => x.Speciality)
+            .NotEmpty()
+            .WithMessage("La especialidad es requerida");
     }
 }

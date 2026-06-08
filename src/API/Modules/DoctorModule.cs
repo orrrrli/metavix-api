@@ -25,10 +25,10 @@ public class DoctorModule : MainModule, ICarterModule
             .RequireAuthorization(p => p.RequireRole("Doctor"));
 
         // === Doctor Profile ===
-        group.MapGet("/get-profile/{doctorId:guid}", GetDoctorProfile)
+        group.MapGet("/me", GetMyProfile)
             .Produces<ApiSuccessResponse<DoctorProfileResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
-            .WithName("GetDoctorProfile")
+            .WithName("GetMyDoctorProfile")
             .WithOpenApi();
 
         // === Patient Management (Doctor perspective) ===
@@ -90,20 +90,18 @@ public class DoctorModule : MainModule, ICarterModule
             .WithOpenApi();
     }
 
-    // === Doctor Profile ===
+    // === Doctor Me ===
 
-    private static async Task<IResult> GetDoctorProfile(
+    private static async Task<IResult> GetMyProfile(
         ISender sender,
-        HttpContext httpContext,
-        [FromRoute] Guid doctorId)
+        HttpContext httpContext)
     {
         string fullRoute = $"{httpContext.Request.Path}";
-        string parametros = $"DoctorId: {doctorId}";
-        LoggingHelper.LogRequest(fullRoute, parametros);
+        LoggingHelper.LogRequest(fullRoute, string.Empty);
 
         try
         {
-            var result = await sender.Send(new GetDoctorProfileQuery(doctorId));
+            var result = await sender.Send(new GetMyDoctorProfileQuery());
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
@@ -111,7 +109,7 @@ public class DoctorModule : MainModule, ICarterModule
         }
         catch (Exception ex)
         {
-            return ApiResults.Error(ex, fullRoute, parametros);
+            return ApiResults.Error(ex, fullRoute, string.Empty);
         }
     }
 

@@ -6,4 +6,6 @@ public sealed record RegisterDoctorCommand(
     string FirstName,
     string LastName,
     string Email,
-    string Password) : IRequest<ErrorOr<RegisterResult>>;
+    string Password,
+    string LicenseNumber,
+    string Speciality) : IRequest<ErrorOr<RegisterResult>>;

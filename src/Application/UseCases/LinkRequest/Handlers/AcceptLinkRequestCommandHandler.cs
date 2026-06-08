@@ -48,18 +48,23 @@ internal sealed class AcceptLinkRequestCommandHandler
         if (callerDoctorId != linkRequest.DoctorId)
             return AuthErrors.Forbidden;
 
-        // 2. Verify it is still pending
+        // 2. Verify the doctor has passed identity verification
+        var doctor = await _doctorRepository.GetByIdAsync(callerDoctorId.Value);
+        if (doctor is null || !doctor.IsVerified)
+            return DoctorErrors.NotVerified;
+
+        // 4. Verify it is still pending
         if (linkRequest.Status != RequestStatus.Pending)
         {
             return LinkRequestErrors.NotPending;
         }
 
-        // 3. Accept the request
+        // 5. Accept the request
         linkRequest.Status = RequestStatus.Accepted;
         linkRequest.ResolvedAt = _dateTimeProvider.UtcNow;
         await _requestRepository.UpdateAsync(linkRequest);
 
-        // 4. Link the patient to the doctor
+        // 6. Link the patient to the doctor
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {

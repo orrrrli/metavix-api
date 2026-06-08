@@ -33,4 +33,21 @@ public class DoctorRepository : IDoctorRepository
             .Select(d => (Guid?)d.Id)
             .FirstOrDefaultAsync();
     }
+
+    public async Task UpdateVerificationAsync(
+        Guid doctorId,
+        bool isVerified,
+        string? curp,
+        string? ineNumber,
+        CancellationToken cancellationToken = default)
+    {
+        await _dbContext.Doctors
+            .Where(d => d.Id == doctorId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.IsVerified, isVerified)
+                .SetProperty(d => d.Curp, curp)
+                .SetProperty(d => d.IneNumber, ineNumber)
+                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                cancellationToken);
+    }
 }

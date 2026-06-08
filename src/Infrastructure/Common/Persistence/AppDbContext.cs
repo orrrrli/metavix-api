@@ -35,12 +35,18 @@ public class AppDbContext : DbContext
             entity.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
         });
 
-        // User → Doctor (one-to-one, optional)
-        modelBuilder.Entity<Doctor>()
-            .HasOne(d => d.User)
-            .WithOne(u => u.Doctor)
-            .HasForeignKey<Doctor>(d => d.UserId)
-            .OnDelete(DeleteBehavior.SetNull);
+        // Doctor configuration
+        modelBuilder.Entity<Doctor>(entity =>
+        {
+            entity.Property(d => d.Curp).HasMaxLength(18);
+            entity.Property(d => d.IneNumber).HasMaxLength(18);
+            entity.Property(d => d.IsVerified).HasDefaultValue(false);
+
+            entity.HasOne(d => d.User)
+                .WithOne(u => u.Doctor)
+                .HasForeignKey<Doctor>(d => d.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
 
         // User → Patient (one-to-one, optional)
         modelBuilder.Entity<Patient>()

@@ -8,5 +8,8 @@ public sealed record DoctorProfileResult(
     string Speciality,
     string Email,
     string? Phone,
+    string? Curp,
+    string? IneNumber,
+    bool IsVerified,
     bool IsActive,
     DateTime CreatedAt);

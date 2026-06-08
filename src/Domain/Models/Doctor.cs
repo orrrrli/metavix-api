@@ -10,6 +10,9 @@ public class Doctor
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public Guid? UserId { get; set; }
+    public string? Curp { get; set; }
+    public string? IneNumber { get; set; }
+    public bool IsVerified { get; set; } = false;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

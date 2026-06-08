@@ -7,4 +7,5 @@ public interface IDoctorRepository
     Task<List<Doctor>> GetAllActiveAsync();
     Task<Doctor?> GetByIdAsync(Guid doctorId);
     Task<Guid?> GetDoctorIdByUserIdAsync(Guid userId);
+    Task UpdateVerificationAsync(Guid doctorId, bool isVerified, string? curp, string? ineNumber, CancellationToken cancellationToken = default);
 }
