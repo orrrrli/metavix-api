@@ -140,6 +140,65 @@ Documentación OpenAPI disponible en `/swagger` en desarrollo.
 
 ---
 
+## Tests
+
+```bash
+# Correr todos los tests
+dotnet test
+
+# Correr solo el proyecto de unit tests
+dotnet test tests/Application.Tests/Application.Tests.csproj
+```
+
+Los tests unitarios cubren los handlers de Application usando **xUnit**, **NSubstitute** para mocks y **FluentAssertions** para assertions. No requieren base de datos ni levantar el servidor — todas las dependencias se mockean a través de las interfaces definidas en Application.
+
+---
+
+## Migraciones
+
+Cuando se modifica una propiedad de una entidad (renombrar columna, cambiar tipo, agregar campo), el flujo es:
+
+**1. Modificar la entidad en Domain**
+
+```csharp
+// src/Domain/Models/Patient.cs
+public string PhoneNumber { get; set; } = string.Empty; // campo nuevo
+```
+
+**2. Actualizar la configuración de EF Core en Infrastructure** (si aplica)
+
+```csharp
+// src/Infrastructure/Persistence/Configurations/PatientConfiguration.cs
+builder.Property(p => p.PhoneNumber).HasMaxLength(20);
+```
+
+**3. Generar la migración**
+
+```bash
+dotnet ef migrations add <NombreDescriptivo> \
+  --project src/Infrastructure/Infrastructure.csproj \
+  --startup-project src/API/API.csproj \
+  --output-dir Migrations
+```
+
+El nombre debe describir el cambio, por ejemplo: `AddPhoneNumberToPatient`, `RenameLastNameToPaternalLastName`.
+
+**4. Revisar el archivo generado antes de aplicar**
+
+EF Core genera el archivo en `src/Infrastructure/Migrations/`. Verificar que el `Up()` y `Down()` reflejan exactamente el cambio esperado — especialmente en renombrados, donde EF a veces genera un `DropColumn` + `AddColumn` en lugar de un `RenameColumn`, lo que causaría pérdida de datos.
+
+**5. Aplicar la migración**
+
+```bash
+dotnet ef database update \
+  --project src/Infrastructure/Infrastructure.csproj \
+  --startup-project src/API/API.csproj
+```
+
+> **Por qué `--output-dir Migrations` es obligatorio:** `AppDbContext` vive en el namespace `Infrastructure.Common.Persistence`. Sin este flag, EF deriva la carpeta de destino desde ese namespace y coloca las migraciones en `src/Infrastructure/Common/Persistence/Migrations/`, rompiendo la cadena de migraciones.
+
+---
+
 ## Estado del proyecto
 
 En desarrollo activo. Actualmente en alpha — base de datos en Neon. Migración planeada a Postgres auto-hospedado en VPS antes del lanzamiento público.
