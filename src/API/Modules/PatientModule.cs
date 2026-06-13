@@ -57,6 +57,12 @@ public class PatientModule : MainModule, ICarterModule
             .WithOpenApi();
 
         // === Patient Profile ===
+        group.MapGet("/me", GetMyPatientProfile)
+            .Produces<ApiSuccessResponse<PatientProfileResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetMyPatientProfile")
+            .WithOpenApi();
+
         group.MapGet("/{patientId:guid}/profile", GetPatientProfile)
             .Produces<ApiSuccessResponse<PatientProfileResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status403Forbidden)
@@ -514,6 +520,27 @@ public class PatientModule : MainModule, ICarterModule
     }
 
     // === Patient Profile ===
+
+    private static async Task<IResult> GetMyPatientProfile(
+        ISender sender,
+        HttpContext httpContext)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        LoggingHelper.LogRequest(fullRoute, "");
+
+        try
+        {
+            var result = await sender.Send(new GetMyPatientProfileQuery());
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, "");
+        }
+    }
 
     private static async Task<IResult> GetPatientProfile(
         ISender sender,
