@@ -21,6 +21,16 @@ public class DoctorModule : MainModule, ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
+        // Any authenticated user can view a doctor's public profile
+        RouteGroupBuilder publicGroup = app.MapGroup("doctor")
+            .RequireAuthorization();
+
+        publicGroup.MapGet("/get-profile/{doctorId:guid}", GetDoctorProfileById)
+            .Produces<ApiSuccessResponse<DoctorProfileResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetDoctorProfileById")
+            .WithOpenApi();
+
         RouteGroupBuilder group = app.MapGroup("doctor")
             .RequireAuthorization(p => p.RequireRole("Doctor"));
 
@@ -88,6 +98,31 @@ public class DoctorModule : MainModule, ICarterModule
             .Produces(StatusCodes.Status404NotFound)
             .WithName("UnlinkPatient")
             .WithOpenApi();
+    }
+
+    // === Doctor Profile (public) ===
+
+    private static async Task<IResult> GetDoctorProfileById(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetDoctorProfileByIdQuery(doctorId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
     }
 
     // === Doctor Me ===

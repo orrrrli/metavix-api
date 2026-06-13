@@ -71,12 +71,12 @@ public class PatientModule : MainModule, ICarterModule
             .WithName("UpdatePatientProfile")
             .WithOpenApi();
 
-        // === Resumen Clínico ===
-        group.MapGet("/{patientId:guid}/resumen", GetPatientResumen)
+        // === Clinical Summary ===
+        group.MapGet("/{patientId:guid}/summary", GetPatientSummary)
             .Produces<ApiSuccessResponse<PatientResumenResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound)
-            .WithName("GetPatientResumen")
+            .WithName("GetPatientSummary")
             .WithOpenApi();
 
         // === Daily Records ===
@@ -568,9 +568,9 @@ public class PatientModule : MainModule, ICarterModule
         }
     }
 
-    // === Resumen Clínico ===
+    // === Clinical Summary ===
 
-    private static async Task<IResult> GetPatientResumen(
+    private static async Task<IResult> GetPatientSummary(
         ISender sender,
         HttpContext httpContext,
         [FromRoute] Guid patientId)
