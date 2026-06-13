@@ -45,15 +45,17 @@ public class AppDbContext : DbContext
             entity.HasOne(d => d.User)
                 .WithOne(u => u.Doctor)
                 .HasForeignKey<Doctor>(d => d.UserId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // User → Patient (one-to-one, optional)
+        // User → Patient (one-to-one, required)
         modelBuilder.Entity<Patient>()
             .HasOne(p => p.User)
             .WithOne(u => u.Patient)
             .HasForeignKey<Patient>(p => p.UserId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
 
         // LogEntry — table managed by Serilog, excluded from migrations
         modelBuilder.Entity<LogEntry>(entity =>

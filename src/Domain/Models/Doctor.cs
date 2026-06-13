@@ -11,7 +11,7 @@ public class Doctor
     public string Speciality { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
-    public Guid? UserId { get; set; }
+    public Guid UserId { get; set; }
     public string? Curp { get; set; }
     public string? IneNumber { get; set; }
     public bool IsVerified { get; set; } = false;

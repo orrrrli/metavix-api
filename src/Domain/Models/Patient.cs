@@ -16,7 +16,7 @@ public class Patient
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public DiabetesType DiabetesType { get; set; } = DiabetesType.None;
-    public Guid? UserId { get; set; }
+    public Guid UserId { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
