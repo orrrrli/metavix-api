@@ -8,7 +8,7 @@ COPY src/Domain/Domain.csproj ./src/Domain/
 COPY src/Infrastructure/Infrastructure.csproj ./src/Infrastructure/
 COPY src/Contracts/Contracts.csproj ./src/Contracts/
 
-RUN dotnet restore
+RUN dotnet restore src/API/API.csproj
 
 COPY src/ ./src/
 
