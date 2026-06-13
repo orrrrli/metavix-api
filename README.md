@@ -201,4 +201,4 @@ dotnet ef database update \
 
 ## Estado del proyecto
 
-En desarrollo activo. Actualmente en alpha — base de datos en Neon. Migración planeada a Postgres auto-hospedado en VPS antes del lanzamiento público.
+En desarrollo activo — actualmente en alpha. La API y Postgres están desplegados en un VPS con Ubuntu Linux, en el mismo servidor para reducir latencia y simplificar operaciones.
