@@ -1,0 +1,10 @@
+global using Application.Common.Errors;
+global using Application.Common.Interfaces.Persistence;
+global using Application.Common.Interfaces.Security;
+global using Application.Common.Interfaces.Services;
+global using Domain.Enums;
+global using Domain.Models;
+global using ErrorOr;
+global using FluentAssertions;
+global using NSubstitute;
+global using Xunit;
