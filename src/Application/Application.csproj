@@ -1,11 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
   <ItemGroup>
     <Folder Include="Common\Interfaces\Security\" />
     <Folder Include="UseCases\Patient\Validators\" />
@@ -24,11 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ErrorOr" Version="2.1.1" />
-    <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
-    <PackageReference Include="MediatR" Version="11.*" />
-    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.*" />
+    <PackageReference Include="ErrorOr" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" />
   </ItemGroup>
 
 </Project>
