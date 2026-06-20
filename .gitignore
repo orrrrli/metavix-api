@@ -53,3 +53,6 @@ seed.sql
 
 # Local deploy scripts (may contain secrets)
 docs/azure-deploy.sh
+
+# Graphify knowledge graph output
+graphify-out/
