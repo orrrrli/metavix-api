@@ -50,7 +50,7 @@ internal sealed class AcceptLinkRequestCommandHandler
 
         // 2. Verify the doctor has passed identity verification
         var doctor = await _doctorRepository.GetByIdAsync(callerDoctorId.Value);
-        if (doctor is null || !doctor.IsVerified)
+        if (doctor is null || string.IsNullOrEmpty(doctor.LicenseNumber))
             return DoctorErrors.NotVerified;
 
         // 4. Verify it is still pending

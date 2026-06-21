@@ -41,7 +41,12 @@ internal sealed class GetPatientDailyRecordsQueryHandler
             return PatientErrors.PatientsNotFound;
         }
 
-        var records = await _dailyRecordRepository.GetAllByPatientIdAsync(request.PatientId);
+        bool hasRange = request.DateFrom.HasValue && request.DateTo.HasValue;
+
+        var records = hasRange
+            ? await _dailyRecordRepository.GetByPatientIdInRangeAsync(
+                request.PatientId, request.DateFrom!.Value, request.DateTo!.Value, cancellationToken)
+            : await _dailyRecordRepository.GetAllByPatientIdAsync(request.PatientId);
 
         var results = records.Select(r => new DailyRecordResult(
             r.Id,
@@ -58,7 +63,7 @@ internal sealed class GetPatientDailyRecordsQueryHandler
             r.GlucoseReadings.Select(g => new GlucoseReadingResult(
                 g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods)).ToList())).ToList();
 
-        if (results.Count == 0)
+        if (!hasRange && results.Count == 0)
         {
             return RecordErrors.RecordsNotFound;
         }

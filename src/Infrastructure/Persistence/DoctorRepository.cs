@@ -50,4 +50,19 @@ public class DoctorRepository : IDoctorRepository
                 .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
                 cancellationToken);
     }
+
+    public async Task UpdateProfileAsync(
+        Guid doctorId,
+        string licenseNumber,
+        string speciality,
+        CancellationToken cancellationToken = default)
+    {
+        await _dbContext.Doctors
+            .Where(d => d.Id == doctorId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.LicenseNumber, licenseNumber)
+                .SetProperty(d => d.Speciality, speciality)
+                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                cancellationToken);
+    }
 }

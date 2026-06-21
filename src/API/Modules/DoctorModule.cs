@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using API.Common;
 using API.Helpers;
+using Application.UseCases.Doctor.Commands;
 using Application.UseCases.Doctor.Common;
 using Application.UseCases.Doctor.Queries;
 using Application.UseCases.Patient.Common;
@@ -39,6 +40,12 @@ public class DoctorModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<DoctorProfileResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("GetMyDoctorProfile")
+            .WithOpenApi();
+
+        group.MapPatch("/me", UpdateMyProfile)
+            .Produces<ApiSuccessResponse<DoctorProfileResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .WithName("UpdateMyDoctorProfile")
             .WithOpenApi();
 
         // === Patient Management (Doctor perspective) ===
@@ -126,6 +133,28 @@ public class DoctorModule : MainModule, ICarterModule
     }
 
     // === Doctor Me ===
+
+    private static async Task<IResult> UpdateMyProfile(
+        ISender sender,
+        HttpContext httpContext,
+        [FromBody] UpdateDoctorProfileCommand command)
+    {
+        string fullRoute = httpContext.Request.Path;
+        LoggingHelper.LogRequest(fullRoute, string.Empty);
+
+        try
+        {
+            var result = await sender.Send(command);
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, string.Empty);
+        }
+    }
 
     private static async Task<IResult> GetMyProfile(
         ISender sender,

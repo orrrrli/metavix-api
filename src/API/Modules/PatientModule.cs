@@ -96,6 +96,12 @@ public class PatientModule : MainModule, ICarterModule
             .WithName("GetPatientDailyRecords")
             .WithOpenApi();
 
+        group.MapGet("/{patientId:guid}/records/daily/snapshot", GetDailyRecordSnapshot)
+            .Produces<ApiSuccessResponse<DailyRecordSnapshotResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .WithName("GetDailyRecordSnapshot")
+            .WithOpenApi();
+
         group.MapGet("/{patientId:guid}/record/daily/{recordId:guid}", GetDailyRecordById)
             .Produces<ApiSuccessResponse<DailyRecordResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
@@ -279,15 +285,41 @@ public class PatientModule : MainModule, ICarterModule
     private static async Task<IResult> GetPatientDailyRecords(
         ISender sender,
         HttpContext httpContext,
-        [FromRoute] Guid patientId)
+        [FromRoute] Guid patientId,
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null)
     {
         string fullRoute = $"{httpContext.Request.Path}";
-        string parametros = $"PatientId: {patientId}";
+        string parametros = $"PatientId: {patientId}, From: {from}, To: {to}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
         try
         {
-            var result = await sender.Send(new GetPatientDailyRecordsQuery(patientId));
+            var result = await sender.Send(new GetPatientDailyRecordsQuery(patientId, from, to));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> GetDailyRecordSnapshot(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId,
+        [FromQuery] DateOnly date)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}, Date: {date}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetDailyRecordSnapshotQuery(patientId, date));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),

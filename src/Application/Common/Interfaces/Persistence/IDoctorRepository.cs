@@ -8,4 +8,5 @@ public interface IDoctorRepository
     Task<Doctor?> GetByIdAsync(Guid doctorId);
     Task<Guid?> GetDoctorIdByUserIdAsync(Guid userId);
     Task UpdateVerificationAsync(Guid doctorId, bool isVerified, string? curp, string? ineNumber, CancellationToken cancellationToken = default);
+    Task UpdateProfileAsync(Guid doctorId, string licenseNumber, string speciality, CancellationToken cancellationToken = default);
 }

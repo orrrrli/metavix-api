@@ -44,4 +44,29 @@ public class DailyRecordRepository : IDailyRecordRepository
             .ThenByDescending(r => r.RecordTime)
             .FirstOrDefaultAsync();
     }
+
+    public async Task<DailyRecord?> GetFirstByPatientIdAndDateAsync(
+        Guid patientId,
+        DateOnly date,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.DailyRecords
+            .Where(r => r.PatientId == patientId && r.RecordDate == date)
+            .OrderBy(r => r.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<List<DailyRecord>> GetByPatientIdInRangeAsync(
+        Guid patientId,
+        DateOnly dateFrom,
+        DateOnly dateTo,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.DailyRecords
+            .Include(r => r.GlucoseReadings)
+            .Where(r => r.PatientId == patientId && r.RecordDate >= dateFrom && r.RecordDate <= dateTo)
+            .OrderByDescending(r => r.RecordDate)
+            .ThenByDescending(r => r.RecordTime)
+            .ToListAsync(cancellationToken);
+    }
 }
