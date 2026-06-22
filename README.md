@@ -55,7 +55,24 @@ Un `IPipelineBehavior<TRequest, TResponse>` de MediatR intercepta cada command a
 
 **Por qué:** La validación corre una sola vez, en un solo lugar, automáticamente — ningún handler necesita recordar llamarla. Agregar un nuevo validator para un nuevo command no requiere ningún cambio en el registro del pipeline.
 
-### 5. Middleware de Correlation ID
+### 5. Compresión de respuestas (Brotli + Gzip)
+
+Todas las respuestas JSON pasan por el middleware de compresión antes de salir por la red. El cliente anuncia los algoritmos que soporta en el header `Accept-Encoding: br, gzip` — el servidor elige el mejor disponible, comprime el cuerpo, y agrega `Content-Encoding: br` a la respuesta. El cliente descomprime automáticamente. Ni el handler ni el frontend escriben código de compresión.
+
+Se registran dos algoritmos en orden de preferencia:
+
+| Algoritmo | Nivel configurado | Por qué |
+| --------- | ----------------- | ------- |
+| **Brotli** (`br`) | `Fastest` | Soportado por todos los navegadores modernos desde 2017. Ya es 20–30% más eficiente que Gzip al mismo nivel, así que se prioriza velocidad sobre tamaño máximo. |
+| **Gzip** | `SmallestSize` | Fallback para clientes antiguos. Como menos requests llegan aquí, vale la pena gastar más CPU para obtener el payload más pequeño posible. |
+
+`EnableForHttps = true` está activado porque los tokens de autenticación van en cookies `HttpOnly`, no en el cuerpo de la respuesta — por lo que el riesgo del ataque BREACH no aplica aquí. `application/json` se agrega explícitamente a la lista de MIME types permitidos porque ASP.NET Core no lo incluye por defecto.
+
+**Por qué importa para este dominio:** Los pacientes acceden desde dispositivos móviles en redes reales. Un historial de registros diarios sin comprimir puede pesar 50 KB; con Brotli baja a ~12 KB. En una conexión 3G eso es la diferencia entre una carga perceptible y una instantánea.
+
+**Cuándo no ayuda:** En conexiones rápidas (LAN, fiber) o payloads pequeños (< 1 KB), el costo de CPU de comprimir supera el tiempo ahorrado en red. ASP.NET Core omite la compresión automáticamente en respuestas muy pequeñas.
+
+### 6. Middleware de Correlation ID
 
 El servidor genera un `Guid` único por cada request, lo empuja al `LogContext` de Serilog y lo devuelve en el header `X-Correlation-ID` de la respuesta. Esto permite buscar en los logs todo lo que ocurrió en una petición específica con una sola consulta al endpoint de admin.
 
@@ -68,29 +85,29 @@ El middleware también acepta el header si el cliente lo manda. Esto habilita un
 ## Endpoints
 
 
-| Módulo  | Método | Ruta                               | Auth      |
-| ------- | ------ | ---------------------------------- | --------- |
-| Auth    | POST   | `/api/auth/login`                  | Público   |
-| Auth    | POST   | `/api/auth/register/patient`       | Público   |
-| Auth    | POST   | `/api/auth/register/doctor`        | Público   |
-| Auth    | POST   | `/api/auth/refresh`                | Público   |
-| Auth    | POST   | `/api/auth/logout`                 | Público   |
-| Auth    | POST   | `/api/auth/forgot-password`        | Público   |
-| Auth    | POST   | `/api/auth/reset-password`         | Público   |
-| Auth    | GET    | `/api/auth/google`                 | Público   |
-| Auth    | GET    | `/api/auth/google/callback`        | Público   |
-| Auth    | GET    | `/api/auth/me`                     | Requerida |
-| Doctor  | GET    | `/api/doctor/profile`              | Doctor    |
-| Doctor  | GET    | `/api/doctor/profile/:id`          | Doctor    |
-| Doctor  | GET    | `/api/doctor/patients/:id/profile` | Doctor    |
-| Doctor  | GET    | `/api/doctor/patients/:id/records` | Doctor    |
-| Doctor  | GET    | `/api/doctor/patients/:id/labs`    | Doctor    |
-| Patient | GET    | `/api/patient/me`                  | Patient   |
-| Patient | POST   | `/api/patient/records`             | Patient   |
-| Patient | GET    | `/api/patient/records`             | Patient   |
-| Patient | GET    | `/api/patient/records/:id`         | Patient   |
-| Admin   | GET    | `/api/admin/logs`                  | Admin     |
-| Admin   | GET    | `/api/admin/logs/:correlationId`   | Admin     |
+| Módulo  | Método | Ruta                                      | Auth      |
+| ------- | ------ | ----------------------------------------- | --------- |
+| Auth    | POST   | `/api/v1/auth/login`                      | Público   |
+| Auth    | POST   | `/api/v1/auth/register/patient`           | Público   |
+| Auth    | POST   | `/api/v1/auth/register/doctor`            | Público   |
+| Auth    | POST   | `/api/v1/auth/refresh`                    | Público   |
+| Auth    | POST   | `/api/v1/auth/logout`                     | Público   |
+| Auth    | POST   | `/api/v1/auth/forgot-password`            | Público   |
+| Auth    | POST   | `/api/v1/auth/reset-password`             | Público   |
+| Auth    | GET    | `/api/v1/auth/google`                     | Público   |
+| Auth    | GET    | `/api/v1/auth/google/callback`            | Público   |
+| Auth    | GET    | `/api/v1/auth/me`                         | Requerida |
+| Doctor  | GET    | `/api/v1/doctor/profile`                  | Doctor    |
+| Doctor  | GET    | `/api/v1/doctor/profile/:id`              | Doctor    |
+| Doctor  | GET    | `/api/v1/doctor/patients/:id/profile`     | Doctor    |
+| Doctor  | GET    | `/api/v1/doctor/patients/:id/records`     | Doctor    |
+| Doctor  | GET    | `/api/v1/doctor/patients/:id/labs`        | Doctor    |
+| Patient | GET    | `/api/v1/patient/me`                      | Patient   |
+| Patient | POST   | `/api/v1/patient/records`                 | Patient   |
+| Patient | GET    | `/api/v1/patient/records`                 | Patient   |
+| Patient | GET    | `/api/v1/patient/records/:id`             | Patient   |
+| Admin   | GET    | `/api/v1/admin/logs`                      | Admin     |
+| Admin   | GET    | `/api/v1/admin/logs/:correlationId`       | Admin     |
 
 
 Los endpoints de login y registro tienen rate limiting. Los endpoints con rol Doctor verifican que el usuario autenticado tenga ese rol via claims del JWT.
