@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /repo
 
-COPY metavix.sln ./
+COPY metavix.sln Directory.Build.props Directory.Packages.props global.json ./
 COPY src/API/API.csproj ./src/API/
 COPY src/Application/Application.csproj ./src/Application/
 COPY src/Domain/Domain.csproj ./src/Domain/

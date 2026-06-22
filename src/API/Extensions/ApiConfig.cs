@@ -1,3 +1,6 @@
+using Carter;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+
 namespace API.Extensions;
 
 public static class ApiConfig
@@ -17,6 +20,27 @@ public static class ApiConfig
         return app;
     }
 
-    public static RouteGroupBuilder ConfigureApiGroup(this RouteGroupBuilder group) =>
-        group.RequireAuthorization();
+    public static WebApplication MapHealthCheck(this WebApplication app)
+    {
+        app.MapHealthChecks("/api/health", new HealthCheckOptions
+        {
+            Predicate = _ => true,
+            ResponseWriter = async (context, report) =>
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new { status = report.Status.ToString() });
+            }
+        }).AllowAnonymous();
+
+        return app;
+    }
+
+    public static WebApplication MapApiEndpoints(this WebApplication app)
+    {
+        RouteGroupBuilder apiGroup = app.MapGroup("/api/v{version:apiVersion}");
+        apiGroup.MapCarter();
+        apiGroup.RequireAuthorization();
+
+        return app;
+    }
 }
