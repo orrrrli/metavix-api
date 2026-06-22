@@ -1,13 +1,13 @@
 using System.Security.Claims;
 using API;
 using API.Extensions;
+using API.Logging;
+using API.Middleware;
 using Application;
 using Application.Common.Interfaces.Services;
 using Carter;
 using Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using API.Logging;
-using API.Middleware;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.PostgreSQL;
@@ -54,6 +54,7 @@ try
         await databaseValidator.ValidateAsync();
     }
 
+    app.UseResponseCompression();
     app.UseMiddleware<CorrelationIdMiddleware>();
 
     app.UseSerilogRequestLogging(options =>
@@ -77,6 +78,7 @@ try
     app.UseCors("ProductionPolicy");
     app.ConfigureApi();
     app.UseRateLimiter();
+    app.UseRequestTimeouts();
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseOutputCache();
