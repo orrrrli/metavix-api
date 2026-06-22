@@ -1,0 +1,15 @@
+global using System.Net;
+global using System.Net.Http.Headers;
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using API.Common;
+global using API.IntegrationTests.Infrastructure;
+global using Application.Common.Constants;
+global using Application.UseCases.Goals.Common;
+global using Domain.Enums;
+global using Domain.Models;
+global using FluentAssertions;
+global using Infrastructure.Common.Persistence;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using Xunit;

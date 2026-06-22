@@ -22,6 +22,9 @@ public class AppDbContext : DbContext
     public DbSet<InsulinDm1Record> InsulinDm1Records => Set<InsulinDm1Record>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<ClinicalGoal> ClinicalGoals => Set<ClinicalGoal>();
+    public DbSet<GoalEvaluation> GoalEvaluations => Set<GoalEvaluation>();
+    public DbSet<GoalEvaluationItem> GoalEvaluationItems => Set<GoalEvaluationItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -131,6 +134,46 @@ public class AppDbContext : DbContext
                 .WithMany(d => d.LinkRequests)
                 .HasForeignKey(r => r.DoctorId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ClinicalGoal configuration
+        modelBuilder.Entity<ClinicalGoal>(entity =>
+        {
+            entity.HasIndex(g => g.PatientId);
+            entity.Property(g => g.ParameterId).HasMaxLength(50).IsRequired();
+            entity.Property(g => g.CustomValue).HasPrecision(8, 2);
+
+            entity.HasOne(g => g.Patient)
+                .WithMany()
+                .HasForeignKey(g => g.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // GoalEvaluation configuration
+        modelBuilder.Entity<GoalEvaluation>(entity =>
+        {
+            entity.HasIndex(e => e.PatientId);
+            entity.Property(e => e.TriggeredBy).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasOne(e => e.Patient)
+                .WithMany()
+                .HasForeignKey(e => e.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Items)
+                .WithOne(i => i.GoalEvaluation)
+                .HasForeignKey(i => i.GoalEvaluationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // GoalEvaluationItem configuration
+        modelBuilder.Entity<GoalEvaluationItem>(entity =>
+        {
+            entity.HasIndex(i => i.GoalEvaluationId);
+            entity.Property(i => i.ParameterId).HasMaxLength(50).IsRequired();
+            entity.Property(i => i.ValueUsed).HasPrecision(10, 3);
+            entity.Property(i => i.GoalUsed).HasPrecision(10, 3);
+            entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
         });
     }
 }

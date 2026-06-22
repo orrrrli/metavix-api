@@ -18,10 +18,13 @@ using Application.UseCases.LabResult.Queries;
 using Application.UseCases.InsulinDm1.Commands;
 using Application.UseCases.InsulinDm1.Common;
 using Application.UseCases.InsulinDm1.Queries;
+using Application.UseCases.Goals.Commands;
+using Application.UseCases.Goals.Common;
 using Application.UseCases.Patient.Commands;
 using Application.UseCases.Patient.Common;
 using Application.UseCases.Patient.Queries;
 using Contracts.Patient.Request;
+using Domain.Enums;
 
 namespace API.Modules;
 
@@ -158,6 +161,13 @@ public class PatientModule : MainModule, ICarterModule
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("DeleteInsulinRecord")
+            .WithOpenApi();
+
+        // === Goal Evaluations ===
+        group.MapPost("/{patientId:guid}/goal-evaluations", EvaluateGoals)
+            .Produces<ApiSuccessResponse<EvaluateGoalsResult>>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status403Forbidden)
+            .WithName("EvaluateGoals")
             .WithOpenApi();
     }
 
@@ -644,6 +654,34 @@ public class PatientModule : MainModule, ICarterModule
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    // === Goal Evaluations ===
+
+    private static async Task<IResult> EvaluateGoals(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var command = new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient);
+            ErrorOr<EvaluateGoalsResult> result = await sender.Send(command);
+
+            return result.Match(
+                value => TypedResults.Created(
+                    $"/api/patient/{patientId}/goal-evaluations/{value.EvaluationId}",
+                    new ApiSuccessResponse<EvaluateGoalsResult> { Data = value }),
                 errors => ApiResults.Problem(errors, fullRoute));
         }
         catch (Exception ex)
