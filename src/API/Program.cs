@@ -92,7 +92,7 @@ try
         }
     }).AllowAnonymous();
 
-    RouteGroupBuilder apiGroup = app.MapGroup("/api");
+    RouteGroupBuilder apiGroup = app.MapGroup("/api/v{version:apiVersion}");
     apiGroup.MapCarter();
     apiGroup.RequireAuthorization();
 

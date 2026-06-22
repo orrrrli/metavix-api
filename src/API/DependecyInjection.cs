@@ -3,11 +3,11 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using API.Extensions;
 using API.GlobalException;
+using Asp.Versioning;
 using Carter;
 using Contracts.Common;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
-
 
 namespace API;
 
@@ -16,6 +16,7 @@ public static class DependecyInjection
     public static IServiceCollection AddPresentation(this IServiceCollection services, IConfiguration configuration)
     {
         services
+            .AddVersioningConfig()
             .AddCustomCors(configuration)
             .AddOpenApiDocs()
             .AddCarter()
@@ -23,6 +24,7 @@ public static class DependecyInjection
             .AddProblemDetails()
             .AddOutputCacheConfig()
             .AddRequestTimeoutConfig(configuration)
+            .AddRateLimitingConfig()
             .AddMapping()
             .AddControllers()
             .AddJsonOptions(options =>
@@ -39,6 +41,37 @@ public static class DependecyInjection
             options.SerializerOptions.Converters.Add(new Converters.TimeOnlyJsonConverter());
         });
 
+        services
+            .AddResponseCompression(options =>
+            {
+                options.EnableForHttps = true;
+                options.Providers.Add<BrotliCompressionProvider>();
+                options.Providers.Add<GzipCompressionProvider>();
+                options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/json"]);
+            })
+            .Configure<BrotliCompressionProviderOptions>(options =>
+                options.Level = CompressionLevel.Fastest)
+            .Configure<GzipCompressionProviderOptions>(options =>
+                options.Level = CompressionLevel.SmallestSize);
+
+        return services;
+    }
+
+    private static IServiceCollection AddVersioningConfig(this IServiceCollection services)
+    {
+        services.AddApiVersioning(options =>
+        {
+            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.AssumeDefaultVersionWhenUnspecified = true;
+            options.ReportApiVersions = true;
+            options.ApiVersionReader = new UrlSegmentApiVersionReader();
+        });
+
+        return services;
+    }
+
+    private static IServiceCollection AddRateLimitingConfig(this IServiceCollection services)
+    {
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -73,19 +106,6 @@ public static class DependecyInjection
                 });
             });
         });
-
-        services
-            .AddResponseCompression(options =>
-            {
-                options.EnableForHttps = true;
-                options.Providers.Add<BrotliCompressionProvider>();
-                options.Providers.Add<GzipCompressionProvider>();
-                options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/json"]);
-            })
-            .Configure<BrotliCompressionProviderOptions>(options =>
-                options.Level = CompressionLevel.Fastest)
-            .Configure<GzipCompressionProviderOptions>(options =>
-                options.Level = CompressionLevel.SmallestSize);
 
         return services;
     }
