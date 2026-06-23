@@ -22,8 +22,6 @@ public class PatientDoctorRequestRepository : IPatientDoctorRequestRepository
     public async Task<PatientDoctorRequest?> GetByIdAsync(Guid id)
     {
         return await _dbContext.PatientDoctorRequests
-            .Include(r => r.Patient)
-            .Include(r => r.Doctor)
             .FirstOrDefaultAsync(r => r.Id == id);
     }
 
