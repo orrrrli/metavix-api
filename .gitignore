@@ -53,3 +53,4 @@ seed.sql
 
 # Local deploy scripts (may contain secrets)
 docs/azure-deploy.sh
+graphify-out/
