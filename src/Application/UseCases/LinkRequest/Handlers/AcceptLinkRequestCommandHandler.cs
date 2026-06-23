@@ -48,12 +48,7 @@ internal sealed class AcceptLinkRequestCommandHandler
         if (callerDoctorId != linkRequest.DoctorId)
             return AuthErrors.Forbidden;
 
-        // 2. Verify the doctor has passed identity verification
-        var doctor = await _doctorRepository.GetByIdAsync(callerDoctorId.Value);
-        if (doctor is null || string.IsNullOrEmpty(doctor.LicenseNumber))
-            return DoctorErrors.NotVerified;
-
-        // 4. Verify it is still pending
+        // 2. Verify it is still pending
         if (linkRequest.Status != RequestStatus.Pending)
         {
             return LinkRequestErrors.NotPending;
