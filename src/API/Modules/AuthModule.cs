@@ -108,7 +108,7 @@ public class AuthModule : MainModule, ICarterModule
         Secure   = true,
         SameSite = SameSiteMode.None,
         Expires  = DateTimeOffset.UtcNow.AddDays(7),
-        Path     = "/api/auth",
+        Path     = "/api/v1/auth",
     };
 
     private static async Task<IResult> Login(
