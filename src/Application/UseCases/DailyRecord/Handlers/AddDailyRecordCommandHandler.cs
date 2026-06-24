@@ -12,18 +12,18 @@ internal sealed class AddDailyRecordCommandHandler
     private readonly IDailyRecordRepository _dailyRecordRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public AddDailyRecordCommandHandler(
         IDailyRecordRepository dailyRecordRepository,
         IPatientRepository patientRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _dailyRecordRepository = dailyRecordRepository;
         _patientRepository = patientRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<DailyRecordResult>> Handle(
@@ -68,7 +68,7 @@ internal sealed class AddDailyRecordCommandHandler
             WeightKg = request.WeightKg,
             WaistCm = request.WaistCm,
             Notes = request.Notes,
-            CreatedAt = _dateTimeProvider.UtcNow,
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
             GlucoseReadings = glucoseReadings
         };
 

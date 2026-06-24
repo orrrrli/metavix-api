@@ -14,20 +14,20 @@ internal sealed class AcceptLinkRequestCommandHandler
     private readonly IPatientRepository _patientRepository;
     private readonly IDoctorRepository _doctorRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public AcceptLinkRequestCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -56,7 +56,7 @@ internal sealed class AcceptLinkRequestCommandHandler
 
         // 5. Accept the request
         linkRequest.Status = RequestStatus.Accepted;
-        linkRequest.ResolvedAt = _dateTimeProvider.UtcNow;
+        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
         // 6. Link the patient to the doctor
@@ -64,7 +64,7 @@ internal sealed class AcceptLinkRequestCommandHandler
         if (patient is not null)
         {
             patient.PrimaryDoctorId = linkRequest.DoctorId;
-            patient.UpdatedAt = _dateTimeProvider.UtcNow;
+            patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
             await _patientRepository.UpdateAsync(patient);
         }
 

@@ -13,7 +13,7 @@ public class EvaluateGoalsCommandHandlerTests
     private readonly IClinicalGoalRepository _clinicalGoalRepository = Substitute.For<IClinicalGoalRepository>();
     private readonly IGoalEvaluationRepository _goalEvaluationRepository = Substitute.For<IGoalEvaluationRepository>();
     private readonly ICurrentUserService _currentUser = Substitute.For<ICurrentUserService>();
-    private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     private readonly EvaluateGoalsCommandHandler _handler;
 
@@ -26,7 +26,7 @@ public class EvaluateGoalsCommandHandlerTests
             _clinicalGoalRepository,
             _goalEvaluationRepository,
             _currentUser,
-            _dateTimeProvider);
+            _timeProvider);
     }
 
     // T11: all parameters present → correct statuses per ADA thresholds
@@ -183,7 +183,7 @@ public class EvaluateGoalsCommandHandlerTests
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
-        _dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
+        _timeProvider.SetUtcNow(DateTimeOffset.UtcNow);
         _goalEvaluationRepository.AddAsync(Arg.Any<GoalEvaluation>()).Returns(Task.CompletedTask);
     }
 }

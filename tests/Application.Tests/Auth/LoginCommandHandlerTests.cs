@@ -10,7 +10,7 @@ public class LoginCommandHandlerTests
     private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly IJwtTokenGenerator _jwtTokenGenerator = Substitute.For<IJwtTokenGenerator>();
-    private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
+    private readonly FakeTimeProvider _timeProvider = new();
     private readonly ILoginAttemptTracker _attemptTracker = Substitute.For<ILoginAttemptTracker>();
 
     private readonly LoginCommandHandler _handler;
@@ -22,7 +22,7 @@ public class LoginCommandHandlerTests
             _refreshTokenRepository,
             _passwordHasher,
             _jwtTokenGenerator,
-            _dateTimeProvider,
+            _timeProvider,
             _attemptTracker);
     }
 
@@ -128,7 +128,7 @@ public class LoginCommandHandlerTests
         _passwordHasher.Verify(command.Password, user.PasswordHash).Returns(true);
         _jwtTokenGenerator.GenerateToken(user, Arg.Any<string>()).Returns("access_token");
         _jwtTokenGenerator.GenerateRefreshToken().Returns("refresh_token");
-        _dateTimeProvider.UtcNow.Returns(now);
+        _timeProvider.SetUtcNow(now);
 
         // Act
         ErrorOr<LoginResult> result = await _handler.Handle(command, CancellationToken.None);

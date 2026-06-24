@@ -12,18 +12,18 @@ internal sealed class UpsertInsulinProfileCommandHandler
     private readonly IInsulinDm1Repository _insulinRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public UpsertInsulinProfileCommandHandler(
         IInsulinDm1Repository insulinRepository,
         IPatientRepository patientRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _insulinRepository = insulinRepository;
         _patientRepository = patientRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<InsulinDm1ProfileResult>> Handle(
@@ -38,7 +38,7 @@ internal sealed class UpsertInsulinProfileCommandHandler
             return AuthErrors.Forbidden;
 
         var existing = await _insulinRepository.GetProfileByPatientIdAsync(request.PatientId);
-        var now = _dateTimeProvider.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         if (existing is null)
         {

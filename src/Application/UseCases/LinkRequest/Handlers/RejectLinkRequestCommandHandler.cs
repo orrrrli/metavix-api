@@ -13,18 +13,18 @@ internal sealed class RejectLinkRequestCommandHandler
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IDoctorRepository _doctorRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public RejectLinkRequestCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IDoctorRepository doctorRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _requestRepository = requestRepository;
         _doctorRepository = doctorRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -53,7 +53,7 @@ internal sealed class RejectLinkRequestCommandHandler
 
         // 3. Reject the request
         linkRequest.Status = RequestStatus.Rejected;
-        linkRequest.ResolvedAt = _dateTimeProvider.UtcNow;
+        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
         return new LinkRequestResult(

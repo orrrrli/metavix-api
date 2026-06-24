@@ -2,6 +2,7 @@ using System.Text;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
 using Application.Common.Interfaces.Services;
+using Contracts.Settings;
 using Infrastructure.HealthChecks;
 using Infrastructure.Persistence;
 using Infrastructure.Security;
@@ -29,13 +30,11 @@ public static class DependencyInjection
     {
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
-        services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<ILoginAttemptTracker, LoginAttemptTracker>();
-        services.AddScoped<IDatabaseValidator, DatabaseValidator>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         services.Configure<BrevoSettings>(configuration.GetSection(BrevoSettings.SectionName));
-        services.AddSingleton<IAppSettings, AppSettings>();
         services.AddHttpClient<IEmailService, BrevoEmailService>();
 
         services.Configure<GoogleOAuthSettings>(configuration.GetSection(GoogleOAuthSettings.SectionName));

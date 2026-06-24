@@ -2,6 +2,7 @@ global using Application.Common.Errors;
 global using Application.Common.Interfaces.Persistence;
 global using Application.Common.Interfaces.Security;
 global using Application.Common.Interfaces.Services;
+global using Application.Tests.Helpers;
 global using Domain.Enums;
 global using Domain.Models;
 global using ErrorOr;

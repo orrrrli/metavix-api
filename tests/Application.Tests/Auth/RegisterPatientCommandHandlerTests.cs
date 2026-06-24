@@ -10,7 +10,7 @@ public class RegisterPatientCommandHandlerTests
     private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly IJwtTokenGenerator _jwtTokenGenerator = Substitute.For<IJwtTokenGenerator>();
-    private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     private readonly RegisterPatientCommandHandler _handler;
 
@@ -21,7 +21,7 @@ public class RegisterPatientCommandHandlerTests
             _refreshTokenRepository,
             _passwordHasher,
             _jwtTokenGenerator,
-            _dateTimeProvider);
+            _timeProvider);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class RegisterPatientCommandHandlerTests
         _passwordHasher.Hash(command.Password).Returns("hashed_password");
         _jwtTokenGenerator.GenerateToken(Arg.Any<User>(), Arg.Any<string>()).Returns("access_token");
         _jwtTokenGenerator.GenerateRefreshToken().Returns("refresh_token");
-        _dateTimeProvider.UtcNow.Returns(now);
+        _timeProvider.SetUtcNow(now);
 
         // Act
         ErrorOr<RegisterResult> result = await _handler.Handle(command, CancellationToken.None);
@@ -74,7 +74,7 @@ public class RegisterPatientCommandHandlerTests
         _passwordHasher.Hash(command.Password).Returns("hashed_password");
         _jwtTokenGenerator.GenerateToken(Arg.Any<User>(), Arg.Any<string>()).Returns("access_token");
         _jwtTokenGenerator.GenerateRefreshToken().Returns("refresh_token");
-        _dateTimeProvider.UtcNow.Returns(now);
+        _timeProvider.SetUtcNow(now);
 
         // Act
         await _handler.Handle(command, CancellationToken.None);
@@ -101,7 +101,7 @@ public class RegisterPatientCommandHandlerTests
         _passwordHasher.Hash(command.Password).Returns("hashed_password");
         _jwtTokenGenerator.GenerateToken(Arg.Any<User>(), Arg.Any<string>()).Returns("access_token");
         _jwtTokenGenerator.GenerateRefreshToken().Returns("refresh_token");
-        _dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
+        _timeProvider.SetUtcNow(DateTime.UtcNow);
 
         // Act
         await _handler.Handle(command, CancellationToken.None);

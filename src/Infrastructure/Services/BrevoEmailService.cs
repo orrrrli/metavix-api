@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Application.Common.Interfaces.Services;
+using Contracts.Settings;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Services;

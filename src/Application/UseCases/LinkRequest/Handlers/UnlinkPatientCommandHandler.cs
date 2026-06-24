@@ -14,20 +14,20 @@ internal sealed class UnlinkPatientCommandHandler
     private readonly IPatientRepository _patientRepository;
     private readonly IDoctorRepository _doctorRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public UnlinkPatientCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -56,7 +56,7 @@ internal sealed class UnlinkPatientCommandHandler
 
         // 3. Unlink the patient
         linkRequest.Status = RequestStatus.Unlinked;
-        linkRequest.ResolvedAt = _dateTimeProvider.UtcNow;
+        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
         // 4. Remove the doctor from the patient
@@ -64,7 +64,7 @@ internal sealed class UnlinkPatientCommandHandler
         if (patient is not null && patient.PrimaryDoctorId == linkRequest.DoctorId)
         {
             patient.PrimaryDoctorId = null;
-            patient.UpdatedAt = _dateTimeProvider.UtcNow;
+            patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
             await _patientRepository.UpdateAsync(patient);
         }
 

@@ -18,7 +18,7 @@ internal sealed class EvaluateGoalsCommandHandler
     private readonly IClinicalGoalRepository _clinicalGoalRepository;
     private readonly IGoalEvaluationRepository _goalEvaluationRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public EvaluateGoalsCommandHandler(
         IPatientRepository patientRepository,
@@ -27,7 +27,7 @@ internal sealed class EvaluateGoalsCommandHandler
         IClinicalGoalRepository clinicalGoalRepository,
         IGoalEvaluationRepository goalEvaluationRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _patientRepository = patientRepository;
         _labResultRepository = labResultRepository;
@@ -35,7 +35,7 @@ internal sealed class EvaluateGoalsCommandHandler
         _clinicalGoalRepository = clinicalGoalRepository;
         _goalEvaluationRepository = goalEvaluationRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<EvaluateGoalsResult>> Handle(
@@ -84,7 +84,7 @@ internal sealed class EvaluateGoalsCommandHandler
 
         // T8/T9: evaluate and build items
         var evaluationId = Guid.NewGuid();
-        var now = _dateTimeProvider.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         var items = new List<GoalEvaluationItem>
         {

@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Application.Common.Interfaces.Security;
-using Application.Common.Interfaces.Services;
 using Domain.Models;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -13,14 +12,14 @@ namespace Infrastructure.Security;
 public sealed class JwtTokenGenerator : IJwtTokenGenerator
 {
     private readonly JwtSettings _jwtSettings;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public JwtTokenGenerator(
         IOptions<JwtSettings> jwtSettings,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _jwtSettings = jwtSettings.Value;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public string GenerateToken(User user, string fullName)
@@ -41,7 +40,7 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
         var securityToken = new JwtSecurityToken(
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
-            expires: _dateTimeProvider.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
+            expires: _timeProvider.GetUtcNow().UtcDateTime.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
             claims: claims,
             signingCredentials: signingCredentials);
 

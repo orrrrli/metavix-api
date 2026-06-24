@@ -12,18 +12,18 @@ internal sealed class AddLabResultCommandHandler
     private readonly ILabResultRepository _labResultRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public AddLabResultCommandHandler(
         ILabResultRepository labResultRepository,
         IPatientRepository patientRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _labResultRepository = labResultRepository;
         _patientRepository = patientRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<LabResultResult>> Handle(
@@ -58,7 +58,7 @@ internal sealed class AddLabResultCommandHandler
             EgoProteins = request.EgoProteins,
             EgoGlucose = request.EgoGlucose,
             Notes = request.Notes,
-            CreatedAt = _dateTimeProvider.UtcNow
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         await _labResultRepository.AddAsync(record);

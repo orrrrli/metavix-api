@@ -18,7 +18,7 @@ internal sealed class RegisterDoctorCommandHandler
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
     private readonly ICedulaVerificationService _cedulaVerification;
 
     public RegisterDoctorCommandHandler(
@@ -26,14 +26,14 @@ internal sealed class RegisterDoctorCommandHandler
         IRefreshTokenRepository refreshTokenRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        IDateTimeProvider dateTimeProvider,
+        TimeProvider timeProvider,
         ICedulaVerificationService cedulaVerification)
     {
         _userRepository         = userRepository;
         _refreshTokenRepository = refreshTokenRepository;
         _passwordHasher         = passwordHasher;
         _jwtTokenGenerator      = jwtTokenGenerator;
-        _dateTimeProvider       = dateTimeProvider;
+        _timeProvider       = timeProvider;
         _cedulaVerification     = cedulaVerification;
     }
 
@@ -59,7 +59,7 @@ internal sealed class RegisterDoctorCommandHandler
             PasswordHash = _passwordHasher.Hash(request.Password),
             Role         = UserRole.Doctor,
             IsActive     = true,
-            CreatedAt    = _dateTimeProvider.UtcNow,
+            CreatedAt    = _timeProvider.GetUtcNow().UtcDateTime,
             Doctor       = new Domain.Models.Doctor
             {
                 Id               = Guid.NewGuid(),
@@ -72,7 +72,7 @@ internal sealed class RegisterDoctorCommandHandler
                 LicenseNumber    = request.LicenseNumber,
                 Speciality       = request.Speciality,
                 IsVerified       = true,
-                CreatedAt        = _dateTimeProvider.UtcNow,
+                CreatedAt        = _timeProvider.GetUtcNow().UtcDateTime,
                 IsActive         = true
             }
         };
@@ -88,8 +88,8 @@ internal sealed class RegisterDoctorCommandHandler
             Id        = Guid.NewGuid(),
             UserId    = user.Id,
             Token     = refreshToken,
-            ExpiresAt = _dateTimeProvider.UtcNow.AddDays(7),
-            CreatedAt = _dateTimeProvider.UtcNow,
+            ExpiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddDays(7),
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
         });
 
         return new RegisterResult(

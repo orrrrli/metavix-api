@@ -2,7 +2,6 @@ using API;
 using API.Extensions;
 using API.Middleware;
 using Application;
-using Application.Common.Interfaces.Services;
 using Infrastructure;
 using Serilog;
 
@@ -22,9 +21,6 @@ try
         .AddInfrastructure(builder.Configuration);
 
     var app = builder.Build();
-
-    using (var scope = app.Services.CreateScope())
-        await scope.ServiceProvider.GetRequiredService<IDatabaseValidator>().ValidateAsync();
 
     app.UseResponseCompression();
     app.UseMiddleware<CorrelationIdMiddleware>();

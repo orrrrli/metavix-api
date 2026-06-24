@@ -14,20 +14,20 @@ internal sealed class SendLinkRequestCommandHandler
     private readonly IDoctorRepository _doctorRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public SendLinkRequestCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IDoctorRepository doctorRepository,
         IPatientRepository patientRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _requestRepository = requestRepository;
         _doctorRepository = doctorRepository;
         _patientRepository = patientRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -74,7 +74,7 @@ internal sealed class SendLinkRequestCommandHandler
             PatientId = request.PatientId,
             DoctorId = request.DoctorId,
             Status = Domain.Enums.RequestStatus.Pending,
-            CreatedAt = _dateTimeProvider.UtcNow
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         await _requestRepository.AddAsync(linkRequest);

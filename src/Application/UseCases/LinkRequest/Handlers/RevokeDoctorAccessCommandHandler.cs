@@ -13,18 +13,18 @@ internal sealed class RevokeDoctorAccessCommandHandler
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public RevokeDoctorAccessCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -53,7 +53,7 @@ internal sealed class RevokeDoctorAccessCommandHandler
 
         // 3. Revoke the request
         linkRequest.Status = RequestStatus.Revoked;
-        linkRequest.ResolvedAt = _dateTimeProvider.UtcNow;
+        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
         // 4. Remove the doctor from the patient
@@ -61,7 +61,7 @@ internal sealed class RevokeDoctorAccessCommandHandler
         if (patient is not null && patient.PrimaryDoctorId == linkRequest.DoctorId)
         {
             patient.PrimaryDoctorId = null;
-            patient.UpdatedAt = _dateTimeProvider.UtcNow;
+            patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
             await _patientRepository.UpdateAsync(patient);
         }
 

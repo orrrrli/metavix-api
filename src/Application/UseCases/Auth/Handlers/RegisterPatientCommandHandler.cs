@@ -1,7 +1,6 @@
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
-using Application.Common.Interfaces.Services;
 using Application.UseCases.Auth.Commands;
 using Application.UseCases.Auth.Common;
 using Domain.Enums;
@@ -16,20 +15,20 @@ internal sealed class RegisterPatientCommandHandler
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public RegisterPatientCommandHandler(
         IUserRepository userRepository,
         IRefreshTokenRepository refreshTokenRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _userRepository = userRepository;
         _refreshTokenRepository = refreshTokenRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<RegisterResult>> Handle(
@@ -47,7 +46,7 @@ internal sealed class RegisterPatientCommandHandler
             PasswordHash = _passwordHasher.Hash(request.Password),
             Role         = UserRole.Patient,
             IsActive     = true,
-            CreatedAt    = _dateTimeProvider.UtcNow,
+            CreatedAt    = _timeProvider.GetUtcNow().UtcDateTime,
             Patient      = new Domain.Models.Patient
             {
                 Id             = Guid.NewGuid(),
@@ -55,7 +54,7 @@ internal sealed class RegisterPatientCommandHandler
                 FirstName      = request.FirstName,
                 LastName       = request.LastName,
                 Email          = request.Email,
-                CreatedAt      = _dateTimeProvider.UtcNow,
+                CreatedAt      = _timeProvider.GetUtcNow().UtcDateTime,
                 IsActive       = true,
                 PrimaryDoctorId = null
             }
@@ -72,8 +71,8 @@ internal sealed class RegisterPatientCommandHandler
             Id        = Guid.NewGuid(),
             UserId    = user.Id,
             Token     = refreshToken,
-            ExpiresAt = _dateTimeProvider.UtcNow.AddDays(7),
-            CreatedAt = _dateTimeProvider.UtcNow,
+            ExpiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddDays(7),
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
         });
 
         return new RegisterResult(

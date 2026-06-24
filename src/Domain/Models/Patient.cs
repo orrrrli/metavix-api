@@ -24,10 +24,8 @@ public class Patient
     // Navigation properties
     public User? User { get; set; }
     public Doctor? PrimaryDoctor { get; set; }
-    public ICollection<Admission> Admissions { get; set; } = [];
     public ICollection<DailyRecord> DailyRecords { get; set; } = [];
     public ICollection<LabResult> LabResults { get; set; } = [];
-    public ICollection<ToolResult> ToolResults { get; set; } = [];
     public ICollection<PatientDoctorRequest> LinkRequests { get; set; } = [];
     public InsulinDm1Profile? InsulinDm1Profile { get; set; }
     public ICollection<InsulinDm1Record> InsulinDm1Records { get; set; } = [];

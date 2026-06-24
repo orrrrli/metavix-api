@@ -6,6 +6,7 @@ using API.GlobalException;
 using Asp.Versioning;
 using Carter;
 using Contracts.Common;
+using Infrastructure.Common.Converters;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 
@@ -30,15 +31,15 @@ public static class DependecyInjection
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-                options.JsonSerializerOptions.Converters.Add(new Converters.DateOnlyJsonConverter());
-                options.JsonSerializerOptions.Converters.Add(new Converters.TimeOnlyJsonConverter());
+                options.JsonSerializerOptions.Converters.Add(new DateOnlyJsonConverter());
+                options.JsonSerializerOptions.Converters.Add(new TimeOnlyJsonConverter());
             });
 
         services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
-            options.SerializerOptions.Converters.Add(new Converters.DateOnlyJsonConverter());
-            options.SerializerOptions.Converters.Add(new Converters.TimeOnlyJsonConverter());
+            options.SerializerOptions.Converters.Add(new DateOnlyJsonConverter());
+            options.SerializerOptions.Converters.Add(new TimeOnlyJsonConverter());
         });
 
         services

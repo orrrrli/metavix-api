@@ -1,4 +1,4 @@
-namespace Infrastructure.Services;
+namespace Contracts.Settings;
 
 public sealed class BrevoSettings
 {

@@ -16,20 +16,20 @@ internal sealed class GoogleCallbackCommandHandler
     private readonly IUserRepository              _userRepository;
     private readonly IRefreshTokenRepository      _refreshTokenRepository;
     private readonly IJwtTokenGenerator           _jwtTokenGenerator;
-    private readonly IDateTimeProvider            _dateTimeProvider;
+    private readonly TimeProvider            _timeProvider;
 
     public GoogleCallbackCommandHandler(
         IGoogleOAuthService googleOAuthService,
         IUserRepository userRepository,
         IRefreshTokenRepository refreshTokenRepository,
         IJwtTokenGenerator jwtTokenGenerator,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _googleOAuthService     = googleOAuthService;
         _userRepository         = userRepository;
         _refreshTokenRepository = refreshTokenRepository;
         _jwtTokenGenerator      = jwtTokenGenerator;
-        _dateTimeProvider       = dateTimeProvider;
+        _timeProvider       = timeProvider;
     }
 
     public async Task<ErrorOr<LoginResult>> Handle(
@@ -63,7 +63,7 @@ internal sealed class GoogleCallbackCommandHandler
                 PasswordHash = string.Empty,
                 Role         = userRole,
                 IsActive     = true,
-                CreatedAt    = _dateTimeProvider.UtcNow,
+                CreatedAt    = _timeProvider.GetUtcNow().UtcDateTime,
             };
 
             if (userRole == UserRole.Patient)
@@ -75,7 +75,7 @@ internal sealed class GoogleCallbackCommandHandler
                     FirstName = googleUser.FirstName,
                     LastName  = googleUser.LastName,
                     Email     = googleUser.Email,
-                    CreatedAt = _dateTimeProvider.UtcNow,
+                    CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
                     IsActive  = true,
                 };
             }
@@ -91,7 +91,7 @@ internal sealed class GoogleCallbackCommandHandler
                     Email         = googleUser.Email,
                     LicenseNumber = string.Empty,
                     Speciality    = string.Empty,
-                    CreatedAt     = _dateTimeProvider.UtcNow,
+                    CreatedAt     = _timeProvider.GetUtcNow().UtcDateTime,
                     IsActive      = true,
                 };
             }
@@ -118,8 +118,8 @@ internal sealed class GoogleCallbackCommandHandler
             Id        = Guid.NewGuid(),
             UserId    = user.Id,
             Token     = refreshToken,
-            ExpiresAt = _dateTimeProvider.UtcNow.AddDays(7),
-            CreatedAt = _dateTimeProvider.UtcNow,
+            ExpiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddDays(7),
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
         });
 
         return new LoginResult(
@@ -128,7 +128,7 @@ internal sealed class GoogleCallbackCommandHandler
             DoctorId:     user.Doctor?.Id,
             AccessToken:  accessToken,
             RefreshToken: refreshToken,
-            ExpiresAt:    _dateTimeProvider.UtcNow.AddMinutes(15),
+            ExpiresAt:    _timeProvider.GetUtcNow().UtcDateTime.AddMinutes(15),
             Email:        user.Email,
             Role:         user.Role.ToString(),
             FullName:     fullName);

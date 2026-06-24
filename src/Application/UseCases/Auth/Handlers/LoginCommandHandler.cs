@@ -16,7 +16,7 @@ internal sealed class LoginCommandHandler
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
     private readonly ILoginAttemptTracker _attemptTracker;
 
     public LoginCommandHandler(
@@ -24,14 +24,14 @@ internal sealed class LoginCommandHandler
         IRefreshTokenRepository refreshTokenRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        IDateTimeProvider dateTimeProvider,
+        TimeProvider timeProvider,
         ILoginAttemptTracker attemptTracker)
     {
         _userRepository = userRepository;
         _refreshTokenRepository = refreshTokenRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
         _attemptTracker = attemptTracker;
     }
 
@@ -79,8 +79,8 @@ internal sealed class LoginCommandHandler
             Id        = Guid.NewGuid(),
             UserId    = user.Id,
             Token     = refreshToken,
-            ExpiresAt = _dateTimeProvider.UtcNow.AddDays(7),
-            CreatedAt = _dateTimeProvider.UtcNow,
+            ExpiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddDays(7),
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
         });
 
         return new LoginResult(
@@ -89,7 +89,7 @@ internal sealed class LoginCommandHandler
             DoctorId:     user.Doctor?.Id,
             AccessToken:  accessToken,
             RefreshToken: refreshToken,
-            ExpiresAt:    _dateTimeProvider.UtcNow.AddMinutes(15),
+            ExpiresAt:    _timeProvider.GetUtcNow().UtcDateTime.AddMinutes(15),
             Email:        user.Email,
             Role:         user.Role.ToString(),
             FullName:     fullName);

@@ -3,6 +3,8 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Auth.Commands;
 using Domain.Models;
+using Contracts.Settings;
+using Microsoft.Extensions.Options;
 
 namespace Application.UseCases.Auth.Handlers;
 
@@ -12,21 +14,21 @@ internal sealed class ForgotPasswordCommandHandler
     private readonly IUserRepository               _userRepository;
     private readonly IPasswordResetTokenRepository _tokenRepository;
     private readonly IEmailService                 _emailService;
-    private readonly IDateTimeProvider             _dateTimeProvider;
-    private readonly IAppSettings                  _appSettings;
+    private readonly TimeProvider                  _timeProvider;
+    private readonly string                        _appBaseUrl;
 
     public ForgotPasswordCommandHandler(
         IUserRepository userRepository,
         IPasswordResetTokenRepository tokenRepository,
         IEmailService emailService,
-        IDateTimeProvider dateTimeProvider,
-        IAppSettings appSettings)
+        TimeProvider timeProvider,
+        IOptions<BrevoSettings> brevoSettings)
     {
         _userRepository   = userRepository;
         _tokenRepository  = tokenRepository;
         _emailService     = emailService;
-        _dateTimeProvider = dateTimeProvider;
-        _appSettings      = appSettings;
+        _timeProvider     = timeProvider;
+        _appBaseUrl       = brevoSettings.Value.AppBaseUrl;
     }
 
     public async Task<ErrorOr<Unit>> Handle(
@@ -46,12 +48,12 @@ internal sealed class ForgotPasswordCommandHandler
             Id        = Guid.NewGuid(),
             UserId    = user.Id,
             TokenHash = tokenHash,
-            ExpiresAt = _dateTimeProvider.UtcNow.AddHours(1),
-            CreatedAt = _dateTimeProvider.UtcNow,
+            ExpiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(1),
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
         });
 
         string fullName  = user.Patient?.FirstName ?? user.Doctor?.FirstName ?? user.Email;
-        string resetLink = $"{_appSettings.AppBaseUrl}/reset-password?token={rawToken}";
+        string resetLink = $"{_appBaseUrl}/reset-password?token={rawToken}";
 
         await _emailService.SendPasswordResetEmailAsync(user.Email, fullName, resetLink);
 

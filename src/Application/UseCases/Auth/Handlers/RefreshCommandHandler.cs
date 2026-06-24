@@ -1,7 +1,6 @@
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
-using Application.Common.Interfaces.Services;
 using Application.UseCases.Auth.Commands;
 using Application.UseCases.Auth.Common;
 using Domain.Enums;
@@ -14,18 +13,18 @@ internal sealed class RefreshCommandHandler
 {
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
     private readonly IUserRepository _userRepository;
 
     public RefreshCommandHandler(
         IRefreshTokenRepository refreshTokenRepository,
         IJwtTokenGenerator jwtTokenGenerator,
-        IDateTimeProvider dateTimeProvider,
+        TimeProvider timeProvider,
         IUserRepository userRepository)
     {
         _refreshTokenRepository = refreshTokenRepository;
         _jwtTokenGenerator = jwtTokenGenerator;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
         _userRepository = userRepository;
     }
 
@@ -35,7 +34,7 @@ internal sealed class RefreshCommandHandler
     {
         RefreshToken? stored = await _refreshTokenRepository.GetByTokenAsync(request.RefreshToken);
 
-        if (stored is null || stored.IsRevoked || stored.ExpiresAt <= _dateTimeProvider.UtcNow)
+        if (stored is null || stored.IsRevoked || stored.ExpiresAt <= _timeProvider.GetUtcNow().UtcDateTime)
             return AuthErrors.InvalidRefreshToken;
 
         User? user = await _userRepository.GetByIdAsync(stored.UserId);
@@ -59,13 +58,13 @@ internal sealed class RefreshCommandHandler
             Id        = Guid.NewGuid(),
             UserId    = user.Id,
             Token     = newRefreshToken,
-            ExpiresAt = _dateTimeProvider.UtcNow.AddDays(7),
-            CreatedAt = _dateTimeProvider.UtcNow,
+            ExpiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddDays(7),
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
         });
 
         return new RefreshResult(
             AccessToken:     newAccessToken,
             NewRefreshToken: newRefreshToken,
-            ExpiresAt:       _dateTimeProvider.UtcNow.AddMinutes(15));
+            ExpiresAt:       _timeProvider.GetUtcNow().UtcDateTime.AddMinutes(15));
     }
 }

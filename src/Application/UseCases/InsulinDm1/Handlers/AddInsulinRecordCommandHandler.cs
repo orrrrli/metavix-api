@@ -12,18 +12,18 @@ internal sealed class AddInsulinRecordCommandHandler
     private readonly IInsulinDm1Repository _insulinRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TimeProvider _timeProvider;
 
     public AddInsulinRecordCommandHandler(
         IInsulinDm1Repository insulinRepository,
         IPatientRepository patientRepository,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        TimeProvider timeProvider)
     {
         _insulinRepository = insulinRepository;
         _patientRepository = patientRepository;
         _currentUser = currentUser;
-        _dateTimeProvider = dateTimeProvider;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<InsulinDm1RecordResult>> Handle(
@@ -52,7 +52,7 @@ internal sealed class AddInsulinRecordCommandHandler
             DoseApplied = request.DoseApplied,
             MealDescription = request.MealDescription,
             HowIFelt = request.HowIFelt,
-            CreatedAt = _dateTimeProvider.UtcNow,
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
         };
 
         await _insulinRepository.AddRecordAsync(record);

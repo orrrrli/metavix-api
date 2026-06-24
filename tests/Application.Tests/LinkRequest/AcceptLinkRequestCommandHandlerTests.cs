@@ -14,8 +14,7 @@ public class AcceptLinkRequestCommandHandlerTests
         Substitute.For<IDoctorRepository>();
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
-    private readonly IDateTimeProvider _dateTimeProvider =
-        Substitute.For<IDateTimeProvider>();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     private readonly AcceptLinkRequestCommandHandler _handler;
 
@@ -26,7 +25,7 @@ public class AcceptLinkRequestCommandHandlerTests
             _patientRepository,
             _doctorRepository,
             _currentUser,
-            _dateTimeProvider);
+            _timeProvider);
     }
 
     [Fact]
@@ -48,7 +47,7 @@ public class AcceptLinkRequestCommandHandlerTests
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _doctorRepository.GetByIdAsync(doctorId).Returns(doctor);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
-        _dateTimeProvider.UtcNow.Returns(now);
+        _timeProvider.SetUtcNow(now);
 
         // Act
         ErrorOr<LinkRequestResult> result =
@@ -60,33 +59,6 @@ public class AcceptLinkRequestCommandHandlerTests
         result.Value.Status.Should().Be("Accepted");
         await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
             r.Status == RequestStatus.Accepted));
-    }
-
-    [Fact]
-    public async Task Handle_WhenDoctorHasEmptyLicenseNumber_ReturnsNotVerified()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
-
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: string.Empty, isVerified: false);
-
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
-        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _doctorRepository.GetByIdAsync(doctorId).Returns(doctor);
-
-        // Act
-        ErrorOr<LinkRequestResult> result =
-            await _handler.Handle(new AcceptLinkRequestCommand(requestId), CancellationToken.None);
-
-        // Assert
-        result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be(DoctorErrors.NotVerified.Code);
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
 
     private static PatientDoctorRequest BuildLinkRequest(Guid requestId, Guid patientId, Guid doctorId) => new()

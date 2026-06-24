@@ -22,6 +22,5 @@ public class Doctor
     // Navigation properties
     public User? User { get; set; }
     public ICollection<Patient> Patients { get; set; } = [];
-    public ICollection<Admission> Admissions { get; set; } = [];
     public ICollection<PatientDoctorRequest> LinkRequests { get; set; } = [];
 }
