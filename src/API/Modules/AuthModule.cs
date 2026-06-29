@@ -111,9 +111,32 @@ public class AuthModule : MainModule, ICarterModule
         Path     = "/api/v1/auth",
     };
 
+    private const string SessionCookieName = "_session";
+
+    private static CookieOptions SessionCookie(IConfiguration configuration) => new()
+    {
+        HttpOnly = true,
+        Secure   = true,
+        SameSite = SameSiteMode.None,
+        Expires  = DateTimeOffset.UtcNow.AddMinutes(15),
+        Domain   = string.IsNullOrWhiteSpace(configuration["Auth:SessionCookieDomain"])
+            ? null
+            : configuration["Auth:SessionCookieDomain"],
+    };
+
+    private static CookieOptions DeleteSessionCookieOptions(IConfiguration configuration) => new()
+    {
+        Secure   = true,
+        SameSite = SameSiteMode.None,
+        Domain   = string.IsNullOrWhiteSpace(configuration["Auth:SessionCookieDomain"])
+            ? null
+            : configuration["Auth:SessionCookieDomain"],
+    };
+
     private static async Task<IResult> Login(
         ISender sender,
         HttpContext httpContext,
+        IConfiguration configuration,
         [FromBody] LoginRequest request)
     {
         string fullRoute  = $"{httpContext.Request.Path}";
@@ -130,6 +153,7 @@ public class AuthModule : MainModule, ICarterModule
                 {
                     httpContext.Response.Cookies.Append("access_token",  value.AccessToken,  AccessTokenCookie());
                     httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken, RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append(SessionCookieName, "1",                 SessionCookie(configuration));
 
                     AuthResponse response = new(
                         value.UserId,
@@ -151,7 +175,8 @@ public class AuthModule : MainModule, ICarterModule
 
     private static async Task<IResult> Refresh(
         ISender sender,
-        HttpContext httpContext)
+        HttpContext httpContext,
+        IConfiguration configuration)
     {
         string fullRoute = $"{httpContext.Request.Path}";
 
@@ -170,6 +195,7 @@ public class AuthModule : MainModule, ICarterModule
                 {
                     httpContext.Response.Cookies.Append("access_token",  value.AccessToken,     AccessTokenCookie());
                     httpContext.Response.Cookies.Append("refresh_token", value.NewRefreshToken, RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append(SessionCookieName, "1",                  SessionCookie(configuration));
 
                     return ApiResults.Success(new RefreshResponse(value.ExpiresAt), fullRoute);
                 },
@@ -183,7 +209,8 @@ public class AuthModule : MainModule, ICarterModule
 
     private static async Task<IResult> Logout(
         ISender sender,
-        HttpContext httpContext)
+        HttpContext httpContext,
+        IConfiguration configuration)
     {
         string fullRoute = $"{httpContext.Request.Path}";
 
@@ -196,6 +223,7 @@ public class AuthModule : MainModule, ICarterModule
 
             httpContext.Response.Cookies.Delete("access_token",  new CookieOptions { SameSite = SameSiteMode.None, Secure = true });
             httpContext.Response.Cookies.Delete("refresh_token", new CookieOptions { SameSite = SameSiteMode.None, Secure = true, Path = "/api/auth" });
+            httpContext.Response.Cookies.Delete(SessionCookieName, DeleteSessionCookieOptions(configuration));
 
             return Results.Ok();
         }
@@ -208,6 +236,7 @@ public class AuthModule : MainModule, ICarterModule
     private static async Task<IResult> RegisterPatient(
         ISender sender,
         HttpContext httpContext,
+        IConfiguration configuration,
         [FromBody] RegisterPatientCommand command)
     {
         string fullRoute  = $"{httpContext.Request.Path}";
@@ -223,6 +252,7 @@ public class AuthModule : MainModule, ICarterModule
                 {
                     httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie());
                     httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append(SessionCookieName, "1",              SessionCookie(configuration));
 
                     RegisterResponse response = new(value.UserId, value.Email, value.Role);
                     return TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResponse> { Data = response });
@@ -238,6 +268,7 @@ public class AuthModule : MainModule, ICarterModule
     private static async Task<IResult> RegisterDoctor(
         ISender sender,
         HttpContext httpContext,
+        IConfiguration configuration,
         [FromBody] RegisterDoctorCommand command)
     {
         string fullRoute  = $"{httpContext.Request.Path}";
@@ -253,6 +284,7 @@ public class AuthModule : MainModule, ICarterModule
                 {
                     httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie());
                     httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append(SessionCookieName, "1",              SessionCookie(configuration));
 
                     RegisterResponse response = new(value.UserId, value.Email, value.Role);
                     return TypedResults.Created($"/api/auth/users/{value.UserId}", new ApiSuccessResponse<RegisterResponse> { Data = response });
@@ -320,7 +352,8 @@ public class AuthModule : MainModule, ICarterModule
         [FromQuery] string? state,
         ISender sender,
         HttpContext httpContext,
-        IGoogleOAuthService googleOAuthService)
+        IGoogleOAuthService googleOAuthService,
+        IConfiguration configuration)
     {
         string frontendUrl = googleOAuthService.FrontendUrl;
 
@@ -339,6 +372,7 @@ public class AuthModule : MainModule, ICarterModule
 
             httpContext.Response.Cookies.Append("access_token",  login.AccessToken,  AccessTokenCookie());
             httpContext.Response.Cookies.Append("refresh_token", login.RefreshToken, RefreshTokenCookie());
+            httpContext.Response.Cookies.Append(SessionCookieName, "1",             SessionCookie(configuration));
 
             return Results.Redirect($"{frontendUrl}/auth/callback");
         }
