@@ -118,6 +118,7 @@ public class AuthModule : MainModule, ICarterModule
         HttpOnly = true,
         Secure   = true,
         SameSite = SameSiteMode.None,
+        Path     = "/",
         Expires  = DateTimeOffset.UtcNow.AddMinutes(15),
         Domain   = string.IsNullOrWhiteSpace(configuration["Auth:SessionCookieDomain"])
             ? null
@@ -128,6 +129,7 @@ public class AuthModule : MainModule, ICarterModule
     {
         Secure   = true,
         SameSite = SameSiteMode.None,
+        Path     = "/",
         Domain   = string.IsNullOrWhiteSpace(configuration["Auth:SessionCookieDomain"])
             ? null
             : configuration["Auth:SessionCookieDomain"],
