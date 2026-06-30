@@ -94,45 +94,51 @@ public class AuthModule : MainModule, ICarterModule
             .WithOpenApi();
     }
 
-    private static CookieOptions AccessTokenCookie() => new()
+    private static bool IsSecure(IConfiguration cfg) =>
+        cfg.GetValue<bool>("Auth:CookieSecure", defaultValue: true);
+
+    private static SameSiteMode GetSameSite(IConfiguration cfg) =>
+        IsSecure(cfg) ? SameSiteMode.None : SameSiteMode.Lax;
+
+    private static CookieOptions AccessTokenCookie(IConfiguration cfg) => new()
     {
         HttpOnly = true,
-        Secure   = true,
-        SameSite = SameSiteMode.None,
+        Secure   = IsSecure(cfg),
+        SameSite = GetSameSite(cfg),
         Expires  = DateTimeOffset.UtcNow.AddMinutes(15),
     };
 
-    private static CookieOptions RefreshTokenCookie() => new()
+    private static CookieOptions RefreshTokenCookie(IConfiguration cfg) => new()
     {
         HttpOnly = true,
-        Secure   = true,
-        SameSite = SameSiteMode.None,
+        Secure   = IsSecure(cfg),
+        SameSite = GetSameSite(cfg),
         Expires  = DateTimeOffset.UtcNow.AddDays(7),
         Path     = "/api/v1/auth",
     };
 
     private const string SessionCookieName = "_session";
 
-    private static CookieOptions SessionCookie(IConfiguration configuration) => new()
+    private static CookieOptions SessionCookie(IConfiguration cfg) => new()
     {
-        HttpOnly = true,
-        Secure   = true,
-        SameSite = SameSiteMode.None,
+        HttpOnly = false,
+        Secure   = IsSecure(cfg),
+        SameSite = GetSameSite(cfg),
         Path     = "/",
-        Expires  = DateTimeOffset.UtcNow.AddMinutes(15),
-        Domain   = string.IsNullOrWhiteSpace(configuration["Auth:SessionCookieDomain"])
+        Expires  = DateTimeOffset.UtcNow.AddDays(7),
+        Domain   = string.IsNullOrWhiteSpace(cfg["Auth:SessionCookieDomain"])
             ? null
-            : configuration["Auth:SessionCookieDomain"],
+            : cfg["Auth:SessionCookieDomain"],
     };
 
-    private static CookieOptions DeleteSessionCookieOptions(IConfiguration configuration) => new()
+    private static CookieOptions DeleteSessionCookieOptions(IConfiguration cfg) => new()
     {
-        Secure   = true,
-        SameSite = SameSiteMode.None,
+        Secure   = IsSecure(cfg),
+        SameSite = GetSameSite(cfg),
         Path     = "/",
-        Domain   = string.IsNullOrWhiteSpace(configuration["Auth:SessionCookieDomain"])
+        Domain   = string.IsNullOrWhiteSpace(cfg["Auth:SessionCookieDomain"])
             ? null
-            : configuration["Auth:SessionCookieDomain"],
+            : cfg["Auth:SessionCookieDomain"],
     };
 
     private static async Task<IResult> Login(
@@ -153,8 +159,8 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
-                    httpContext.Response.Cookies.Append("access_token",  value.AccessToken,  AccessTokenCookie());
-                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken, RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append("access_token",  value.AccessToken,  AccessTokenCookie(configuration));
+                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken, RefreshTokenCookie(configuration));
                     httpContext.Response.Cookies.Append(SessionCookieName, "1",                 SessionCookie(configuration));
 
                     AuthResponse response = new(
@@ -195,8 +201,8 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
-                    httpContext.Response.Cookies.Append("access_token",  value.AccessToken,     AccessTokenCookie());
-                    httpContext.Response.Cookies.Append("refresh_token", value.NewRefreshToken, RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append("access_token",  value.AccessToken,     AccessTokenCookie(configuration));
+                    httpContext.Response.Cookies.Append("refresh_token", value.NewRefreshToken, RefreshTokenCookie(configuration));
                     httpContext.Response.Cookies.Append(SessionCookieName, "1",                  SessionCookie(configuration));
 
                     return ApiResults.Success(new RefreshResponse(value.ExpiresAt), fullRoute);
@@ -223,8 +229,8 @@ public class AuthModule : MainModule, ICarterModule
             if (!string.IsNullOrEmpty(refreshToken))
                 await sender.Send(new LogoutCommand(refreshToken));
 
-            httpContext.Response.Cookies.Delete("access_token",  new CookieOptions { SameSite = SameSiteMode.None, Secure = true });
-            httpContext.Response.Cookies.Delete("refresh_token", new CookieOptions { SameSite = SameSiteMode.None, Secure = true, Path = "/api/auth" });
+            httpContext.Response.Cookies.Delete("access_token",  new CookieOptions { SameSite = GetSameSite(configuration), Secure = IsSecure(configuration) });
+            httpContext.Response.Cookies.Delete("refresh_token", new CookieOptions { SameSite = GetSameSite(configuration), Secure = IsSecure(configuration), Path = "/api/v1/auth" });
             httpContext.Response.Cookies.Delete(SessionCookieName, DeleteSessionCookieOptions(configuration));
 
             return Results.Ok();
@@ -252,8 +258,8 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
-                    httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie());
-                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie(configuration));
+                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie(configuration));
                     httpContext.Response.Cookies.Append(SessionCookieName, "1",              SessionCookie(configuration));
 
                     RegisterResponse response = new(value.UserId, value.Email, value.Role);
@@ -284,8 +290,8 @@ public class AuthModule : MainModule, ICarterModule
             return result.Match(
                 value =>
                 {
-                    httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie());
-                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie());
+                    httpContext.Response.Cookies.Append("access_token",  value.Token,         AccessTokenCookie(configuration));
+                    httpContext.Response.Cookies.Append("refresh_token", value.RefreshToken,  RefreshTokenCookie(configuration));
                     httpContext.Response.Cookies.Append(SessionCookieName, "1",              SessionCookie(configuration));
 
                     RegisterResponse response = new(value.UserId, value.Email, value.Role);
@@ -372,8 +378,8 @@ public class AuthModule : MainModule, ICarterModule
 
             LoginResult login = result.Value;
 
-            httpContext.Response.Cookies.Append("access_token",  login.AccessToken,  AccessTokenCookie());
-            httpContext.Response.Cookies.Append("refresh_token", login.RefreshToken, RefreshTokenCookie());
+            httpContext.Response.Cookies.Append("access_token",  login.AccessToken,  AccessTokenCookie(configuration));
+            httpContext.Response.Cookies.Append("refresh_token", login.RefreshToken, RefreshTokenCookie(configuration));
             httpContext.Response.Cookies.Append(SessionCookieName, "1",             SessionCookie(configuration));
 
             return Results.Redirect($"{frontendUrl}/auth/callback");
