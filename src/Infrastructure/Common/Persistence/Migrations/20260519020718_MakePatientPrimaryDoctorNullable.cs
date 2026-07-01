@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Infrastructure.Migrations
+namespace Infrastructure.Common.Persistence.Migrations
 {
     /// <inheritdoc />
     public partial class MakePatientPrimaryDoctorNullable : Migration

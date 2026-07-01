@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Infrastructure.Migrations
+namespace Infrastructure.Common.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260519023943_AddPatientDoctorRequests")]
-    partial class AddPatientDoctorRequests
+    [Migration("20260518192434_RefactorDomainModels")]
+    partial class RefactorDomainModels
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -144,13 +144,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
 
                     b.ToTable("Doctors");
                 });
@@ -274,55 +268,17 @@ namespace Infrastructure.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("PrimaryDoctorId")
+                    b.Property<Guid>("PrimaryDoctorId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("PrimaryDoctorId");
 
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
                     b.ToTable("Patients");
-                });
-
-            modelBuilder.Entity("Domain.Models.PatientDoctorRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DoctorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PatientId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ResolvedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DoctorId");
-
-                    b.HasIndex("PatientId");
-
-                    b.ToTable("PatientDoctorRequests");
                 });
 
             modelBuilder.Entity("Domain.Models.ToolResult", b =>
@@ -357,43 +313,6 @@ namespace Infrastructure.Migrations
                     b.ToTable("ToolResults");
                 });
 
-            modelBuilder.Entity("Domain.Models.User", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
-
-                    b.ToTable("Users");
-                });
-
             modelBuilder.Entity("Domain.Models.Admission", b =>
                 {
                     b.HasOne("Domain.Models.Doctor", "Doctor")
@@ -424,16 +343,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("Patient");
                 });
 
-            modelBuilder.Entity("Domain.Models.Doctor", b =>
-                {
-                    b.HasOne("Domain.Models.User", "User")
-                        .WithOne("Doctor")
-                        .HasForeignKey("Domain.Models.Doctor", "UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("Domain.Models.GlucoseReading", b =>
                 {
                     b.HasOne("Domain.Models.DailyRecord", "DailyRecord")
@@ -460,35 +369,11 @@ namespace Infrastructure.Migrations
                 {
                     b.HasOne("Domain.Models.Doctor", "PrimaryDoctor")
                         .WithMany("Patients")
-                        .HasForeignKey("PrimaryDoctorId");
-
-                    b.HasOne("Domain.Models.User", "User")
-                        .WithOne("Patient")
-                        .HasForeignKey("Domain.Models.Patient", "UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("PrimaryDoctorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("PrimaryDoctor");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Domain.Models.PatientDoctorRequest", b =>
-                {
-                    b.HasOne("Domain.Models.Doctor", "Doctor")
-                        .WithMany("LinkRequests")
-                        .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Domain.Models.Patient", "Patient")
-                        .WithMany("LinkRequests")
-                        .HasForeignKey("PatientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Doctor");
-
-                    b.Navigation("Patient");
                 });
 
             modelBuilder.Entity("Domain.Models.ToolResult", b =>
@@ -519,8 +404,6 @@ namespace Infrastructure.Migrations
                 {
                     b.Navigation("Admissions");
 
-                    b.Navigation("LinkRequests");
-
                     b.Navigation("Patients");
                 });
 
@@ -532,16 +415,7 @@ namespace Infrastructure.Migrations
 
                     b.Navigation("LabResults");
 
-                    b.Navigation("LinkRequests");
-
                     b.Navigation("ToolResults");
-                });
-
-            modelBuilder.Entity("Domain.Models.User", b =>
-                {
-                    b.Navigation("Doctor");
-
-                    b.Navigation("Patient");
                 });
 #pragma warning restore 612, 618
         }
