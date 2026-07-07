@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Infrastructure.Migrations
+namespace Infrastructure.Common.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260607230015_AddDoctorVerificationFields")]
-    partial class AddDoctorVerificationFields
+    [Migration("20260613201331_MakeUserIdRequiredOnDoctorAndPatient")]
+    partial class MakeUserIdRequiredOnDoctorAndPatient
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -139,11 +139,18 @@ namespace Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("LastName")
+                    b.Property<string>("LicenseNumber")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("LicenseNumber")
+                    b.Property<string>("MaternalLastName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MiddleName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaternalLastName")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -157,7 +164,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("UserId")
+                    b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -416,7 +423,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("UserId")
+                    b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -661,7 +668,8 @@ namespace Infrastructure.Migrations
                     b.HasOne("Domain.Models.User", "User")
                         .WithOne("Doctor")
                         .HasForeignKey("Domain.Models.Doctor", "UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("User");
                 });
@@ -730,7 +738,8 @@ namespace Infrastructure.Migrations
                     b.HasOne("Domain.Models.User", "User")
                         .WithOne("Patient")
                         .HasForeignKey("Domain.Models.Patient", "UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("PrimaryDoctor");
 
