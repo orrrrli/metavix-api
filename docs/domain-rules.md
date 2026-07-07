@@ -55,6 +55,22 @@
 12. **Google OAuth users cannot login with password.** Enforced by `string.IsNullOrEmpty(user.PasswordHash)` check in `LoginCommandHandler`.
 13. **Idempotency on mutations.** `Admission.IdempotencyKey` enables safe retries without duplicate admissions.
 
+## 3.1. Patient categories for `ParameterSpec`
+
+`ParameterSpec.Category` is resolved from `Patient.IsPregnant` and `Patient.DiabetesType`:
+
+| `IsPregnant` | `DiabetesType` | `PatientCategory` |
+|---|---|---|
+| false | `None` | `SinDiabetes` |
+| false | `Type1` / `Type2` / `LADA` / `Gestational` | `ConDiabetes` |
+| true | `None` | `SinDiabetes` (pregnancy is not diabetes) |
+| true | `Type1` / `Type2` / `LADA` | `EmbarazadaDM` |
+| true | `Gestational` | `EmbarazadaDM` for all parameters except `postprandial_1h` and `postprandial_2h`, which use `EmbarazadaDMG` |
+
+`PatientCategory.Universal` applies to parameters with identical thresholds across all categories (HeartRate, BMI, TotalCholesterol, Triglycerides, eGFR, BUN, and gender-based params HDL, Creatinine, WaistCircumference).
+
+**Note:** `DiabetesType` enum currently lacks `Gestational` and `LADA` values (see `src/Domain/Enums/DiabetesType.cs`). The resolver (BE-CATALOG-1-T4) must add them.
+
 ## 4. Architecture & Stack
 
 - **Style:** Clean Architecture + CQRS via MediatR. Dependencies point inward.
