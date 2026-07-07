@@ -50,7 +50,7 @@
 7. **Login lockout.** 5 failed attempts = 15-minute block (`ILoginAttemptTracker`).
 8. **Refresh token rotation.** Every `/auth/refresh` revokes the old token and issues a new pair.
 9. **Goal evaluation is an immutable snapshot.** `GoalEvaluationItem.GoalUsed` captures the threshold at evaluation time; historical evaluations are never recalculated.
-10. **ADA clinical constants.** HbA1c < 7.0%, fasting glucose 80-130 mg/dL, systolic BP < 130 mmHg, LDL < 100 mg/dL, BMI 18.5-24.9. Values at ≥90% of goal flagged `AtRisk`.
+10. **ADA clinical constants.** HbA1c < 7.0%, fasting glucose 80-130 mg/dL, systolic BP < 130 mmHg, LDL < 100 mg/dL, BMI 18.5-24.9.
 11. **JWT delivered via HttpOnly cookies.** Never in response body (except during Postman testing phase). `SameSite=None, Secure, HttpOnly`.
 12. **Google OAuth users cannot login with password.** Enforced by `string.IsNullOrEmpty(user.PasswordHash)` check in `LoginCommandHandler`.
 13. **Idempotency on mutations.** `Admission.IdempotencyKey` enables safe retries without duplicate admissions.
