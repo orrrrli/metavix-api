@@ -23,6 +23,7 @@ public class AppDbContext : DbContext
     public DbSet<ClinicalGoal> ClinicalGoals => Set<ClinicalGoal>();
     public DbSet<GoalEvaluation> GoalEvaluations => Set<GoalEvaluation>();
     public DbSet<GoalEvaluationItem> GoalEvaluationItems => Set<GoalEvaluationItem>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -172,6 +173,21 @@ public class AppDbContext : DbContext
             entity.Property(i => i.ValueUsed).HasPrecision(10, 3);
             entity.Property(i => i.GoalUsed).HasPrecision(10, 3);
             entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+        });
+
+        // Notification configuration
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasIndex(n => n.RecipientUserId);
+            entity.HasIndex(n => n.PatientId);
+            entity.Property(n => n.Title).HasMaxLength(150).IsRequired();
+            entity.Property(n => n.Body).HasMaxLength(500).IsRequired();
+            entity.Property(n => n.Type).HasConversion<string>().HasMaxLength(40);
+
+            entity.HasOne(n => n.Patient)
+                .WithMany()
+                .HasForeignKey(n => n.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
