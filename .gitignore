@@ -57,3 +57,6 @@ docs/azure-deploy.sh
 
 # Graphify knowledge graph output
 graphify-out/
+
+# Docs
+docs/

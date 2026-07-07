@@ -118,6 +118,8 @@ internal sealed class GetPatientResumenQueryHandler
         DiabetesType.Type1       => "tipo_1",
         DiabetesType.Type2       => "tipo_2",
         DiabetesType.Prediabetes => "prediabetes",
+        DiabetesType.Gestational => "gestational",
+        DiabetesType.LADA        => "lada",
         _                        => "none"
     };
 }
