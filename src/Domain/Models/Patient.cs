@@ -13,6 +13,9 @@ public class Patient
     public decimal? HeightCm { get; set; }
     public Gender? Gender { get; set; }
     public bool IsPregnant { get; set; } = false;
+    public bool HasAscvd { get; set; } = false;
+    public DateOnly? PregnancyStartDate { get; set; }
+    public DateOnly? PregnancyDueDate { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public DiabetesType DiabetesType { get; set; } = DiabetesType.None;

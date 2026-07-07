@@ -623,7 +623,9 @@ public class PatientModule : MainModule, ICarterModule
                 patientId,
                 request.IsPregnant,
                 request.HeightCm,
-                request.Phone);
+                request.Phone,
+                request.PregnancyStartDate,
+                request.PregnancyDueDate);
 
             var result = await sender.Send(command);
 
