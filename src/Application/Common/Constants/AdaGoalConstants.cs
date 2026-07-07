@@ -53,8 +53,8 @@ public static class AdaGoalConstants
         new("ldl_secondary", PatientCategory.SinDiabetes, null, null, null, 100m, 130m, false, TimeSpan.FromDays(365)),
         new("ldl_secondary", PatientCategory.ConDiabetes, null, null, null, 55m, 70m, false, TimeSpan.FromDays(365)),
 
-        new("hdl", PatientCategory.Universal, Gender.Female, null, 50m, null, null, true, TimeSpan.FromDays(365)),
-        new("hdl", PatientCategory.Universal, Gender.Male, null, 40m, null, null, true, TimeSpan.FromDays(365)),
+        new("hdl", PatientCategory.Universal, Gender.Female, 40m, 50m, null, null, true, TimeSpan.FromDays(365)),
+        new("hdl", PatientCategory.Universal, Gender.Male, 35m, 40m, null, null, true, TimeSpan.FromDays(365)),
 
         new("total_cholesterol", PatientCategory.Universal, null, null, null, 200m, 240m, false, TimeSpan.FromDays(365)),
 
@@ -88,5 +88,27 @@ public static class AdaGoalConstants
                 : PatientCategory.EmbarazadaDM,
             _                       => PatientCategory.EmbarazadaDM
         };
+    }
+
+    // ponytail: half-open bands, lower inclusive / upper exclusive. PRD mixes > and >= for OutOfRange;
+    // unified to >= (clinically negligible at the boundary, e.g. 250 vs 251 mg/dL postprandial).
+    public static GoalStatus ClassifyStatus(decimal? value, ParameterSpec spec)
+    {
+        if (value is null)
+            return GoalStatus.NoData;
+
+        if (spec.OutOfRangeLow.HasValue && value < spec.OutOfRangeLow)
+            return GoalStatus.OutOfRange;
+
+        if (spec.OutOfRangeHigh.HasValue && value >= spec.OutOfRangeHigh)
+            return GoalStatus.OutOfRange;
+
+        if (spec.AtRiskLow.HasValue && value < spec.AtRiskLow)
+            return GoalStatus.AtRisk;
+
+        if (spec.AtRiskHigh.HasValue && value >= spec.AtRiskHigh)
+            return GoalStatus.AtRisk;
+
+        return GoalStatus.InRange;
     }
 }
