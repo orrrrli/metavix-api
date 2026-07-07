@@ -70,4 +70,23 @@ public static class AdaGoalConstants
         new("waist_circumference", PatientCategory.Universal, Gender.Female, null, null, 80m, 88m, false, TimeSpan.FromDays(30)),
         new("waist_circumference", PatientCategory.Universal, Gender.Male, null, null, 94m, 102m, false, TimeSpan.FromDays(30)),
     };
+
+    private static readonly HashSet<string> PostprandialParameterIds = new() { "postprandial_1h", "postprandial_2h" };
+
+    public static PatientCategory ResolveCategory(bool isPregnant, DiabetesType diabetesType, string parameterId)
+    {
+        if (!isPregnant)
+        {
+            return diabetesType == DiabetesType.None ? PatientCategory.SinDiabetes : PatientCategory.ConDiabetes;
+        }
+
+        return diabetesType switch
+        {
+            DiabetesType.None       => PatientCategory.SinDiabetes,
+            DiabetesType.Gestational => PostprandialParameterIds.Contains(parameterId)
+                ? PatientCategory.EmbarazadaDMG
+                : PatientCategory.EmbarazadaDM,
+            _                       => PatientCategory.EmbarazadaDM
+        };
+    }
 }
