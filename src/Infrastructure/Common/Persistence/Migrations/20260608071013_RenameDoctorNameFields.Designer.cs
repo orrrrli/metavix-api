@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Infrastructure.Migrations
+namespace Infrastructure.Common.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260607230015_AddDoctorVerificationFields")]
-    partial class AddDoctorVerificationFields
+    [Migration("20260608071013_RenameDoctorNameFields")]
+    partial class RenameDoctorNameFields
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -139,11 +139,18 @@ namespace Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("LastName")
+                    b.Property<string>("LicenseNumber")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("LicenseNumber")
+                    b.Property<string>("MaternalLastName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MiddleName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaternalLastName")
                         .IsRequired()
                         .HasColumnType("text");
 
