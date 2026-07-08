@@ -178,14 +178,34 @@ internal sealed class EvaluateGoalsCommandHandler
     }
 
     // A null custom threshold keeps the catalog default; a set one overrides that band.
-    private static ParameterSpec ApplyCustom(ParameterSpec spec, ClinicalGoal custom) =>
-        spec with
+    // Bands are widened outward as needed so the merged spec never violates
+    // outOfRangeLow <= atRiskLow <= atRiskHigh <= outOfRangeHigh: a custom bound that would
+    // otherwise leave a gap against a catalog default instead pulls that default along with it,
+    // so severity is never under-reported.
+    private static ParameterSpec ApplyCustom(ParameterSpec spec, ClinicalGoal custom)
+    {
+        var outOfRangeLow = custom.CustomOutOfRangeLow ?? spec.OutOfRangeLow;
+
+        var atRiskLow = custom.CustomAtRiskLow ?? spec.AtRiskLow;
+        if (outOfRangeLow.HasValue && atRiskLow.HasValue && atRiskLow < outOfRangeLow)
+            atRiskLow = outOfRangeLow;
+
+        var atRiskHigh = custom.CustomAtRiskHigh ?? spec.AtRiskHigh;
+        if (atRiskLow.HasValue && atRiskHigh.HasValue && atRiskHigh < atRiskLow)
+            atRiskHigh = atRiskLow;
+
+        var outOfRangeHigh = custom.CustomOutOfRangeHigh ?? spec.OutOfRangeHigh;
+        if (atRiskHigh.HasValue && outOfRangeHigh.HasValue && outOfRangeHigh < atRiskHigh)
+            outOfRangeHigh = atRiskHigh;
+
+        return spec with
         {
-            OutOfRangeLow = custom.CustomOutOfRangeLow ?? spec.OutOfRangeLow,
-            AtRiskLow = custom.CustomAtRiskLow ?? spec.AtRiskLow,
-            AtRiskHigh = custom.CustomAtRiskHigh ?? spec.AtRiskHigh,
-            OutOfRangeHigh = custom.CustomOutOfRangeHigh ?? spec.OutOfRangeHigh,
+            OutOfRangeLow = outOfRangeLow,
+            AtRiskLow = atRiskLow,
+            AtRiskHigh = atRiskHigh,
+            OutOfRangeHigh = outOfRangeHigh,
         };
+    }
 
     // Builds a spec entirely from the specialist's custom bands when the catalog has no row
     // (e.g. blood pressure targets for a pregnant patient).

@@ -181,6 +181,51 @@ public class EvaluateGoalsCommandHandlerTests
         hba1cItem.Status.Should().Be(GoalStatus.InRange);
     }
 
+    // Regression: a custom bound that only touches one side of the band must not leave a gap
+    // against the catalog default on the other side (see ApplyCustom widening rule).
+    [Fact]
+    public async Task Handle_WhenCustomAtRiskHighExceedsCatalogOutOfRangeHigh_WidensOutOfRangeHighToMatch()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        // SinDiabetes HbA1c catalog: AtRiskHigh=5.7, OutOfRangeHigh=6.5.
+        // Doctor sets only CustomAtRiskHigh=9.0, leaving OutOfRangeHigh at the catalog's 6.5 (< 9.0).
+        // Without widening, 9.5 would fall through to AtRisk instead of OutOfRange.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hba1c = 9.5m,
+        };
+
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.HbA1c,
+            CustomAtRiskHigh = 9.0m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
+        hba1cItem.Status.Should().Be(GoalStatus.OutOfRange);
+    }
+
     private void SetupAuth(Guid userId, Guid patientId, Patient patient)
     {
         _currentUser.UserId.Returns(userId);
