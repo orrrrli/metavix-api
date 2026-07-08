@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Common.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260708170000_MigrateClinicalGoalToRangesAndAddReason")]
-    partial class MigrateClinicalGoalToRangesAndAddReason
+    [Migration("20260708175333_AddGoalEvaluationItemReason")]
+    partial class AddGoalEvaluationItemReason
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -65,7 +65,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("PatientId");
 
-                    b.ToTable("ClinicalGoals", (string)null);
+                    b.ToTable("ClinicalGoals");
                 });
 
             modelBuilder.Entity("Domain.Models.DailyRecord", b =>
@@ -108,7 +108,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("PatientId");
 
-                    b.ToTable("DailyRecords", (string)null);
+                    b.ToTable("DailyRecords");
                 });
 
             modelBuilder.Entity("Domain.Models.Doctor", b =>
@@ -177,7 +177,7 @@ namespace Infrastructure.Common.Persistence.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("Doctors", (string)null);
+                    b.ToTable("Doctors");
                 });
 
             modelBuilder.Entity("Domain.Models.GlucoseReading", b =>
@@ -205,7 +205,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("DailyRecordId");
 
-                    b.ToTable("GlucoseReadings", (string)null);
+                    b.ToTable("GlucoseReadings");
                 });
 
             modelBuilder.Entity("Domain.Models.GoalEvaluation", b =>
@@ -229,7 +229,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("PatientId");
 
-                    b.ToTable("GoalEvaluations", (string)null);
+                    b.ToTable("GoalEvaluations");
                 });
 
             modelBuilder.Entity("Domain.Models.GoalEvaluationItem", b =>
@@ -267,7 +267,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("GoalEvaluationId");
 
-                    b.ToTable("GoalEvaluationItems", (string)null);
+                    b.ToTable("GoalEvaluationItems");
                 });
 
             modelBuilder.Entity("Domain.Models.InsulinDm1Profile", b =>
@@ -312,7 +312,7 @@ namespace Infrastructure.Common.Persistence.Migrations
                     b.HasIndex("PatientId")
                         .IsUnique();
 
-                    b.ToTable("InsulinDm1Profiles", (string)null);
+                    b.ToTable("InsulinDm1Profiles");
                 });
 
             modelBuilder.Entity("Domain.Models.InsulinDm1Record", b =>
@@ -355,7 +355,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("PatientId", "RecordDate");
 
-                    b.ToTable("InsulinDm1Records", (string)null);
+                    b.ToTable("InsulinDm1Records");
                 });
 
             modelBuilder.Entity("Domain.Models.LabResult", b =>
@@ -407,7 +407,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("PatientId");
 
-                    b.ToTable("LabResults", (string)null);
+                    b.ToTable("LabResults");
                 });
 
             modelBuilder.Entity("Domain.Models.Notification", b =>
@@ -449,7 +449,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("RecipientUserId");
 
-                    b.ToTable("Notifications", (string)null);
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("Domain.Models.PasswordResetToken", b =>
@@ -478,7 +478,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PasswordResetTokens", (string)null);
+                    b.ToTable("PasswordResetTokens");
                 });
 
             modelBuilder.Entity("Domain.Models.Patient", b =>
@@ -551,7 +551,7 @@ namespace Infrastructure.Common.Persistence.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("Patients", (string)null);
+                    b.ToTable("Patients");
                 });
 
             modelBuilder.Entity("Domain.Models.PatientDoctorRequest", b =>
@@ -583,7 +583,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("PatientId");
 
-                    b.ToTable("PatientDoctorRequests", (string)null);
+                    b.ToTable("PatientDoctorRequests");
                 });
 
             modelBuilder.Entity("Domain.Models.RefreshToken", b =>
@@ -615,7 +615,7 @@ namespace Infrastructure.Common.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("Domain.Models.User", b =>
@@ -652,7 +652,7 @@ namespace Infrastructure.Common.Persistence.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("Infrastructure.Persistence.LogEntry", b =>

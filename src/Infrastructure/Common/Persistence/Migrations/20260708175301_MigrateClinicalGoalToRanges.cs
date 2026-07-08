@@ -1,17 +1,15 @@
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Infrastructure.Common.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class MigrateClinicalGoalToRangesAndAddReason : Migration
+    public partial class MigrateClinicalGoalToRanges : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Legacy single-value custom goals are replaced by a four-threshold band model.
-            // Existing rows are smoke-test data only; the column is dropped rather than migrated.
             migrationBuilder.DropColumn(
                 name: "CustomValue",
                 table: "ClinicalGoals");
@@ -47,22 +45,11 @@ namespace Infrastructure.Common.Persistence.Migrations
                 precision: 8,
                 scale: 2,
                 nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "Reason",
-                table: "GoalEvaluationItems",
-                type: "character varying(50)",
-                maxLength: 50,
-                nullable: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Reason",
-                table: "GoalEvaluationItems");
-
             migrationBuilder.DropColumn(
                 name: "CustomAtRiskHigh",
                 table: "ClinicalGoals");

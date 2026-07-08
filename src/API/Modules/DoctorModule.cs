@@ -120,7 +120,7 @@ public class DoctorModule : MainModule, ICarterModule
             .WithOpenApi();
 
         group.MapGet("/{doctorId:guid}/patients/{patientId:guid}/goals", GetClinicalGoals)
-            .Produces<ApiSuccessResponse<List<ClinicalGoalResult>>>(StatusCodes.Status200OK)
+            .Produces<ApiSuccessResponse<ClinicalGoalsResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status403Forbidden)
             .WithName("GetClinicalGoals")
             .WithOpenApi();

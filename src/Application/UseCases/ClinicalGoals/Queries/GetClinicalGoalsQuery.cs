@@ -4,4 +4,4 @@ namespace Application.UseCases.ClinicalGoals.Queries;
 
 public sealed record GetClinicalGoalsQuery(
     Guid DoctorId,
-    Guid PatientId) : IRequest<ErrorOr<List<ClinicalGoalResult>>>;
+    Guid PatientId) : IRequest<ErrorOr<ClinicalGoalsResult>>;

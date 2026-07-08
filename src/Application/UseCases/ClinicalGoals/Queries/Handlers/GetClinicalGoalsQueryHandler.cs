@@ -6,7 +6,7 @@ using Application.UseCases.ClinicalGoals.Queries;
 namespace Application.UseCases.ClinicalGoals.Handlers;
 
 internal sealed class GetClinicalGoalsQueryHandler
-    : IRequestHandler<GetClinicalGoalsQuery, ErrorOr<List<ClinicalGoalResult>>>
+    : IRequestHandler<GetClinicalGoalsQuery, ErrorOr<ClinicalGoalsResult>>
 {
     private readonly IClinicalGoalRepository _clinicalGoalRepository;
     private readonly IDoctorRepository _doctorRepository;
@@ -25,7 +25,7 @@ internal sealed class GetClinicalGoalsQueryHandler
         _currentUser = currentUser;
     }
 
-    public async Task<ErrorOr<List<ClinicalGoalResult>>> Handle(
+    public async Task<ErrorOr<ClinicalGoalsResult>> Handle(
         GetClinicalGoalsQuery request,
         CancellationToken cancellationToken)
     {
@@ -36,6 +36,6 @@ internal sealed class GetClinicalGoalsQueryHandler
 
         var goals = await _clinicalGoalRepository.GetByPatientIdAsync(request.PatientId);
 
-        return goals.Select(ClinicalGoalMapper.ToResult).ToList();
+        return new ClinicalGoalsResult(goals.Select(ClinicalGoalMapper.ToResult).ToList());
     }
 }

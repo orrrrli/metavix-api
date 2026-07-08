@@ -37,7 +37,7 @@ public class GetClinicalGoalsQueryHandlerTests
         var result = await _handler.Handle(new GetClinicalGoalsQuery(doctorId, patientId), CancellationToken.None);
 
         result.IsError.Should().BeFalse();
-        result.Value.Should().BeEmpty();
+        result.Value.Goals.Should().BeEmpty();
     }
 
     [Fact]
@@ -63,9 +63,9 @@ public class GetClinicalGoalsQueryHandlerTests
         var result = await _handler.Handle(new GetClinicalGoalsQuery(doctorId, patientId), CancellationToken.None);
 
         result.IsError.Should().BeFalse();
-        result.Value.Should().HaveCount(1);
-        result.Value[0].ParameterId.Should().Be("systolic_bp");
-        result.Value[0].CustomAtRiskHigh.Should().Be(135m);
+        result.Value.Goals.Should().HaveCount(1);
+        result.Value.Goals[0].ParameterId.Should().Be("systolic_bp");
+        result.Value.Goals[0].CustomAtRiskHigh.Should().Be(135m);
     }
 
     [Fact]
