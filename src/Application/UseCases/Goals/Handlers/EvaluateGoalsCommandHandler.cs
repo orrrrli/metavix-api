@@ -61,7 +61,7 @@ internal sealed class EvaluateGoalsCommandHandler
 
         // T7: custom goal overrides
         var customGoals = await _clinicalGoalRepository.GetByPatientIdAsync(request.PatientId);
-        var customGoalMap = customGoals.ToDictionary(g => g.ParameterId, g => g.CustomValue);
+        var customGoalMap = customGoals.ToDictionary(g => g.ParameterId, g => g);
 
         // Extract values from records
         decimal? sbp = allRecords.FirstOrDefault(r => r.SystolicPressure.HasValue)?.SystolicPressure;
@@ -120,7 +120,7 @@ internal sealed class EvaluateGoalsCommandHandler
             evaluationId,
             now,
             items.Select(i => new GoalEvaluationItemResult(
-                i.ParameterId, i.ValueUsed, i.GoalUsed, i.Status)).ToList());
+                i.ParameterId, i.ValueUsed, i.GoalUsed, i.Status, i.Reason)).ToList());
     }
 
     private static GoalEvaluationItem? BuildItem(
@@ -128,7 +128,7 @@ internal sealed class EvaluateGoalsCommandHandler
         string parameterId,
         decimal? value,
         Domain.Models.Patient patient,
-        Dictionary<string, decimal> customGoalMap)
+        Dictionary<string, ClinicalGoal> customGoalMap)
     {
         // Ldl in the command is the unclassified cholesterol reading; map to the primary spec
         // unless a more specific one is desired. Today the catalog splits ldl_primary/ldl_secondary
@@ -137,18 +137,75 @@ internal sealed class EvaluateGoalsCommandHandler
 
         var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, resolvedParameterId);
         var spec = AdaGoalConstants.ResolveSpec(resolvedParameterId, category, patient.Gender);
-        if (spec is null) return null;
 
-        // Custom goal: doctor-set upper threshold. The doctor is saying "this patient should
-        // stay at or below this value"; both the AtRisk and OutOfRange upper bands move to it.
-        // The lower bands stay at the spec default (the doctor did not override the lower alarm).
-        var effectiveSpec = customGoalMap.TryGetValue(parameterId, out var customUpper)
-            ? spec with { AtRiskHigh = customUpper, OutOfRangeHigh = customUpper }
-            : spec;
+        var hasCustom = customGoalMap.TryGetValue(parameterId, out var custom);
 
-        // GoalUsed surfaces the threshold the doctor set (or the spec default) so the response
-        // shows what the patient is being compared against.
-        var goal = effectiveSpec.AtRiskHigh ?? effectiveSpec.OutOfRangeHigh ?? 0m;
+        // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c targets in gestation)
+        // takes precedence over any doctor-set custom goal.
+        if (spec is { IsPregnancySpecific: true })
+            return BuildEvaluatedItem(evaluationId, parameterId, value, spec);
+
+        if (spec is null)
+        {
+            // A non-pregnant patient simply has no applicable spec for this parameter → omit it.
+            if (!patient.IsPregnant)
+                return null;
+
+            // Pregnant patient with no pregnancy-category spec. How this parameter behaves outside
+            // pregnancy tells us whether it is contraindicated or just awaiting specialist thresholds.
+            var baseCategory = AdaGoalConstants.ResolveCategory(false, patient.DiabetesType, resolvedParameterId);
+            var baseSpec = AdaGoalConstants.ResolveSpec(resolvedParameterId, baseCategory, patient.Gender);
+
+            // Not evaluated during pregnancy (e.g. LDL: statins contraindicated).
+            if (baseSpec is { AppliesInPregnancy: false })
+                return BuildNoDataItem(evaluationId, parameterId, ReasonFor(resolvedParameterId));
+
+            // Applies in pregnancy but has no universal threshold (e.g. blood pressure): the
+            // specialist assigns it per patient via a custom clinical goal.
+            if (hasCustom)
+                return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(resolvedParameterId, custom!));
+
+            return BuildNoDataItem(evaluationId, parameterId, "requires-specialist-evaluation");
+        }
+
+        // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol).
+        if (patient.IsPregnant && !spec.AppliesInPregnancy)
+            return BuildNoDataItem(evaluationId, parameterId, ReasonFor(resolvedParameterId));
+
+        // Non-pregnancy-specific spec → apply the doctor's custom override when present.
+        var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
+        return BuildEvaluatedItem(evaluationId, parameterId, value, effectiveSpec);
+    }
+
+    // A null custom threshold keeps the catalog default; a set one overrides that band.
+    private static ParameterSpec ApplyCustom(ParameterSpec spec, ClinicalGoal custom) =>
+        spec with
+        {
+            OutOfRangeLow = custom.CustomOutOfRangeLow ?? spec.OutOfRangeLow,
+            AtRiskLow = custom.CustomAtRiskLow ?? spec.AtRiskLow,
+            AtRiskHigh = custom.CustomAtRiskHigh ?? spec.AtRiskHigh,
+            OutOfRangeHigh = custom.CustomOutOfRangeHigh ?? spec.OutOfRangeHigh,
+        };
+
+    // Builds a spec entirely from the specialist's custom bands when the catalog has no row
+    // (e.g. blood pressure targets for a pregnant patient).
+    private static ParameterSpec SpecFromCustom(string parameterId, ClinicalGoal custom) =>
+        new(parameterId, PatientCategory.Universal, null,
+            custom.CustomOutOfRangeLow, custom.CustomAtRiskLow,
+            custom.CustomAtRiskHigh, custom.CustomOutOfRangeHigh,
+            AppliesInPregnancy: true, NoDataWindow: null);
+
+    private static string ReasonFor(string resolvedParameterId) => resolvedParameterId switch
+    {
+        "ldl_primary" or "ldl_secondary" => "statins-contraindicated",
+        _ => "not-evaluated-in-pregnancy",
+    };
+
+    private static GoalEvaluationItem BuildEvaluatedItem(
+        Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec)
+    {
+        // GoalUsed surfaces the threshold the patient is compared against (custom or spec default).
+        var goal = spec.AtRiskHigh ?? spec.OutOfRangeHigh ?? 0m;
 
         return new GoalEvaluationItem
         {
@@ -157,7 +214,19 @@ internal sealed class EvaluateGoalsCommandHandler
             ParameterId = parameterId,
             ValueUsed = value,
             GoalUsed = goal,
-            Status = effectiveSpec.Classify(value),
+            Status = spec.Classify(value),
         };
     }
+
+    private static GoalEvaluationItem BuildNoDataItem(Guid evaluationId, string parameterId, string reason) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            GoalEvaluationId = evaluationId,
+            ParameterId = parameterId,
+            ValueUsed = null,
+            GoalUsed = 0m,
+            Status = GoalStatus.NoData,
+            Reason = reason,
+        };
 }

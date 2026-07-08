@@ -140,7 +140,10 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(g => g.PatientId);
             entity.Property(g => g.ParameterId).HasMaxLength(50).IsRequired();
-            entity.Property(g => g.CustomValue).HasPrecision(8, 2);
+            entity.Property(g => g.CustomOutOfRangeLow).HasPrecision(8, 2);
+            entity.Property(g => g.CustomAtRiskLow).HasPrecision(8, 2);
+            entity.Property(g => g.CustomAtRiskHigh).HasPrecision(8, 2);
+            entity.Property(g => g.CustomOutOfRangeHigh).HasPrecision(8, 2);
 
             entity.HasOne(g => g.Patient)
                 .WithMany()
@@ -173,6 +176,7 @@ public class AppDbContext : DbContext
             entity.Property(i => i.ValueUsed).HasPrecision(10, 3);
             entity.Property(i => i.GoalUsed).HasPrecision(10, 3);
             entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(i => i.Reason).HasMaxLength(50);
         });
 
         // Notification configuration

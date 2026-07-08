@@ -61,6 +61,11 @@ public static class AdaGoalConstants
         new("waist_circumference", PatientCategory.Universal, Gender.Male, null, null, 94m, 102m, false, TimeSpan.FromDays(30)),
     };
 
+    // Every parameter a doctor may set a custom clinical goal for: the catalog spec ids plus the
+    // "ldl" alias the evaluation uses before resolving to ldl_primary/ldl_secondary.
+    public static readonly IReadOnlySet<string> KnownParameterIds =
+        Catalog.Select(s => s.ParameterId).Append(Ldl).ToHashSet();
+
     private static readonly HashSet<string> PostprandialParameterIds = new() { "postprandial_1h", "postprandial_2h" };
 
     public static PatientCategory ResolveCategory(bool isPregnant, DiabetesType diabetesType, string parameterId)
