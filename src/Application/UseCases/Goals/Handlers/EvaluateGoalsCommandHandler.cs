@@ -180,32 +180,20 @@ internal sealed class EvaluateGoalsCommandHandler
     }
 
     // A null custom threshold keeps the catalog default; a set one overrides that band.
-    // Bands are widened outward as needed so the merged spec never violates
-    // outOfRangeLow <= atRiskLow <= atRiskHigh <= outOfRangeHigh: a custom bound that would
-    // otherwise leave a gap against a catalog default instead pulls that default along with it,
-    // so severity is never under-reported.
+    // ThresholdRange.MergeOnto widens bands outward as needed so the merged spec never violates
+    // outOfRangeLow <= atRiskLow <= atRiskHigh <= outOfRangeHigh.
     private static ParameterSpec ApplyCustom(ParameterSpec spec, ClinicalGoal custom)
     {
-        var outOfRangeLow = custom.CustomOutOfRangeLow ?? spec.OutOfRangeLow;
-
-        var atRiskLow = custom.CustomAtRiskLow ?? spec.AtRiskLow;
-        if (outOfRangeLow.HasValue && atRiskLow.HasValue && atRiskLow < outOfRangeLow)
-            atRiskLow = outOfRangeLow;
-
-        var atRiskHigh = custom.CustomAtRiskHigh ?? spec.AtRiskHigh;
-        if (atRiskLow.HasValue && atRiskHigh.HasValue && atRiskHigh < atRiskLow)
-            atRiskHigh = atRiskLow;
-
-        var outOfRangeHigh = custom.CustomOutOfRangeHigh ?? spec.OutOfRangeHigh;
-        if (atRiskHigh.HasValue && outOfRangeHigh.HasValue && outOfRangeHigh < atRiskHigh)
-            outOfRangeHigh = atRiskHigh;
+        var merged = new ThresholdRange(
+                custom.CustomOutOfRangeLow, custom.CustomAtRiskLow, custom.CustomAtRiskHigh, custom.CustomOutOfRangeHigh)
+            .MergeOnto(new ThresholdRange(spec.OutOfRangeLow, spec.AtRiskLow, spec.AtRiskHigh, spec.OutOfRangeHigh));
 
         return spec with
         {
-            OutOfRangeLow = outOfRangeLow,
-            AtRiskLow = atRiskLow,
-            AtRiskHigh = atRiskHigh,
-            OutOfRangeHigh = outOfRangeHigh,
+            OutOfRangeLow = merged.OutOfRangeLow,
+            AtRiskLow = merged.AtRiskLow,
+            AtRiskHigh = merged.AtRiskHigh,
+            OutOfRangeHigh = merged.OutOfRangeHigh,
         };
     }
 
