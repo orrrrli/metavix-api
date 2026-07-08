@@ -139,6 +139,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<ClinicalGoal>(entity =>
         {
             entity.HasIndex(g => g.PatientId);
+            entity.HasIndex(g => new { g.PatientId, g.ParameterId }).IsUnique();
             entity.Property(g => g.ParameterId).HasMaxLength(50).IsRequired();
             entity.Property(g => g.CustomOutOfRangeLow).HasPrecision(8, 2);
             entity.Property(g => g.CustomAtRiskLow).HasPrecision(8, 2);
