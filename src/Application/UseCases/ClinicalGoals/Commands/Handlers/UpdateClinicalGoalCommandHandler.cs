@@ -36,8 +36,8 @@ internal sealed class UpdateClinicalGoalCommandHandler
         if (authError is not null)
             return authError.Value;
 
-        var goal = await _clinicalGoalRepository.GetByIdAsync(request.GoalId);
-        if (goal is null || goal.PatientId != request.PatientId || goal.DoctorId != request.DoctorId)
+        var goal = await _clinicalGoalRepository.GetOwnedAsync(request.GoalId, request.PatientId, request.DoctorId);
+        if (goal is null)
             return ClinicalGoalErrors.NotFound;
 
         goal.CustomOutOfRangeLow = request.CustomOutOfRangeLow;

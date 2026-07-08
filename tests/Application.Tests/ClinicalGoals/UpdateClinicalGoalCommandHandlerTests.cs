@@ -43,7 +43,7 @@ public class UpdateClinicalGoalCommandHandlerTests
             CustomAtRiskHigh = 135m,
             CustomOutOfRangeHigh = 150m,
         };
-        _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
+        _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns(goal);
 
         var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -62,7 +62,7 @@ public class UpdateClinicalGoalCommandHandlerTests
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
         SetupAuth(userId, doctorId, patientId);
-        _clinicalGoalRepository.GetByIdAsync(goalId).Returns((ClinicalGoal?)null);
+        _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -71,6 +71,8 @@ public class UpdateClinicalGoalCommandHandlerTests
         result.FirstError.Should().Be(ClinicalGoalErrors.NotFound);
     }
 
+    // The repository's GetOwnedAsync filters by patient and doctor in the query itself, so a
+    // goal belonging to another patient (or another doctor, tested below) simply isn't returned.
     [Fact]
     public async Task Handle_WhenGoalBelongsToAnotherPatient_ReturnsNotFound()
     {
@@ -79,9 +81,7 @@ public class UpdateClinicalGoalCommandHandlerTests
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
         SetupAuth(userId, doctorId, patientId);
-
-        var goal = new ClinicalGoal { Id = goalId, PatientId = Guid.NewGuid(), ParameterId = "systolic_bp" };
-        _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
+        _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -101,15 +101,7 @@ public class UpdateClinicalGoalCommandHandlerTests
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
         SetupAuth(userId, doctorId, patientId);
-
-        var goal = new ClinicalGoal
-        {
-            Id = goalId,
-            PatientId = patientId,
-            DoctorId = Guid.NewGuid(),
-            ParameterId = "systolic_bp",
-        };
-        _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
+        _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
         var result = await _handler.Handle(command, CancellationToken.None);

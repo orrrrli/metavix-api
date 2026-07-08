@@ -35,7 +35,7 @@ public class DeleteClinicalGoalCommandHandlerTests
         SetupAuth(userId, doctorId, patientId);
 
         var goal = new ClinicalGoal { Id = goalId, PatientId = patientId, DoctorId = doctorId, ParameterId = "systolic_bp" };
-        _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
+        _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns(goal);
 
         var result = await _handler.Handle(
             new DeleteClinicalGoalCommand(doctorId, patientId, goalId), CancellationToken.None);
@@ -52,7 +52,7 @@ public class DeleteClinicalGoalCommandHandlerTests
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
         SetupAuth(userId, doctorId, patientId);
-        _clinicalGoalRepository.GetByIdAsync(goalId).Returns((ClinicalGoal?)null);
+        _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var result = await _handler.Handle(
             new DeleteClinicalGoalCommand(doctorId, patientId, goalId), CancellationToken.None);
@@ -62,8 +62,8 @@ public class DeleteClinicalGoalCommandHandlerTests
         await _clinicalGoalRepository.DidNotReceive().DeleteAsync(Arg.Any<ClinicalGoal>());
     }
 
-    // Regression: a linked doctor other than the one who created the goal must not be able to
-    // delete it, even though both are validly linked to the same patient.
+    // The repository's GetOwnedAsync filters by patient and doctor in the query itself, so a
+    // goal belonging to another doctor simply isn't returned.
     [Fact]
     public async Task Handle_WhenGoalBelongsToAnotherDoctor_ReturnsNotFound()
     {
@@ -72,15 +72,7 @@ public class DeleteClinicalGoalCommandHandlerTests
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
         SetupAuth(userId, doctorId, patientId);
-
-        var goal = new ClinicalGoal
-        {
-            Id = goalId,
-            PatientId = patientId,
-            DoctorId = Guid.NewGuid(),
-            ParameterId = "systolic_bp",
-        };
-        _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
+        _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var result = await _handler.Handle(
             new DeleteClinicalGoalCommand(doctorId, patientId, goalId), CancellationToken.None);
