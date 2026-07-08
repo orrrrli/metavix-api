@@ -90,4 +90,32 @@ public class UpdateClinicalGoalCommandHandlerTests
         result.FirstError.Should().Be(ClinicalGoalErrors.NotFound);
         await _clinicalGoalRepository.DidNotReceive().UpdateAsync(Arg.Any<ClinicalGoal>());
     }
+
+    // Regression: a linked doctor other than the one who created the goal must not be able to
+    // update it, even though both are validly linked to the same patient.
+    [Fact]
+    public async Task Handle_WhenGoalBelongsToAnotherDoctor_ReturnsNotFound()
+    {
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var goalId = Guid.NewGuid();
+        SetupAuth(userId, doctorId, patientId);
+
+        var goal = new ClinicalGoal
+        {
+            Id = goalId,
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = "systolic_bp",
+        };
+        _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
+
+        var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Should().Be(ClinicalGoalErrors.NotFound);
+        await _clinicalGoalRepository.DidNotReceive().UpdateAsync(Arg.Any<ClinicalGoal>());
+    }
 }

@@ -34,7 +34,7 @@ public class DeleteClinicalGoalCommandHandlerTests
         var goalId = Guid.NewGuid();
         SetupAuth(userId, doctorId, patientId);
 
-        var goal = new ClinicalGoal { Id = goalId, PatientId = patientId, ParameterId = "systolic_bp" };
+        var goal = new ClinicalGoal { Id = goalId, PatientId = patientId, DoctorId = doctorId, ParameterId = "systolic_bp" };
         _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
 
         var result = await _handler.Handle(
@@ -53,6 +53,34 @@ public class DeleteClinicalGoalCommandHandlerTests
         var goalId = Guid.NewGuid();
         SetupAuth(userId, doctorId, patientId);
         _clinicalGoalRepository.GetByIdAsync(goalId).Returns((ClinicalGoal?)null);
+
+        var result = await _handler.Handle(
+            new DeleteClinicalGoalCommand(doctorId, patientId, goalId), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Should().Be(ClinicalGoalErrors.NotFound);
+        await _clinicalGoalRepository.DidNotReceive().DeleteAsync(Arg.Any<ClinicalGoal>());
+    }
+
+    // Regression: a linked doctor other than the one who created the goal must not be able to
+    // delete it, even though both are validly linked to the same patient.
+    [Fact]
+    public async Task Handle_WhenGoalBelongsToAnotherDoctor_ReturnsNotFound()
+    {
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var goalId = Guid.NewGuid();
+        SetupAuth(userId, doctorId, patientId);
+
+        var goal = new ClinicalGoal
+        {
+            Id = goalId,
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = "systolic_bp",
+        };
+        _clinicalGoalRepository.GetByIdAsync(goalId).Returns(goal);
 
         var result = await _handler.Handle(
             new DeleteClinicalGoalCommand(doctorId, patientId, goalId), CancellationToken.None);
