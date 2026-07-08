@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -30,7 +31,7 @@ internal sealed class UpdateClinicalGoalCommandHandler
         UpdateClinicalGoalCommand request,
         CancellationToken cancellationToken)
     {
-        var authError = await ClinicalGoalAuth.AuthorizeAsync(
+        var authError = await DoctorPatientLinkAuth.AuthorizeAsync(
             _currentUser, _doctorRepository, _requestRepository, request.DoctorId, request.PatientId);
         if (authError is not null)
             return authError.Value;

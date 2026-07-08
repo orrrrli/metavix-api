@@ -2,11 +2,11 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 
-namespace Application.UseCases.ClinicalGoals.Common;
+namespace Application.Common.Authorization;
 
-// Shared guard for clinical-goal endpoints: the caller must be the doctor named in the route and
-// must hold an accepted link with the patient.
-internal static class ClinicalGoalAuth
+// Shared guard for endpoints scoped to a doctor acting on one of their linked patients: the
+// caller must be the doctor named in the route and must hold an accepted link with the patient.
+internal static class DoctorPatientLinkAuth
 {
     public static async Task<Error?> AuthorizeAsync(
         ICurrentUserService currentUser,

@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -30,16 +31,10 @@ internal sealed class GetLinkedPatientLabResultsQueryHandler
         GetLinkedPatientLabResultsQuery request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
-            return AuthErrors.Forbidden;
-
-        var callerDoctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerDoctorId != request.DoctorId)
-            return AuthErrors.Forbidden;
-
-        var isLinked = await _requestRepository.IsAcceptedLinkAsync(request.DoctorId, request.PatientId);
-        if (!isLinked)
-            return AuthErrors.Forbidden;
+        var authError = await DoctorPatientLinkAuth.AuthorizeAsync(
+            _currentUser, _doctorRepository, _requestRepository, request.DoctorId, request.PatientId);
+        if (authError is not null)
+            return authError.Value;
 
         var records = await _labResultRepository.GetAllByPatientIdAsync(request.PatientId);
 
