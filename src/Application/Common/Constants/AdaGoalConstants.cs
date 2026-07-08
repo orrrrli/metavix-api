@@ -11,31 +11,21 @@ public static class AdaGoalConstants
     public const string Ldl = "ldl";
     public const string Bmi = "bmi";
 
-    public const decimal HbA1cGoal = 7.0m;
-    public const decimal FastingGlucoseMin = 80m;
-    public const decimal FastingGlucoseMax = 130m;
-    public const decimal SystolicBpGoal = 130m;
-    public const decimal LdlGoal = 100m;
-    public const decimal BmiMin = 18.5m;
-    public const decimal BmiMax = 24.9m;
-
-    public const decimal AtRiskFactor = 0.9m;
-
     public static readonly IReadOnlyList<ParameterSpec> Catalog = new List<ParameterSpec>
     {
         new("hba1c", PatientCategory.SinDiabetes, null, null, null, 5.7m, 6.5m, true, TimeSpan.FromDays(90)),
         new("hba1c", PatientCategory.ConDiabetes, null, null, null, 7.0m, 8.0m, true, TimeSpan.FromDays(90)),
         new("hba1c", PatientCategory.EmbarazadaDM, null, null, null, 6.0m, 7.0m, true, TimeSpan.FromDays(90)),
 
-        new("fasting_glucose", PatientCategory.SinDiabetes, null, 70m, 70m, 100m, 126m, true, TimeSpan.FromDays(14)),
+        new("fasting_glucose", PatientCategory.SinDiabetes, null, 60m, 70m, 100m, 126m, true, TimeSpan.FromDays(14)),
         new("fasting_glucose", PatientCategory.ConDiabetes, null, 70m, 80m, 131m, 180m, true, TimeSpan.FromDays(14)),
-        new("fasting_glucose", PatientCategory.EmbarazadaDM, null, 70m, 70m, 96m, 110m, true, TimeSpan.FromDays(14)),
+        new("fasting_glucose", PatientCategory.EmbarazadaDM, null, 60m, 70m, 96m, 110m, true, TimeSpan.FromDays(14)),
 
         new("postprandial_1h", PatientCategory.ConDiabetes, null, null, null, 180m, 250m, true, TimeSpan.FromDays(14)),
-        new("postprandial_1h", PatientCategory.EmbarazadaDMG, null, 110m, 110m, 141m, 160m, true, TimeSpan.FromDays(14)),
+        new("postprandial_1h", PatientCategory.EmbarazadaDMG, null, 100m, 110m, 141m, 160m, true, TimeSpan.FromDays(14)),
 
         new("postprandial_2h", PatientCategory.ConDiabetes, null, null, null, 180m, 250m, true, TimeSpan.FromDays(14)),
-        new("postprandial_2h", PatientCategory.EmbarazadaDMG, null, 100m, 100m, 121m, 140m, true, TimeSpan.FromDays(14)),
+        new("postprandial_2h", PatientCategory.EmbarazadaDMG, null, 90m, 100m, 121m, 140m, true, TimeSpan.FromDays(14)),
 
         new("systolic_bp", PatientCategory.SinDiabetes, null, null, null, 120m, 130m, true, TimeSpan.FromDays(7)),
         new("systolic_bp", PatientCategory.ConDiabetes, null, null, null, 130m, 140m, true, TimeSpan.FromDays(7)),
@@ -45,7 +35,7 @@ public static class AdaGoalConstants
 
         new("heart_rate", PatientCategory.Universal, null, 50m, 60m, 101m, 110m, true, TimeSpan.FromDays(7)),
 
-        new("bmi", PatientCategory.Universal, null, 18.5m, 18.5m, 25m, 30m, false, TimeSpan.FromDays(30)),
+        new("bmi", PatientCategory.Universal, null, 17m, 18.5m, 25m, 30m, false, TimeSpan.FromDays(30)),
 
         new("ldl_primary", PatientCategory.SinDiabetes, null, null, null, 130m, 160m, false, TimeSpan.FromDays(365)),
         new("ldl_primary", PatientCategory.ConDiabetes, null, null, null, 70m, 100m, false, TimeSpan.FromDays(365)),
@@ -65,7 +55,7 @@ public static class AdaGoalConstants
 
         new("egfr", PatientCategory.Universal, null, 30m, 60m, null, null, true, TimeSpan.FromDays(180)),
 
-        new("bun", PatientCategory.Universal, null, 7m, 7m, 21m, 40m, true, TimeSpan.FromDays(180)),
+        new("bun", PatientCategory.Universal, null, 3m, 7m, 21m, 40m, true, TimeSpan.FromDays(180)),
 
         new("waist_circumference", PatientCategory.Universal, Gender.Female, null, null, 80m, 88m, false, TimeSpan.FromDays(30)),
         new("waist_circumference", PatientCategory.Universal, Gender.Male, null, null, 94m, 102m, false, TimeSpan.FromDays(30)),
@@ -90,25 +80,27 @@ public static class AdaGoalConstants
         };
     }
 
-    // ponytail: half-open bands, lower inclusive / upper exclusive. PRD mixes > and >= for OutOfRange;
-    // unified to >= (clinically negligible at the boundary, e.g. 250 vs 251 mg/dL postprandial).
-    public static GoalStatus ClassifyStatus(decimal? value, ParameterSpec spec)
+    public static ParameterSpec? ResolveSpec(string parameterId, PatientCategory category, Gender? gender)
     {
-        if (value is null)
-            return GoalStatus.NoData;
+        if (category == PatientCategory.Universal)
+        {
+            var universal = Catalog.FirstOrDefault(s =>
+                s.ParameterId == parameterId && s.Category == PatientCategory.Universal);
+            if (universal is null) return null;
+            if (universal.Gender is null) return universal;
+            return universal.Gender == gender ? universal : null;
+        }
 
-        if (spec.OutOfRangeLow.HasValue && value < spec.OutOfRangeLow)
-            return GoalStatus.OutOfRange;
+        var categorySpec = Catalog.FirstOrDefault(s =>
+            s.ParameterId == parameterId && s.Category == category);
+        if (categorySpec is not null) return categorySpec;
 
-        if (spec.OutOfRangeHigh.HasValue && value >= spec.OutOfRangeHigh)
-            return GoalStatus.OutOfRange;
-
-        if (spec.AtRiskLow.HasValue && value < spec.AtRiskLow)
-            return GoalStatus.AtRisk;
-
-        if (spec.AtRiskHigh.HasValue && value >= spec.AtRiskHigh)
-            return GoalStatus.AtRisk;
-
-        return GoalStatus.InRange;
+        // Fall back to Universal if the parameter is not category-specific
+        // (e.g., BMI, heart_rate, total_cholesterol, egfr, bun).
+        var universalSpec = Catalog.FirstOrDefault(s =>
+            s.ParameterId == parameterId && s.Category == PatientCategory.Universal);
+        if (universalSpec is null) return null;
+        if (universalSpec.Gender is null) return universalSpec;
+        return universalSpec.Gender == gender ? universalSpec : null;
     }
 }
