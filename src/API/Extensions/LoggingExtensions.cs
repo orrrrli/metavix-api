@@ -14,9 +14,12 @@ internal static class LoggingExtensions
             string connectionString = context.Configuration.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
+            var isDevelopment = context.HostingEnvironment.IsDevelopment();
+            var microsoftLogLevel = isDevelopment ? LogEventLevel.Information : LogEventLevel.Warning;
+
             config
                 .MinimumLevel.Information()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                .MinimumLevel.Override("Microsoft", microsoftLogLevel)
                 .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
                 .MinimumLevel.Override("System", LogEventLevel.Warning)
                 .Enrich.FromLogContext()

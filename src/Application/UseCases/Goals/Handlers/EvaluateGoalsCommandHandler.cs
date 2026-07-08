@@ -86,14 +86,24 @@ internal sealed class EvaluateGoalsCommandHandler
         var evaluationId = Guid.NewGuid();
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        var items = new List<GoalEvaluationItem>
+        // Each entry: (parameterId, value). Ldl resolves to ldl_primary; the catalog maps both
+        // ldl_primary and ldl_secondary to distinct patient categories.
+        var parameterValues = new (string ParameterId, decimal? Value)[]
         {
-            BuildItem(evaluationId, AdaGoalConstants.HbA1c,         latestLab?.Hba1c,  customGoalMap, AdaGoalConstants.HbA1cGoal),
-            BuildItem(evaluationId, AdaGoalConstants.FastingGlucose, fastingGlucose,    customGoalMap, AdaGoalConstants.FastingGlucoseMax, AdaGoalConstants.FastingGlucoseMin),
-            BuildItem(evaluationId, AdaGoalConstants.SystolicBp,     sbp,               customGoalMap, AdaGoalConstants.SystolicBpGoal),
-            BuildItem(evaluationId, AdaGoalConstants.Ldl,            latestLab?.Ldl,    customGoalMap, AdaGoalConstants.LdlGoal),
-            BuildItem(evaluationId, AdaGoalConstants.Bmi,            bmi,               customGoalMap, AdaGoalConstants.BmiMax, AdaGoalConstants.BmiMin),
+            (AdaGoalConstants.HbA1c,         latestLab?.Hba1c),
+            (AdaGoalConstants.FastingGlucose, fastingGlucose),
+            (AdaGoalConstants.SystolicBp,     sbp),
+            (AdaGoalConstants.Ldl,            latestLab?.Ldl),
+            (AdaGoalConstants.Bmi,            bmi),
+            ("hdl",                           latestLab?.Hdl),
         };
+
+        var items = new List<GoalEvaluationItem>();
+        foreach (var (parameterId, value) in parameterValues)
+        {
+            var item = BuildItem(evaluationId, parameterId, value, patient, customGoalMap);
+            if (item is not null) items.Add(item);
+        }
 
         var evaluation = new GoalEvaluation
         {
@@ -113,15 +123,33 @@ internal sealed class EvaluateGoalsCommandHandler
                 i.ParameterId, i.ValueUsed, i.GoalUsed, i.Status)).ToList());
     }
 
-    private static GoalEvaluationItem BuildItem(
+    private static GoalEvaluationItem? BuildItem(
         Guid evaluationId,
         string parameterId,
         decimal? value,
-        Dictionary<string, decimal> customGoalMap,
-        decimal adaGoal,
-        decimal? lowerBound = null)
+        Domain.Models.Patient patient,
+        Dictionary<string, decimal> customGoalMap)
     {
-        var goal = customGoalMap.GetValueOrDefault(parameterId, adaGoal);
+        // Ldl in the command is the unclassified cholesterol reading; map to the primary spec
+        // unless a more specific one is desired. Today the catalog splits ldl_primary/ldl_secondary
+        // by patient category only, so the category resolver already picks the right row.
+        var resolvedParameterId = parameterId == AdaGoalConstants.Ldl ? "ldl_primary" : parameterId;
+
+        var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, resolvedParameterId);
+        var spec = AdaGoalConstants.ResolveSpec(resolvedParameterId, category, patient.Gender);
+        if (spec is null) return null;
+
+        // Custom goal: doctor-set upper threshold. The doctor is saying "this patient should
+        // stay at or below this value"; both the AtRisk and OutOfRange upper bands move to it.
+        // The lower bands stay at the spec default (the doctor did not override the lower alarm).
+        var effectiveSpec = customGoalMap.TryGetValue(parameterId, out var customUpper)
+            ? spec with { AtRiskHigh = customUpper, OutOfRangeHigh = customUpper }
+            : spec;
+
+        // GoalUsed surfaces the threshold the doctor set (or the spec default) so the response
+        // shows what the patient is being compared against.
+        var goal = effectiveSpec.AtRiskHigh ?? effectiveSpec.OutOfRangeHigh ?? 0m;
+
         return new GoalEvaluationItem
         {
             Id = Guid.NewGuid(),
@@ -129,24 +157,7 @@ internal sealed class EvaluateGoalsCommandHandler
             ParameterId = parameterId,
             ValueUsed = value,
             GoalUsed = goal,
-            Status = ClassifyStatus(value, goal, lowerBound),
+            Status = effectiveSpec.Classify(value),
         };
-    }
-
-    private static GoalStatus ClassifyStatus(decimal? value, decimal goal, decimal? lowerBound)
-    {
-        if (value is null)
-            return GoalStatus.NoData;
-
-        if (lowerBound.HasValue && value < lowerBound)
-            return GoalStatus.OutOfRange;
-
-        if (value >= goal)
-            return GoalStatus.OutOfRange;
-
-        if (value >= goal * AdaGoalConstants.AtRiskFactor)
-            return GoalStatus.AtRisk;
-
-        return GoalStatus.InRange;
     }
 }

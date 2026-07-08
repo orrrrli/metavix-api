@@ -38,18 +38,18 @@ public class EvaluateGoalsCommandHandlerTests
         var patientId = Guid.NewGuid();
         var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
 
-        // Weight 70 kg, height 170 cm → BMI = 70 / 1.7² = 24.2 → InRange (< 24.9 * 0.9 = 22.4)... actually 24.2 ≥ 22.41, so AtRisk
-        // Let's use weight 60 kg → BMI = 60 / 1.7² = 20.76 → InRange (< 22.41)
+        // Weight 60 kg, height 170 cm → BMI = 60 / 1.7² = 20.76 → InRange (18.5 ≤ 20.76 < 25)
+        // Thresholds now come from AdaGoalConstants.Catalog per patient category (SinDiabetes here).
         var dailyRecord = new DailyRecord
         {
             Id = Guid.NewGuid(),
             PatientId = patientId,
             RecordDate = new DateOnly(2026, 6, 21),
-            SystolicPressure = 110,   // InRange: < 130 * 0.9 = 117
+            SystolicPressure = 110,   // SinDiabetes spec: < 120 → InRange
             WeightKg = 60m,            // BMI = 20.76 → InRange
             GlucoseReadings =
             [
-                new GlucoseReading { ReadingType = GlucoseReadingType.Fasting, ValueMgDl = 100 } // InRange: 80 ≤ 100 < 117
+                new GlucoseReading { ReadingType = GlucoseReadingType.Fasting, ValueMgDl = 90 } // SinDiabetes spec: 60 ≤ 90 < 100 → InRange
             ]
         };
 
@@ -57,8 +57,8 @@ public class EvaluateGoalsCommandHandlerTests
         {
             PatientId = patientId,
             SampleDate = new DateOnly(2026, 6, 21),
-            Hba1c = 5.5m,   // InRange: < 7.0 * 0.9 = 6.3
-            Ldl = 80m,       // InRange: < 100 * 0.9 = 90
+            Hba1c = 5.0m,   // SinDiabetes spec: < 5.7 → InRange
+            Ldl = 80m,       // ldl_primary SinDiabetes spec: < 130 → InRange
         };
 
         SetupAuth(userId, patientId, patient);
@@ -72,6 +72,8 @@ public class EvaluateGoalsCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeFalse();
+        // 5 parameters + hdl. hdl is gender-specific and the test patient has no gender, so
+        // the lookup returns null and hdl is omitted from the items list.
         result.Value.Items.Should().HaveCount(5);
         result.Value.Items.Should().AllSatisfy(i => i.Status.Should().Be(GoalStatus.InRange));
     }
@@ -185,5 +187,43 @@ public class EvaluateGoalsCommandHandlerTests
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
         _timeProvider.SetUtcNow(DateTimeOffset.UtcNow);
         _goalEvaluationRepository.AddAsync(Arg.Any<GoalEvaluation>()).Returns(Task.CompletedTask);
+    }
+
+    // T14: Female patient with low HDL → OutOfRange via gender-resolved spec
+    [Fact]
+    public async Task Handle_WhenFemalePatientHasLowHdl_ClassifiesAsOutOfRange()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hdl = 38m,   // Female HDL spec: OutOfRangeLow=40 → 38 < 40 → OutOfRange
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var hdlItem = result.Value.Items.First(i => i.ParameterId == "hdl");
+        hdlItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
 }

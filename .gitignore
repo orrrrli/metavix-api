@@ -51,6 +51,7 @@ CLAUDE.md
 scratch.cs
 hash.csx
 seed.sql
+scripts/
 
 # Local deploy scripts (may contain secrets)
 docs/azure-deploy.sh
