@@ -138,7 +138,9 @@ internal sealed class EvaluateGoalsCommandHandler
         var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, resolvedParameterId);
         var spec = AdaGoalConstants.ResolveSpec(resolvedParameterId, category, patient.Gender);
 
-        var hasCustom = customGoalMap.TryGetValue(parameterId, out var custom);
+        // Custom goals are stored under the resolved id (e.g. "ldl_primary"), matching the
+        // catalog lookup above, not the unresolved alias ("ldl") the evaluation loop iterates on.
+        var hasCustom = customGoalMap.TryGetValue(resolvedParameterId, out var custom);
 
         // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c targets in gestation)
         // takes precedence over any doctor-set custom goal.

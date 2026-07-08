@@ -61,10 +61,12 @@ public static class AdaGoalConstants
         new("waist_circumference", PatientCategory.Universal, Gender.Male, null, null, 94m, 102m, false, TimeSpan.FromDays(30)),
     };
 
-    // Every parameter a doctor may set a custom clinical goal for: the catalog spec ids plus the
-    // "ldl" alias the evaluation uses before resolving to ldl_primary/ldl_secondary.
+    // Every parameter a doctor may set a custom clinical goal for. "ldl" itself is excluded:
+    // it is only the pre-resolution alias EvaluateGoalsCommandHandler uses internally before
+    // mapping to ldl_primary/ldl_secondary, and a goal stored under "ldl" would never match
+    // during evaluation since the lookup always keys on the resolved id.
     public static readonly IReadOnlySet<string> KnownParameterIds =
-        Catalog.Select(s => s.ParameterId).Append(Ldl).ToHashSet();
+        Catalog.Select(s => s.ParameterId).ToHashSet();
 
     private static readonly HashSet<string> PostprandialParameterIds = new() { "postprandial_1h", "postprandial_2h" };
 

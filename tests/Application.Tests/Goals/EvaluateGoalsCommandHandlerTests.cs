@@ -226,6 +226,52 @@ public class EvaluateGoalsCommandHandlerTests
         hba1cItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
 
+    // Regression: a custom goal stored under the canonical "ldl_primary" id (the id
+    // CreateClinicalGoalCommandHandler actually accepts) must be found during evaluation, even
+    // though the evaluation loop iterates the unresolved "ldl" alias internally.
+    [Fact]
+    public async Task Handle_WhenCustomGoalStoredUnderLdlPrimary_IsAppliedDuringEvaluation()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        // ldl_primary SinDiabetes catalog: AtRiskHigh=130, OutOfRangeHigh=160. Custom relaxes both.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 180m,
+        };
+
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = "ldl_primary",
+            CustomAtRiskHigh = 200m,
+            CustomOutOfRangeHigh = 250m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        ldlItem.GoalUsed.Should().Be(200m);
+        ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
+    }
+
     private void SetupAuth(Guid userId, Guid patientId, Patient patient)
     {
         _currentUser.UserId.Returns(userId);
