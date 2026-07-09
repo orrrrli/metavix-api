@@ -115,7 +115,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c)
             .Status.Should().Be(GoalStatus.NoData);
 
-        result.Value.Items.First(i => i.ParameterId == "ldl_primary")
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary)
             .Status.Should().Be(GoalStatus.NoData);
 
         result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp)
@@ -250,7 +250,7 @@ public class EvaluateGoalsCommandHandlerTests
             Id = Guid.NewGuid(),
             PatientId = patientId,
             DoctorId = Guid.NewGuid(),
-            ParameterId = "ldl_primary",
+            ParameterId = AdaGoalConstants.LdlPrimary,
             CustomAtRiskHigh = 200m,
             CustomOutOfRangeHigh = 250m,
         };
@@ -267,7 +267,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_primary");
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
         ldlItem.GoalUsed.Should().Be(200m);
         ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
     }
@@ -315,7 +315,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var hdlItem = result.Value.Items.First(i => i.ParameterId == "hdl");
+        var hdlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Hdl);
         hdlItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
 
@@ -404,7 +404,7 @@ public class EvaluateGoalsCommandHandlerTests
             Id = Guid.NewGuid(),
             PatientId = patientId,
             DoctorId = Guid.NewGuid(),
-            ParameterId = "ldl_primary",
+            ParameterId = AdaGoalConstants.LdlPrimary,
             CustomAtRiskHigh = 150m,
             CustomOutOfRangeHigh = 200m,
         };
@@ -421,7 +421,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_primary");
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
         ldlItem.GoalUsed.Should().Be(70m);
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
@@ -459,7 +459,7 @@ public class EvaluateGoalsCommandHandlerTests
             Id = Guid.NewGuid(),
             PatientId = patientId,
             DoctorId = Guid.NewGuid(),
-            ParameterId = "ldl_secondary",
+            ParameterId = AdaGoalConstants.LdlSecondary,
             CustomAtRiskHigh = 150m,
             CustomOutOfRangeHigh = 200m,
         };
@@ -476,7 +476,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_secondary");
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
         ldlItem.GoalUsed.Should().Be(55m);
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
@@ -522,7 +522,7 @@ public class EvaluateGoalsCommandHandlerTests
 
         var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
         sbpItem.Status.Should().Be(GoalStatus.NoData);
-        sbpItem.Reason.Should().Be("requires-specialist-evaluation");
+        sbpItem.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
     }
 
     // A specialist-set custom goal fills the gap where the catalog has no pregnancy spec (e.g. SBP).
@@ -619,7 +619,7 @@ public class EvaluateGoalsCommandHandlerTests
 
         var bmiItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Bmi);
         bmiItem.Status.Should().Be(GoalStatus.NoData);
-        bmiItem.Reason.Should().Be("not-evaluated-in-pregnancy");
+        bmiItem.Reason.Should().Be(AdaGoalConstants.NotEvaluatedInPregnancyReason);
     }
 
     // Patient.HasAscvd routes Ldl to the stricter ldl_secondary spec instead of ldl_primary.
@@ -662,7 +662,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_secondary");
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
         ldlItem.GoalUsed.Should().Be(55m);
         ldlItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
@@ -709,7 +709,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_primary");
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
         ldlItem.GoalUsed.Should().Be(130m);
         ldlItem.Status.Should().Be(GoalStatus.InRange);
     }
@@ -741,7 +741,7 @@ public class EvaluateGoalsCommandHandlerTests
             Id = Guid.NewGuid(),
             PatientId = patientId,
             DoctorId = Guid.NewGuid(),
-            ParameterId = "ldl_primary",
+            ParameterId = AdaGoalConstants.LdlPrimary,
             CustomAtRiskHigh = 80m,
             CustomOutOfRangeHigh = 110m,
         };
@@ -765,7 +765,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_secondary");
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
         ldlItem.GoalUsed.Should().Be(55m); // ldl_secondary ConDiabetes default, not the ldl_primary custom
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
