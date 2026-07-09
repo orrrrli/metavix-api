@@ -468,4 +468,48 @@ public class EvaluateGoalsCommandHandlerTests
         sbpItem.GoalUsed.Should().Be(135m);
         sbpItem.Status.Should().Be(GoalStatus.AtRisk);   // 135 ≤ 140 < 150
     }
+
+    // BMI resolves via the Universal catalog fallback (AppliesInPregnancy=false), so a pregnant
+    // patient hits the "spec resolved but not evaluated in pregnancy" branch, not the spec-is-null
+    // one used by blood pressure. This path had no regression coverage before.
+    [Fact]
+    public async Task Handle_WhenPregnant_BmiEmitsNoDataWithNotEvaluatedReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            WeightKg = 65m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var bmiItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Bmi);
+        bmiItem.Status.Should().Be(GoalStatus.NoData);
+        bmiItem.Reason.Should().Be("not-evaluated-in-pregnancy");
+    }
 }
