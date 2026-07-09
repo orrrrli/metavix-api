@@ -158,9 +158,9 @@ internal sealed class EvaluateGoalsCommandHandler
             var baseCategory = AdaGoalConstants.ResolveCategory(false, patient.DiabetesType, resolvedParameterId);
             var baseSpec = AdaGoalConstants.ResolveSpec(resolvedParameterId, baseCategory, patient.Gender);
 
-            // Not evaluated during pregnancy (e.g. LDL: statins contraindicated).
+            // Not evaluated during pregnancy (e.g. BMI, waist circumference).
             if (baseSpec is { AppliesInPregnancy: false })
-                return BuildNoDataItem(evaluationId, parameterId, ReasonFor(resolvedParameterId));
+                return BuildNoDataItem(evaluationId, parameterId, "not-evaluated-in-pregnancy");
 
             // Applies in pregnancy but has no universal threshold (e.g. blood pressure): the
             // specialist assigns it per patient via a custom clinical goal.
@@ -172,7 +172,7 @@ internal sealed class EvaluateGoalsCommandHandler
 
         // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol).
         if (patient.IsPregnant && !spec.AppliesInPregnancy)
-            return BuildNoDataItem(evaluationId, parameterId, ReasonFor(resolvedParameterId));
+            return BuildNoDataItem(evaluationId, parameterId, "not-evaluated-in-pregnancy");
 
         // Non-pregnancy-specific spec → apply the doctor's custom override when present.
         var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
@@ -204,12 +204,6 @@ internal sealed class EvaluateGoalsCommandHandler
             custom.CustomOutOfRangeLow, custom.CustomAtRiskLow,
             custom.CustomAtRiskHigh, custom.CustomOutOfRangeHigh,
             AppliesInPregnancy: true, NoDataWindow: null);
-
-    private static string ReasonFor(string resolvedParameterId) => resolvedParameterId switch
-    {
-        "ldl_primary" or "ldl_secondary" => "statins-contraindicated",
-        _ => "not-evaluated-in-pregnancy",
-    };
 
     private static GoalEvaluationItem BuildEvaluatedItem(
         Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec)

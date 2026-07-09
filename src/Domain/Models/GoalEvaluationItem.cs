@@ -12,7 +12,7 @@ public class GoalEvaluationItem
     public GoalStatus Status { get; set; }
 
     // Populated for NoData items to explain why the parameter was not evaluated
-    // (e.g. "statins-contraindicated", "requires-specialist-evaluation").
+    // (e.g. "not-evaluated-in-pregnancy", "requires-specialist-evaluation").
     public string? Reason { get; set; }
 
     public GoalEvaluation GoalEvaluation { get; set; } = null!;

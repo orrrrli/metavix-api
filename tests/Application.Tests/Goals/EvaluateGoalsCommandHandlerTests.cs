@@ -372,8 +372,9 @@ public class EvaluateGoalsCommandHandlerTests
         hba1cItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
-    // When no pregnancy spec exists, contraindicated / specialist-set parameters surface as
-    // NoData with an explanatory reason instead of being silently dropped.
+    // When no pregnancy spec exists and no custom goal is set (e.g. blood pressure, which the
+    // catalog deliberately omits for pregnancy categories), the parameter surfaces as NoData
+    // with an explanatory reason instead of being silently dropped.
     [Fact]
     public async Task Handle_WhenPregnancySpecMissing_AndIsPregnant_EmitsNoDataWithReason()
     {
@@ -394,7 +395,7 @@ public class EvaluateGoalsCommandHandlerTests
         {
             PatientId = patientId,
             SampleDate = new DateOnly(2026, 6, 21),
-            Ldl = 150m,   // ldl_primary is AppliesInPregnancy=false → statins contraindicated
+            Ldl = 150m,   // ldl_primary EmbarazadaDM spec (same as ConDiabetes): OutOfRangeHigh=100 → OutOfRange
         };
 
         var dailyRecord = new DailyRecord
@@ -422,8 +423,7 @@ public class EvaluateGoalsCommandHandlerTests
         sbpItem.Reason.Should().Be("requires-specialist-evaluation");
 
         var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
-        ldlItem.Status.Should().Be(GoalStatus.NoData);
-        ldlItem.Reason.Should().Be("statins-contraindicated");
+        ldlItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
 
     // A specialist-set custom goal fills the gap where the catalog has no pregnancy spec (e.g. SBP).

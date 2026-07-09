@@ -28,20 +28,22 @@ public static class AdaGoalConstants
         new("postprandial_2h", PatientCategory.EmbarazadaDMG, null, 90m, 100m, 121m, 140m, true, TimeSpan.FromDays(14)),
 
         new("systolic_bp", PatientCategory.SinDiabetes, null, null, null, 120m, 130m, true, TimeSpan.FromDays(7)),
-        new("systolic_bp", PatientCategory.ConDiabetes, null, null, null, 130m, 140m, true, TimeSpan.FromDays(7)),
+        new("systolic_bp", PatientCategory.ConDiabetes, null, 90m, null, 130m, 140m, true, TimeSpan.FromDays(7)),
 
         new("diastolic_bp", PatientCategory.SinDiabetes, null, null, null, 80m, 90m, true, TimeSpan.FromDays(7)),
-        new("diastolic_bp", PatientCategory.ConDiabetes, null, null, null, 80m, 90m, true, TimeSpan.FromDays(7)),
+        new("diastolic_bp", PatientCategory.ConDiabetes, null, 60m, null, 80m, 90m, true, TimeSpan.FromDays(7)),
 
         new("heart_rate", PatientCategory.Universal, null, 50m, 60m, 101m, 110m, true, TimeSpan.FromDays(7)),
 
         new("bmi", PatientCategory.Universal, null, 17m, 18.5m, 25m, 30m, false, TimeSpan.FromDays(30)),
 
-        new("ldl_primary", PatientCategory.SinDiabetes, null, null, null, 130m, 160m, false, TimeSpan.FromDays(365)),
-        new("ldl_primary", PatientCategory.ConDiabetes, null, null, null, 70m, 100m, false, TimeSpan.FromDays(365)),
+        new("ldl_primary", PatientCategory.SinDiabetes, null, null, null, 130m, 160m, true, TimeSpan.FromDays(365)),
+        new("ldl_primary", PatientCategory.ConDiabetes, null, null, null, 70m, 100m, true, TimeSpan.FromDays(365)),
+        new("ldl_primary", PatientCategory.EmbarazadaDM, null, null, null, 70m, 100m, true, TimeSpan.FromDays(365)),
 
-        new("ldl_secondary", PatientCategory.SinDiabetes, null, null, null, 100m, 130m, false, TimeSpan.FromDays(365)),
-        new("ldl_secondary", PatientCategory.ConDiabetes, null, null, null, 55m, 70m, false, TimeSpan.FromDays(365)),
+        new("ldl_secondary", PatientCategory.SinDiabetes, null, null, null, 100m, 130m, true, TimeSpan.FromDays(365)),
+        new("ldl_secondary", PatientCategory.ConDiabetes, null, null, null, 55m, 70m, true, TimeSpan.FromDays(365)),
+        new("ldl_secondary", PatientCategory.EmbarazadaDM, null, null, null, 55m, 70m, true, TimeSpan.FromDays(365)),
 
         new("hdl", PatientCategory.Universal, Gender.Female, 40m, 50m, null, null, true, TimeSpan.FromDays(365)),
         new("hdl", PatientCategory.Universal, Gender.Male, 35m, 40m, null, null, true, TimeSpan.FromDays(365)),
