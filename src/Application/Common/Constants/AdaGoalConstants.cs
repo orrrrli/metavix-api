@@ -8,8 +8,15 @@ public static class AdaGoalConstants
     public const string HbA1c = "hba1c";
     public const string FastingGlucose = "fasting_glucose";
     public const string SystolicBp = "systolic_bp";
-    public const string Ldl = "ldl";
+    public const string LdlPrimary = "ldl_primary";
+    public const string LdlSecondary = "ldl_secondary";
     public const string Bmi = "bmi";
+    public const string Hdl = "hdl";
+
+    // NoDataReason values for GoalEvaluationItem.Reason. Shared as constants so a rename can't
+    // silently desync production code from the tests asserting on it.
+    public const string NotEvaluatedInPregnancyReason = "not-evaluated-in-pregnancy";
+    public const string RequiresSpecialistEvaluationReason = "requires-specialist-evaluation";
 
     public static readonly IReadOnlyList<ParameterSpec> Catalog = new List<ParameterSpec>
     {
@@ -27,21 +34,31 @@ public static class AdaGoalConstants
         new("postprandial_2h", PatientCategory.ConDiabetes, null, null, null, 180m, 250m, true, TimeSpan.FromDays(14)),
         new("postprandial_2h", PatientCategory.EmbarazadaDMG, null, 90m, 100m, 121m, 140m, true, TimeSpan.FromDays(14)),
 
+        // Blood pressure asymmetry is intentional and clinically grounded:
+        //   - ConDiabetes: ADA 2026 Rec. 10.4 — target < 130/80; SBP < 120 if high CV/renal risk
+        //     (BPROAD/ESPRIT evidence). The low-side band (OutOfRangeLow=90 SBP / 60 DBP) signals
+        //     "reduce treatment" — relevant for diabetics on antihypertensives where over-treatment
+        //     causes symptomatic hypotension.
+        //   - SinDiabetes: ACC/AHA 2017 — normal < 120/80, elevated 120–129/< 80, HTN ≥ 130/80.
+        //     No low-side band is defined for non-diabetics in the guideline, so an unusually low
+        //     reading stays InRange rather than triggering an out-of-range signal.
         new("systolic_bp", PatientCategory.SinDiabetes, null, null, null, 120m, 130m, true, TimeSpan.FromDays(7)),
-        new("systolic_bp", PatientCategory.ConDiabetes, null, null, null, 130m, 140m, true, TimeSpan.FromDays(7)),
+        new("systolic_bp", PatientCategory.ConDiabetes, null, 90m, null, 130m, 140m, true, TimeSpan.FromDays(7)),
 
         new("diastolic_bp", PatientCategory.SinDiabetes, null, null, null, 80m, 90m, true, TimeSpan.FromDays(7)),
-        new("diastolic_bp", PatientCategory.ConDiabetes, null, null, null, 80m, 90m, true, TimeSpan.FromDays(7)),
+        new("diastolic_bp", PatientCategory.ConDiabetes, null, 60m, null, 80m, 90m, true, TimeSpan.FromDays(7)),
 
         new("heart_rate", PatientCategory.Universal, null, 50m, 60m, 101m, 110m, true, TimeSpan.FromDays(7)),
 
         new("bmi", PatientCategory.Universal, null, 17m, 18.5m, 25m, 30m, false, TimeSpan.FromDays(30)),
 
-        new("ldl_primary", PatientCategory.SinDiabetes, null, null, null, 130m, 160m, false, TimeSpan.FromDays(365)),
-        new("ldl_primary", PatientCategory.ConDiabetes, null, null, null, 70m, 100m, false, TimeSpan.FromDays(365)),
+        new("ldl_primary", PatientCategory.SinDiabetes, null, null, null, 130m, 160m, true, TimeSpan.FromDays(365)),
+        new("ldl_primary", PatientCategory.ConDiabetes, null, null, null, 70m, 100m, true, TimeSpan.FromDays(365)),
+        new("ldl_primary", PatientCategory.EmbarazadaDM, null, null, null, 70m, 100m, true, TimeSpan.FromDays(365)),
 
-        new("ldl_secondary", PatientCategory.SinDiabetes, null, null, null, 100m, 130m, false, TimeSpan.FromDays(365)),
-        new("ldl_secondary", PatientCategory.ConDiabetes, null, null, null, 55m, 70m, false, TimeSpan.FromDays(365)),
+        new("ldl_secondary", PatientCategory.SinDiabetes, null, null, null, 100m, 130m, true, TimeSpan.FromDays(365)),
+        new("ldl_secondary", PatientCategory.ConDiabetes, null, null, null, 55m, 70m, true, TimeSpan.FromDays(365)),
+        new("ldl_secondary", PatientCategory.EmbarazadaDM, null, null, null, 55m, 70m, true, TimeSpan.FromDays(365)),
 
         new("hdl", PatientCategory.Universal, Gender.Female, 40m, 50m, null, null, true, TimeSpan.FromDays(365)),
         new("hdl", PatientCategory.Universal, Gender.Male, 35m, 40m, null, null, true, TimeSpan.FromDays(365)),
@@ -61,15 +78,21 @@ public static class AdaGoalConstants
         new("waist_circumference", PatientCategory.Universal, Gender.Male, null, null, 94m, 102m, false, TimeSpan.FromDays(30)),
     };
 
-    // Every parameter a doctor may set a custom clinical goal for. "ldl" itself is excluded:
-    // it is only the pre-resolution alias EvaluateGoalsCommandHandler uses internally before
-    // mapping to ldl_primary/ldl_secondary, and a goal stored under "ldl" would never match
-    // during evaluation since the lookup always keys on the resolved id.
+    // Every parameter a doctor may set a custom clinical goal for. LDL has no bare "ldl" entry:
+    // EvaluateGoalsCommandHandler resolves it to ldl_primary or ldl_secondary (by Patient.HasAscvd)
+    // before ever looking anything up, so a goal must be stored under one of those two ids.
     public static readonly IReadOnlySet<string> KnownParameterIds =
         Catalog.Select(s => s.ParameterId).ToHashSet();
 
     private static readonly HashSet<string> PostprandialParameterIds = new() { "postprandial_1h", "postprandial_2h" };
 
+    // KNOWN GAP (not yet reachable — postprandial_1h/2h aren't in EvaluateGoalsCommandHandler's
+    // evaluated parameter list yet): a pregnant patient with pre-existing Type1/Type2 diabetes
+    // resolves postprandial glucose to EmbarazadaDM (the `_` arm below), but the catalog only has
+    // postprandial rows for ConDiabetes and EmbarazadaDMG — no EmbarazadaDM row. Whoever wires up
+    // postprandial evaluation needs to either add an EmbarazadaDM row or decide these patients
+    // fall back to a doctor-set custom goal (blood pressure's pattern), and add test coverage —
+    // don't let it ship silently unreachable like blood pressure's low-side band once did.
     public static PatientCategory ResolveCategory(bool isPregnant, DiabetesType diabetesType, string parameterId)
     {
         if (!isPregnant)

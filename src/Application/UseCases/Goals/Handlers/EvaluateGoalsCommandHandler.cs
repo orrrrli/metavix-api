@@ -86,16 +86,19 @@ internal sealed class EvaluateGoalsCommandHandler
         var evaluationId = Guid.NewGuid();
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        // Each entry: (parameterId, value). Ldl resolves to ldl_primary; the catalog maps both
-        // ldl_primary and ldl_secondary to distinct patient categories.
+        // Ldl resolves to ldl_primary (primary prevention) or ldl_secondary (established ASCVD,
+        // stricter targets) based on Patient.HasAscvd, not patient category. Resolved here so
+        // BuildItem stays parameter-agnostic — it only ever sees the final catalog id.
+        var ldlParameterId = patient.HasAscvd ? AdaGoalConstants.LdlSecondary : AdaGoalConstants.LdlPrimary;
+
         var parameterValues = new (string ParameterId, decimal? Value)[]
         {
             (AdaGoalConstants.HbA1c,         latestLab?.Hba1c),
             (AdaGoalConstants.FastingGlucose, fastingGlucose),
             (AdaGoalConstants.SystolicBp,     sbp),
-            (AdaGoalConstants.Ldl,            latestLab?.Ldl),
+            (ldlParameterId,                  latestLab?.Ldl),
             (AdaGoalConstants.Bmi,            bmi),
-            ("hdl",                           latestLab?.Hdl),
+            (AdaGoalConstants.Hdl,            latestLab?.Hdl),
         };
 
         var items = new List<GoalEvaluationItem>();
@@ -123,6 +126,9 @@ internal sealed class EvaluateGoalsCommandHandler
                 i.ParameterId, i.ValueUsed, i.GoalUsed, i.Status, i.Reason)).ToList());
     }
 
+    // parameterId is always the final catalog id (e.g. "ldl_primary"/"ldl_secondary", already
+    // resolved by the caller based on Patient.HasAscvd) — this method has no per-parameter
+    // knowledge and never rewrites the id it was given.
     private static GoalEvaluationItem? BuildItem(
         Guid evaluationId,
         string parameterId,
@@ -130,20 +136,17 @@ internal sealed class EvaluateGoalsCommandHandler
         Domain.Models.Patient patient,
         Dictionary<string, ClinicalGoal> customGoalMap)
     {
-        // Ldl in the command is the unclassified cholesterol reading; map to the primary spec
-        // unless a more specific one is desired. Today the catalog splits ldl_primary/ldl_secondary
-        // by patient category only, so the category resolver already picks the right row.
-        var resolvedParameterId = parameterId == AdaGoalConstants.Ldl ? "ldl_primary" : parameterId;
+        var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, parameterId);
+        var spec = AdaGoalConstants.ResolveSpec(parameterId, category, patient.Gender);
 
-        var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, resolvedParameterId);
-        var spec = AdaGoalConstants.ResolveSpec(resolvedParameterId, category, patient.Gender);
+        var hasCustom = customGoalMap.TryGetValue(parameterId, out var custom);
 
-        // Custom goals are stored under the resolved id (e.g. "ldl_primary"), matching the
-        // catalog lookup above, not the unresolved alias ("ldl") the evaluation loop iterates on.
-        var hasCustom = customGoalMap.TryGetValue(resolvedParameterId, out var custom);
-
-        // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c targets in gestation)
-        // takes precedence over any doctor-set custom goal.
+        // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c or LDL targets in
+        // gestation) takes precedence over any doctor-set custom goal. This also governs LDL: its
+        // EmbarazadaDM catalog row makes IsPregnancySpecific true, so a custom ldl_primary/
+        // ldl_secondary goal is intentionally ignored during pregnancy, same as HbA1c. Blood
+        // pressure is the deliberate exception — it has no pregnancy-category row at all, so it
+        // never reaches this branch and falls through to the specialist-custom-goal path below.
         if (spec is { IsPregnancySpecific: true })
             return BuildEvaluatedItem(evaluationId, parameterId, value, spec);
 
@@ -153,26 +156,30 @@ internal sealed class EvaluateGoalsCommandHandler
             if (!patient.IsPregnant)
                 return null;
 
-            // Pregnant patient with no pregnancy-category spec. How this parameter behaves outside
-            // pregnancy tells us whether it is contraindicated or just awaiting specialist thresholds.
-            var baseCategory = AdaGoalConstants.ResolveCategory(false, patient.DiabetesType, resolvedParameterId);
-            var baseSpec = AdaGoalConstants.ResolveSpec(resolvedParameterId, baseCategory, patient.Gender);
-
-            // Not evaluated during pregnancy (e.g. LDL: statins contraindicated).
-            if (baseSpec is { AppliesInPregnancy: false })
-                return BuildNoDataItem(evaluationId, parameterId, ReasonFor(resolvedParameterId));
-
-            // Applies in pregnancy but has no universal threshold (e.g. blood pressure): the
-            // specialist assigns it per patient via a custom clinical goal.
+            // Pregnant patient with no pregnancy-category spec and no Universal fallback
+            // (currently only blood pressure): the specialist assigns it per patient via a
+            // custom clinical goal. (If a future catalog parameter needs the "explicitly not
+            // evaluated in pregnancy" case here too — i.e. AppliesInPregnancy=false on its base
+            // category with no pregnancy row — reintroduce that check with test coverage; today
+            // every non-Universal catalog row has AppliesInPregnancy=true, so it would be dead.)
             if (hasCustom)
-                return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(resolvedParameterId, custom!));
+            {
+                // No reading yet — surface the same "specialist must evaluate" reason the
+                // no-custom branch emits, instead of letting BuildEvaluatedItem emit a bare
+                // NoData item that loses the explanation.
+                if (value is null)
+                    return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
 
-            return BuildNoDataItem(evaluationId, parameterId, "requires-specialist-evaluation");
+                return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(parameterId, custom!));
+            }
+
+            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
         }
 
-        // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol).
+        // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol —
+        // Universal-category parameters marked AppliesInPregnancy=false).
         if (patient.IsPregnant && !spec.AppliesInPregnancy)
-            return BuildNoDataItem(evaluationId, parameterId, ReasonFor(resolvedParameterId));
+            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.NotEvaluatedInPregnancyReason);
 
         // Non-pregnancy-specific spec → apply the doctor's custom override when present.
         var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
@@ -205,17 +212,14 @@ internal sealed class EvaluateGoalsCommandHandler
             custom.CustomAtRiskHigh, custom.CustomOutOfRangeHigh,
             AppliesInPregnancy: true, NoDataWindow: null);
 
-    private static string ReasonFor(string resolvedParameterId) => resolvedParameterId switch
-    {
-        "ldl_primary" or "ldl_secondary" => "statins-contraindicated",
-        _ => "not-evaluated-in-pregnancy",
-    };
-
     private static GoalEvaluationItem BuildEvaluatedItem(
         Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec)
     {
-        // GoalUsed surfaces the threshold the patient is compared against (custom or spec default).
-        var goal = spec.AtRiskHigh ?? spec.OutOfRangeHigh ?? 0m;
+        // GoalUsed surfaces the InRange/AtRisk boundary the patient is compared against (custom or
+        // spec default). Most specs are upper-bound-oriented (AtRiskHigh); low-only specs like HDL
+        // and eGFR (higher is better) have no AtRiskHigh, so fall back to AtRiskLow, then to
+        // whichever OutOfRange bound exists, in that order.
+        var goal = spec.AtRiskHigh ?? spec.AtRiskLow ?? spec.OutOfRangeHigh ?? spec.OutOfRangeLow ?? 0m;
 
         return new GoalEvaluationItem
         {

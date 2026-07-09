@@ -115,7 +115,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c)
             .Status.Should().Be(GoalStatus.NoData);
 
-        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl)
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary)
             .Status.Should().Be(GoalStatus.NoData);
 
         result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp)
@@ -226,9 +226,10 @@ public class EvaluateGoalsCommandHandlerTests
         hba1cItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
 
-    // Regression: a custom goal stored under the canonical "ldl_primary" id (the id
-    // CreateClinicalGoalCommandHandler actually accepts) must be found during evaluation, even
-    // though the evaluation loop iterates the unresolved "ldl" alias internally.
+    // Regression: a custom goal stored under "ldl_primary" (the id CreateClinicalGoalCommandHandler
+    // accepts) must be found during evaluation. The handler resolves the active LDL id from
+    // Patient.HasAscvd before iterating the parameterValues table, so for a non-ASCVD patient
+    // BuildItem is called with "ldl_primary" directly and the lookup hits the custom goal.
     [Fact]
     public async Task Handle_WhenCustomGoalStoredUnderLdlPrimary_IsAppliedDuringEvaluation()
     {
@@ -250,7 +251,7 @@ public class EvaluateGoalsCommandHandlerTests
             Id = Guid.NewGuid(),
             PatientId = patientId,
             DoctorId = Guid.NewGuid(),
-            ParameterId = "ldl_primary",
+            ParameterId = AdaGoalConstants.LdlPrimary,
             CustomAtRiskHigh = 200m,
             CustomOutOfRangeHigh = 250m,
         };
@@ -267,7 +268,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
         ldlItem.GoalUsed.Should().Be(200m);
         ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
     }
@@ -315,8 +316,11 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var hdlItem = result.Value.Items.First(i => i.ParameterId == "hdl");
+        var hdlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Hdl);
         hdlItem.Status.Should().Be(GoalStatus.OutOfRange);
+        // Regression: HDL is a low-only spec (AtRiskHigh/OutOfRangeHigh are null), so GoalUsed
+        // must fall back to AtRiskLow (50) instead of the old "?? 0m" phantom zero.
+        hdlItem.GoalUsed.Should().Be(50m);
     }
 
     // Decision 2A: a genuine pregnancy-category spec wins over a doctor-set custom goal.
@@ -372,10 +376,71 @@ public class EvaluateGoalsCommandHandlerTests
         hba1cItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
-    // When no pregnancy spec exists, contraindicated / specialist-set parameters surface as
-    // NoData with an explanatory reason instead of being silently dropped.
+    // Decision 2A also governs LDL: its EmbarazadaDM catalog row makes IsPregnancySpecific true,
+    // so a custom goal is ignored during pregnancy, same as HbA1c above. HasAscvd decides which
+    // id (ldl_primary vs ldl_secondary, both with an EmbarazadaDM row of the same shape) is
+    // active; the two cases only differ in HasAscvd, the resolved id, the value, and the
+    // catalog's AtRiskHigh for that id — parametrized rather than duplicated.
+    [Theory]
+    [InlineData(false, AdaGoalConstants.LdlPrimary, 85, 70)]
+    [InlineData(true, AdaGoalConstants.LdlSecondary, 60, 55)]
+    public async Task Handle_WhenPregnancySpecExists_LdlCustomGoalIsIgnored(
+        bool hasAscvd, string expectedParameterId, decimal ldlValue, decimal expectedGoalUsed)
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+            HasAscvd = hasAscvd,
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = ldlValue,
+        };
+
+        // Doctor tries to relax the target; the pregnancy spec must override it.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = expectedParameterId,
+            CustomAtRiskHigh = 150m,
+            CustomOutOfRangeHigh = 200m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == expectedParameterId);
+        ldlItem.GoalUsed.Should().Be(expectedGoalUsed);
+        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
+
+    // When no pregnancy spec exists and no custom goal is set (blood pressure, which the
+    // catalog deliberately omits for pregnancy categories), the parameter surfaces as NoData
+    // with an explanatory reason instead of being silently dropped.
     [Fact]
-    public async Task Handle_WhenPregnancySpecMissing_AndIsPregnant_EmitsNoDataWithReason()
+    public async Task Handle_WhenSbpPregnancySpecMissing_AndIsPregnant_EmitsNoDataWithReason()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -390,13 +455,6 @@ public class EvaluateGoalsCommandHandlerTests
             DiabetesType = DiabetesType.Type2,
         };
 
-        var labResult = new LabResult
-        {
-            PatientId = patientId,
-            SampleDate = new DateOnly(2026, 6, 21),
-            Ldl = 150m,   // ldl_primary is AppliesInPregnancy=false → statins contraindicated
-        };
-
         var dailyRecord = new DailyRecord
         {
             Id = Guid.NewGuid(),
@@ -406,7 +464,7 @@ public class EvaluateGoalsCommandHandlerTests
         };
 
         SetupAuth(userId, patientId, patient);
-        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
         _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
         _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
 
@@ -419,11 +477,7 @@ public class EvaluateGoalsCommandHandlerTests
 
         var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
         sbpItem.Status.Should().Be(GoalStatus.NoData);
-        sbpItem.Reason.Should().Be("requires-specialist-evaluation");
-
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
-        ldlItem.Status.Should().Be(GoalStatus.NoData);
-        ldlItem.Reason.Should().Be("statins-contraindicated");
+        sbpItem.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
     }
 
     // A specialist-set custom goal fills the gap where the catalog has no pregnancy spec (e.g. SBP).
@@ -477,5 +531,289 @@ public class EvaluateGoalsCommandHandlerTests
         var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
         sbpItem.GoalUsed.Should().Be(135m);
         sbpItem.Status.Should().Be(GoalStatus.AtRisk);   // 135 ≤ 140 < 150
+    }
+
+    // Specialist custom SBP exists for a pregnant patient but no daily record has been logged yet.
+    // BuildItem previously called BuildEvaluatedItem with SpecFromCustom, which emits a NoData
+    // item (value=null) without a Reason — silently dropping the "specialist must evaluate"
+    // explanation. The fix routes this exact shape through BuildNoDataItem so the reason survives.
+    [Fact]
+    public async Task Handle_WhenPregnantAndSbpCustomGoalButNoReading_EmitsNoDataWithSpecialistReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        // Specialist has set SBP bands for this patient, but no daily record exists yet — no SBP value.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.SystolicBp,
+            CustomAtRiskHigh = 135m,
+            CustomOutOfRangeHigh = 150m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);   // no readings
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
+        sbpItem.Status.Should().Be(GoalStatus.NoData);
+        sbpItem.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
+    }
+
+    // BMI resolves via the Universal catalog fallback (AppliesInPregnancy=false), so a pregnant
+    // patient hits the "spec resolved but not evaluated in pregnancy" branch, not the spec-is-null
+    // one used by blood pressure. This path had no regression coverage before.
+    [Fact]
+    public async Task Handle_WhenPregnant_BmiEmitsNoDataWithNotEvaluatedReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            WeightKg = 65m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var bmiItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Bmi);
+        bmiItem.Status.Should().Be(GoalStatus.NoData);
+        bmiItem.Reason.Should().Be(AdaGoalConstants.NotEvaluatedInPregnancyReason);
+    }
+
+    // Patient.HasAscvd routes Ldl to the stricter ldl_secondary spec instead of ldl_primary.
+    // ldl_secondary was previously unreachable: nothing resolved it, so ASCVD patients were
+    // always evaluated against the looser primary-prevention thresholds.
+    [Fact]
+    public async Task Handle_WhenPatientHasAscvd_UsesLdlSecondarySpec()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            DiabetesType = DiabetesType.Type2,
+            HasAscvd = true,
+        };
+
+        // ldl_secondary ConDiabetes spec: AtRiskHigh=55, OutOfRangeHigh=70. Value 80 → OutOfRange.
+        // Under the (wrong) ldl_primary ConDiabetes spec (AtRiskHigh=70, OutOfRangeHigh=100) this
+        // same value would only be AtRisk.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 80m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
+        ldlItem.GoalUsed.Should().Be(55m);
+        ldlItem.Status.Should().Be(GoalStatus.OutOfRange);
+    }
+
+    // ResolveCategory maps a pregnant non-diabetic patient to SinDiabetes, not EmbarazadaDM —
+    // EmbarazadaDM only exists for patients with an active diabetes diagnosis during pregnancy.
+    // This predates the LDL catalog change and already governed HbA1c the same way; LDL simply
+    // inherits it now that AppliesInPregnancy is true. Locking in the intended behavior: a
+    // pregnant non-diabetic patient's LDL is evaluated against the plain SinDiabetes thresholds,
+    // consistent with "cholesterol targets don't change with pregnancy."
+    [Fact]
+    public async Task Handle_WhenPregnantNonDiabetic_LdlUsesSinDiabetesSpec()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.None,
+        };
+
+        // ldl_primary SinDiabetes spec: AtRiskHigh=130, OutOfRangeHigh=160. Value 120 → InRange.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 120m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
+        ldlItem.GoalUsed.Should().Be(130m);
+        ldlItem.Status.Should().Be(GoalStatus.InRange);
+    }
+
+    // Intentional consequence, not a bug: ParameterId is the override key, and HasAscvd changes
+    // which id is active for LDL. A custom goal stored under "ldl_primary" does not carry over
+    // once the patient's ASCVD status makes "ldl_secondary" the active id — the doctor must set a
+    // new custom goal under the newly-active id. See clinical-goal.md for the documented rule.
+    [Fact]
+    public async Task Handle_WhenAscvdChangesActiveLdlId_PreviousLdlPrimaryCustomGoalNoLongerApplies()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            DiabetesType = DiabetesType.Type2,
+            HasAscvd = true,
+        };
+
+        // Doctor previously relaxed ldl_primary to 80/110, back when HasAscvd was false. Now that
+        // HasAscvd is true, evaluation resolves to ldl_secondary instead, so this custom goal is
+        // never looked up — the ldl_secondary ConDiabetes default (AtRiskHigh=55) applies instead.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.LdlPrimary,
+            CustomAtRiskHigh = 80m,
+            CustomOutOfRangeHigh = 110m,
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 60m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
+        ldlItem.GoalUsed.Should().Be(55m); // ldl_secondary ConDiabetes default, not the ldl_primary custom
+        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
+
+    // Gestational diabetes wasn't covered by any existing LDL test: postprandial glucose splits
+    // Gestational into EmbarazadaDMG, but LDL isn't in PostprandialParameterIds, so it resolves to
+    // plain EmbarazadaDM — same ldl_primary/secondary spec as pre-existing Type1/Type2 diabetes.
+    [Fact]
+    public async Task Handle_WhenGestationalDiabetes_LdlUsesEmbarazadaDMSpec()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Gestational,
+        };
+
+        // ldl_primary EmbarazadaDM spec (same as ConDiabetes): AtRiskHigh=70, OutOfRangeHigh=100.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 85m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
+        ldlItem.GoalUsed.Should().Be(70m);
+        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 }
