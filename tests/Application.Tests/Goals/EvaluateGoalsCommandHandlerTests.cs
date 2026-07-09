@@ -131,8 +131,8 @@ public class EvaluateGoalsCommandHandlerTests
         var patientId = Guid.NewGuid();
         var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
 
-        // HbA1c = 7.5% → OutOfRange with ADA goal of 7.0
-        // With custom goal of 9.0: AtRisk threshold = 9.0 * 0.9 = 8.1 → 7.5 < 8.1 → InRange
+        // HbA1c = 7.5% → OutOfRange with ADA goal of 7.0 (SinDiabetes AtRiskHigh=5.7, OutOfRangeHigh=6.5)
+        // With custom upper bands moved to 9.0: 7.5 < 9.0 → InRange
         var labResult = new LabResult
         {
             PatientId = patientId,
@@ -147,7 +147,8 @@ public class EvaluateGoalsCommandHandlerTests
             PatientId = patientId,
             DoctorId = Guid.NewGuid(),
             ParameterId = AdaGoalConstants.HbA1c,
-            CustomValue = 9.0m,
+            CustomAtRiskHigh = 9.0m,
+            CustomOutOfRangeHigh = 9.0m,
         };
 
         var dailyRecord = new DailyRecord
@@ -178,6 +179,97 @@ public class EvaluateGoalsCommandHandlerTests
         var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
         hba1cItem.GoalUsed.Should().Be(9.0m);
         hba1cItem.Status.Should().Be(GoalStatus.InRange);
+    }
+
+    // Regression: a custom bound that only touches one side of the band must not leave a gap
+    // against the catalog default on the other side (see ApplyCustom widening rule).
+    [Fact]
+    public async Task Handle_WhenCustomAtRiskHighExceedsCatalogOutOfRangeHigh_WidensOutOfRangeHighToMatch()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        // SinDiabetes HbA1c catalog: AtRiskHigh=5.7, OutOfRangeHigh=6.5.
+        // Doctor sets only CustomAtRiskHigh=9.0, leaving OutOfRangeHigh at the catalog's 6.5 (< 9.0).
+        // Without widening, 9.5 would fall through to AtRisk instead of OutOfRange.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hba1c = 9.5m,
+        };
+
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.HbA1c,
+            CustomAtRiskHigh = 9.0m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
+        hba1cItem.Status.Should().Be(GoalStatus.OutOfRange);
+    }
+
+    // Regression: a custom goal stored under the canonical "ldl_primary" id (the id
+    // CreateClinicalGoalCommandHandler actually accepts) must be found during evaluation, even
+    // though the evaluation loop iterates the unresolved "ldl" alias internally.
+    [Fact]
+    public async Task Handle_WhenCustomGoalStoredUnderLdlPrimary_IsAppliedDuringEvaluation()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        // ldl_primary SinDiabetes catalog: AtRiskHigh=130, OutOfRangeHigh=160. Custom relaxes both.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 180m,
+        };
+
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = "ldl_primary",
+            CustomAtRiskHigh = 200m,
+            CustomOutOfRangeHigh = 250m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        ldlItem.GoalUsed.Should().Be(200m);
+        ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
     }
 
     private void SetupAuth(Guid userId, Guid patientId, Patient patient)
@@ -225,5 +317,165 @@ public class EvaluateGoalsCommandHandlerTests
 
         var hdlItem = result.Value.Items.First(i => i.ParameterId == "hdl");
         hdlItem.Status.Should().Be(GoalStatus.OutOfRange);
+    }
+
+    // Decision 2A: a genuine pregnancy-category spec wins over a doctor-set custom goal.
+    [Fact]
+    public async Task Handle_WhenPregnancySpecExists_CustomGoalIsIgnored()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        // EmbarazadaDM HbA1c spec: AtRiskHigh=6.0, OutOfRangeHigh=7.0. Value 6.5 → AtRisk.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hba1c = 6.5m,
+        };
+
+        // Doctor tries to relax the target to 9.0; the pregnancy spec must override it.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.HbA1c,
+            CustomAtRiskHigh = 9.0m,
+            CustomOutOfRangeHigh = 9.0m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
+        hba1cItem.GoalUsed.Should().Be(6.0m);
+        hba1cItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
+
+    // When no pregnancy spec exists, contraindicated / specialist-set parameters surface as
+    // NoData with an explanatory reason instead of being silently dropped.
+    [Fact]
+    public async Task Handle_WhenPregnancySpecMissing_AndIsPregnant_EmitsNoDataWithReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 150m,   // ldl_primary is AppliesInPregnancy=false → statins contraindicated
+        };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            SystolicPressure = 128,   // systolic_bp has no EmbarazadaDM spec → requires specialist
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
+        sbpItem.Status.Should().Be(GoalStatus.NoData);
+        sbpItem.Reason.Should().Be("requires-specialist-evaluation");
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        ldlItem.Status.Should().Be(GoalStatus.NoData);
+        ldlItem.Reason.Should().Be("statins-contraindicated");
+    }
+
+    // A specialist-set custom goal fills the gap where the catalog has no pregnancy spec (e.g. SBP).
+    [Fact]
+    public async Task Handle_WhenPregnantAndNoSpecButCustomGoal_UsesCustomThresholds()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            SystolicPressure = 140,
+        };
+
+        // Specialist assigns SBP bands for this pregnant patient: AtRisk ≥135, OutOfRange ≥150.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.SystolicBp,
+            CustomAtRiskHigh = 135m,
+            CustomOutOfRangeHigh = 150m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
+        sbpItem.GoalUsed.Should().Be(135m);
+        sbpItem.Status.Should().Be(GoalStatus.AtRisk);   // 135 ≤ 140 < 150
     }
 }

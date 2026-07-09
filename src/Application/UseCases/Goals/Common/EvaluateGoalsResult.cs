@@ -11,4 +11,5 @@ public sealed record GoalEvaluationItemResult(
     string ParameterId,
     decimal? ValueUsed,
     decimal GoalUsed,
-    GoalStatus Status);
+    GoalStatus Status,
+    string? Reason);

@@ -14,6 +14,10 @@ using Application.UseCases.LinkRequest.Common;
 using Application.UseCases.LinkRequest.Queries;
 using Application.UseCases.DailyRecord.Common;
 using Application.UseCases.LabResult.Common;
+using Application.UseCases.ClinicalGoals.Commands;
+using Application.UseCases.ClinicalGoals.Common;
+using Application.UseCases.ClinicalGoals.Queries;
+using Contracts.Patient.Request;
 using Contracts.Patient.Response;
 
 namespace API.Modules;
@@ -104,6 +108,35 @@ public class DoctorModule : MainModule, ICarterModule
             .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("UnlinkPatient")
+            .WithOpenApi();
+
+        // === Clinical Goals (custom per-patient thresholds) ===
+        group.MapPost("/{doctorId:guid}/patients/{patientId:guid}/goals", CreateClinicalGoal)
+            .Produces<ApiSuccessResponse<ClinicalGoalResult>>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .WithName("CreateClinicalGoal")
+            .WithOpenApi();
+
+        group.MapGet("/{doctorId:guid}/patients/{patientId:guid}/goals", GetClinicalGoals)
+            .Produces<ApiSuccessResponse<ClinicalGoalsResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .WithName("GetClinicalGoals")
+            .WithOpenApi();
+
+        group.MapPut("/{doctorId:guid}/patients/{patientId:guid}/goals/{goalId:guid}", UpdateClinicalGoal)
+            .Produces<ApiSuccessResponse<ClinicalGoalResult>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("UpdateClinicalGoal")
+            .WithOpenApi();
+
+        group.MapDelete("/{doctorId:guid}/patients/{patientId:guid}/goals/{goalId:guid}", DeleteClinicalGoal)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("DeleteClinicalGoal")
             .WithOpenApi();
     }
 
@@ -402,6 +435,126 @@ public class DoctorModule : MainModule, ICarterModule
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    // === Clinical Goals ===
+
+    private static async Task<IResult> CreateClinicalGoal(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId,
+        [FromRoute] Guid patientId,
+        [FromBody] CreateClinicalGoalRequest request)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}, PatientId: {patientId}, ParameterId: {request.ParameterId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var command = new CreateClinicalGoalCommand(
+                doctorId,
+                patientId,
+                request.ParameterId,
+                request.CustomOutOfRangeLow,
+                request.CustomAtRiskLow,
+                request.CustomAtRiskHigh,
+                request.CustomOutOfRangeHigh);
+
+            var result = await sender.Send(command);
+
+            return result.Match(
+                value => TypedResults.Created(fullRoute, new ApiSuccessResponse<ClinicalGoalResult> { Data = value }),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> GetClinicalGoals(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}, PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetClinicalGoalsQuery(doctorId, patientId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> UpdateClinicalGoal(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId,
+        [FromRoute] Guid patientId,
+        [FromRoute] Guid goalId,
+        [FromBody] UpdateClinicalGoalRequest request)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}, PatientId: {patientId}, GoalId: {goalId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var command = new UpdateClinicalGoalCommand(
+                doctorId,
+                patientId,
+                goalId,
+                request.CustomOutOfRangeLow,
+                request.CustomAtRiskLow,
+                request.CustomAtRiskHigh,
+                request.CustomOutOfRangeHigh);
+
+            var result = await sender.Send(command);
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
+
+    private static async Task<IResult> DeleteClinicalGoal(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid doctorId,
+        [FromRoute] Guid patientId,
+        [FromRoute] Guid goalId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"DoctorId: {doctorId}, PatientId: {patientId}, GoalId: {goalId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new DeleteClinicalGoalCommand(doctorId, patientId, goalId));
+
+            return result.Match(
+                _ => TypedResults.NoContent(),
                 errors => ApiResults.Problem(errors, fullRoute));
         }
         catch (Exception ex)
