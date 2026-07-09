@@ -317,6 +317,9 @@ public class EvaluateGoalsCommandHandlerTests
 
         var hdlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Hdl);
         hdlItem.Status.Should().Be(GoalStatus.OutOfRange);
+        // Regression: HDL is a low-only spec (AtRiskHigh/OutOfRangeHigh are null), so GoalUsed
+        // must fall back to AtRiskLow (50) instead of the old "?? 0m" phantom zero.
+        hdlItem.GoalUsed.Should().Be(50m);
     }
 
     // Decision 2A: a genuine pregnancy-category spec wins over a doctor-set custom goal.

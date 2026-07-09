@@ -207,8 +207,11 @@ internal sealed class EvaluateGoalsCommandHandler
     private static GoalEvaluationItem BuildEvaluatedItem(
         Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec)
     {
-        // GoalUsed surfaces the threshold the patient is compared against (custom or spec default).
-        var goal = spec.AtRiskHigh ?? spec.OutOfRangeHigh ?? 0m;
+        // GoalUsed surfaces the InRange/AtRisk boundary the patient is compared against (custom or
+        // spec default). Most specs are upper-bound-oriented (AtRiskHigh); low-only specs like HDL
+        // and eGFR (higher is better) have no AtRiskHigh, so fall back to AtRiskLow, then to
+        // whichever OutOfRange bound exists, in that order.
+        var goal = spec.AtRiskHigh ?? spec.AtRiskLow ?? spec.OutOfRangeHigh ?? spec.OutOfRangeLow ?? 0m;
 
         return new GoalEvaluationItem
         {
