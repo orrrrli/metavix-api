@@ -115,7 +115,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c)
             .Status.Should().Be(GoalStatus.NoData);
 
-        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl)
+        result.Value.Items.First(i => i.ParameterId == "ldl_primary")
             .Status.Should().Be(GoalStatus.NoData);
 
         result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp)
@@ -267,7 +267,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_primary");
         ldlItem.GoalUsed.Should().Be(200m);
         ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
     }
@@ -421,7 +421,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_primary");
         ldlItem.GoalUsed.Should().Be(70m);
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
@@ -607,7 +607,7 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_secondary");
         ldlItem.GoalUsed.Should().Be(55m);
         ldlItem.Status.Should().Be(GoalStatus.OutOfRange);
     }

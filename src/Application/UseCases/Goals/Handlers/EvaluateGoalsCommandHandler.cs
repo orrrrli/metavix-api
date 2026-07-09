@@ -154,7 +154,7 @@ internal sealed class EvaluateGoalsCommandHandler
         // pressure is the deliberate exception — it has no pregnancy-category row at all, so it
         // never reaches this branch and falls through to the specialist-custom-goal path below.
         if (spec is { IsPregnancySpecific: true })
-            return BuildEvaluatedItem(evaluationId, parameterId, value, spec);
+            return BuildEvaluatedItem(evaluationId, resolvedParameterId, value, spec);
 
         if (spec is null)
         {
@@ -162,33 +162,26 @@ internal sealed class EvaluateGoalsCommandHandler
             if (!patient.IsPregnant)
                 return null;
 
-            // Pregnant patient with no pregnancy-category spec. How this parameter behaves outside
-            // pregnancy tells us whether it is contraindicated or just awaiting specialist thresholds.
-            var baseCategory = AdaGoalConstants.ResolveCategory(false, patient.DiabetesType, resolvedParameterId);
-            var baseSpec = AdaGoalConstants.ResolveSpec(resolvedParameterId, baseCategory, patient.Gender);
-
-            // A category-only parameter (no Universal row) explicitly excluded from pregnancy
-            // with no dedicated pregnancy-category row either. Universal parameters like BMI
-            // and waist circumference never reach this branch — they resolve via the Universal
-            // fallback in ResolveSpec, so `spec` above is non-null for them (see line 173 instead).
-            if (baseSpec is { AppliesInPregnancy: false })
-                return BuildNoDataItem(evaluationId, parameterId, NotEvaluatedInPregnancyReason);
-
-            // Applies in pregnancy but has no universal threshold (e.g. blood pressure): the
-            // specialist assigns it per patient via a custom clinical goal.
+            // Pregnant patient with no pregnancy-category spec and no Universal fallback
+            // (currently only blood pressure): the specialist assigns it per patient via a
+            // custom clinical goal. (If a future catalog parameter needs the "explicitly not
+            // evaluated in pregnancy" case here too — i.e. AppliesInPregnancy=false on its base
+            // category with no pregnancy row — reintroduce that check with test coverage; today
+            // every non-Universal catalog row has AppliesInPregnancy=true, so it would be dead.)
             if (hasCustom)
-                return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(resolvedParameterId, custom!));
+                return BuildEvaluatedItem(evaluationId, resolvedParameterId, value, SpecFromCustom(resolvedParameterId, custom!));
 
-            return BuildNoDataItem(evaluationId, parameterId, RequiresSpecialistEvaluationReason);
+            return BuildNoDataItem(evaluationId, resolvedParameterId, RequiresSpecialistEvaluationReason);
         }
 
-        // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol).
+        // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol —
+        // Universal-category parameters marked AppliesInPregnancy=false).
         if (patient.IsPregnant && !spec.AppliesInPregnancy)
-            return BuildNoDataItem(evaluationId, parameterId, "not-evaluated-in-pregnancy");
+            return BuildNoDataItem(evaluationId, resolvedParameterId, NotEvaluatedInPregnancyReason);
 
         // Non-pregnancy-specific spec → apply the doctor's custom override when present.
         var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
-        return BuildEvaluatedItem(evaluationId, parameterId, value, effectiveSpec);
+        return BuildEvaluatedItem(evaluationId, resolvedParameterId, value, effectiveSpec);
     }
 
     // A null custom threshold keeps the catalog default; a set one overrides that band.
