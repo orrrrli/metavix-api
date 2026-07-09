@@ -372,6 +372,60 @@ public class EvaluateGoalsCommandHandlerTests
         hba1cItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
+    // Decision 2A also governs LDL: its EmbarazadaDM catalog row makes IsPregnancySpecific true,
+    // so a custom ldl_primary goal is ignored during pregnancy, same as HbA1c above.
+    [Fact]
+    public async Task Handle_WhenPregnancySpecExists_LdlCustomGoalIsIgnored()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        // ldl_primary EmbarazadaDM spec (same as ConDiabetes): AtRiskHigh=70, OutOfRangeHigh=100.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 85m,
+        };
+
+        // Doctor tries to relax the target; the pregnancy spec must override it.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = "ldl_primary",
+            CustomAtRiskHigh = 150m,
+            CustomOutOfRangeHigh = 200m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        ldlItem.GoalUsed.Should().Be(70m);
+        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
+
     // When no pregnancy spec exists and no custom goal is set (blood pressure, which the
     // catalog deliberately omits for pregnancy categories), the parameter surfaces as NoData
     // with an explanatory reason instead of being silently dropped.

@@ -145,8 +145,12 @@ internal sealed class EvaluateGoalsCommandHandler
         // catalog lookup above, not the unresolved alias ("ldl") the evaluation loop iterates on.
         var hasCustom = customGoalMap.TryGetValue(resolvedParameterId, out var custom);
 
-        // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c targets in gestation)
-        // takes precedence over any doctor-set custom goal.
+        // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c or LDL targets in
+        // gestation) takes precedence over any doctor-set custom goal. This also governs LDL: its
+        // EmbarazadaDM catalog row makes IsPregnancySpecific true, so a custom ldl_primary/
+        // ldl_secondary goal is intentionally ignored during pregnancy, same as HbA1c. Blood
+        // pressure is the deliberate exception — it has no pregnancy-category row at all, so it
+        // never reaches this branch and falls through to the specialist-custom-goal path below.
         if (spec is { IsPregnancySpecific: true })
             return BuildEvaluatedItem(evaluationId, parameterId, value, spec);
 
