@@ -723,4 +723,48 @@ public class EvaluateGoalsCommandHandlerTests
         ldlItem.GoalUsed.Should().Be(55m); // ldl_secondary ConDiabetes default, not the ldl_primary custom
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
+
+    // Gestational diabetes wasn't covered by any existing LDL test: postprandial glucose splits
+    // Gestational into EmbarazadaDMG, but LDL isn't in PostprandialParameterIds, so it resolves to
+    // plain EmbarazadaDM — same ldl_primary/secondary spec as pre-existing Type1/Type2 diabetes.
+    [Fact]
+    public async Task Handle_WhenGestationalDiabetes_LdlUsesEmbarazadaDMSpec()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Gestational,
+        };
+
+        // ldl_primary EmbarazadaDM spec (same as ConDiabetes): AtRiskHigh=70, OutOfRangeHigh=100.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 85m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
+        ldlItem.GoalUsed.Should().Be(70m);
+        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
 }

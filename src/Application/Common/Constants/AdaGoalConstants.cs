@@ -78,6 +78,13 @@ public static class AdaGoalConstants
 
     private static readonly HashSet<string> PostprandialParameterIds = new() { "postprandial_1h", "postprandial_2h" };
 
+    // KNOWN GAP (not yet reachable — postprandial_1h/2h aren't in EvaluateGoalsCommandHandler's
+    // evaluated parameter list yet): a pregnant patient with pre-existing Type1/Type2 diabetes
+    // resolves postprandial glucose to EmbarazadaDM (the `_` arm below), but the catalog only has
+    // postprandial rows for ConDiabetes and EmbarazadaDMG — no EmbarazadaDM row. Whoever wires up
+    // postprandial evaluation needs to either add an EmbarazadaDM row or decide these patients
+    // fall back to a doctor-set custom goal (blood pressure's pattern), and add test coverage —
+    // don't let it ship silently unreachable like blood pressure's low-side band once did.
     public static PatientCategory ResolveCategory(bool isPregnant, DiabetesType diabetesType, string parameterId)
     {
         if (!isPregnant)
