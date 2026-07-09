@@ -12,9 +12,6 @@ namespace Application.UseCases.Goals.Handlers;
 internal sealed class EvaluateGoalsCommandHandler
     : IRequestHandler<EvaluateGoalsCommand, ErrorOr<EvaluateGoalsResult>>
 {
-    private const string NotEvaluatedInPregnancyReason = "not-evaluated-in-pregnancy";
-    private const string RequiresSpecialistEvaluationReason = "requires-specialist-evaluation";
-
     private readonly IPatientRepository _patientRepository;
     private readonly ILabResultRepository _labResultRepository;
     private readonly IDailyRecordRepository _dailyRecordRepository;
@@ -89,16 +86,19 @@ internal sealed class EvaluateGoalsCommandHandler
         var evaluationId = Guid.NewGuid();
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        // Each entry: (parameterId, value). Ldl resolves to ldl_primary or ldl_secondary
-        // depending on Patient.HasAscvd (see BuildItem).
+        // Ldl resolves to ldl_primary (primary prevention) or ldl_secondary (established ASCVD,
+        // stricter targets) based on Patient.HasAscvd, not patient category. Resolved here so
+        // BuildItem stays parameter-agnostic — it only ever sees the final catalog id.
+        var ldlParameterId = patient.HasAscvd ? AdaGoalConstants.LdlSecondary : AdaGoalConstants.LdlPrimary;
+
         var parameterValues = new (string ParameterId, decimal? Value)[]
         {
             (AdaGoalConstants.HbA1c,         latestLab?.Hba1c),
             (AdaGoalConstants.FastingGlucose, fastingGlucose),
             (AdaGoalConstants.SystolicBp,     sbp),
-            (AdaGoalConstants.Ldl,            latestLab?.Ldl),
+            (ldlParameterId,                  latestLab?.Ldl),
             (AdaGoalConstants.Bmi,            bmi),
-            ("hdl",                           latestLab?.Hdl),
+            (AdaGoalConstants.Hdl,            latestLab?.Hdl),
         };
 
         var items = new List<GoalEvaluationItem>();
@@ -126,6 +126,9 @@ internal sealed class EvaluateGoalsCommandHandler
                 i.ParameterId, i.ValueUsed, i.GoalUsed, i.Status, i.Reason)).ToList());
     }
 
+    // parameterId is always the final catalog id (e.g. "ldl_primary"/"ldl_secondary", already
+    // resolved by the caller based on Patient.HasAscvd) — this method has no per-parameter
+    // knowledge and never rewrites the id it was given.
     private static GoalEvaluationItem? BuildItem(
         Guid evaluationId,
         string parameterId,
@@ -133,19 +136,10 @@ internal sealed class EvaluateGoalsCommandHandler
         Domain.Models.Patient patient,
         Dictionary<string, ClinicalGoal> customGoalMap)
     {
-        // Ldl in the command is the unclassified cholesterol reading; the catalog splits it into
-        // ldl_primary (primary prevention) vs ldl_secondary (established ASCVD, stricter targets)
-        // based on Patient.HasAscvd, not patient category.
-        var resolvedParameterId = parameterId == AdaGoalConstants.Ldl
-            ? (patient.HasAscvd ? "ldl_secondary" : "ldl_primary")
-            : parameterId;
+        var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, parameterId);
+        var spec = AdaGoalConstants.ResolveSpec(parameterId, category, patient.Gender);
 
-        var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, resolvedParameterId);
-        var spec = AdaGoalConstants.ResolveSpec(resolvedParameterId, category, patient.Gender);
-
-        // Custom goals are stored under the resolved id (e.g. "ldl_primary"), matching the
-        // catalog lookup above, not the unresolved alias ("ldl") the evaluation loop iterates on.
-        var hasCustom = customGoalMap.TryGetValue(resolvedParameterId, out var custom);
+        var hasCustom = customGoalMap.TryGetValue(parameterId, out var custom);
 
         // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c or LDL targets in
         // gestation) takes precedence over any doctor-set custom goal. This also governs LDL: its
@@ -154,7 +148,7 @@ internal sealed class EvaluateGoalsCommandHandler
         // pressure is the deliberate exception — it has no pregnancy-category row at all, so it
         // never reaches this branch and falls through to the specialist-custom-goal path below.
         if (spec is { IsPregnancySpecific: true })
-            return BuildEvaluatedItem(evaluationId, resolvedParameterId, value, spec);
+            return BuildEvaluatedItem(evaluationId, parameterId, value, spec);
 
         if (spec is null)
         {
@@ -169,19 +163,19 @@ internal sealed class EvaluateGoalsCommandHandler
             // category with no pregnancy row — reintroduce that check with test coverage; today
             // every non-Universal catalog row has AppliesInPregnancy=true, so it would be dead.)
             if (hasCustom)
-                return BuildEvaluatedItem(evaluationId, resolvedParameterId, value, SpecFromCustom(resolvedParameterId, custom!));
+                return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(parameterId, custom!));
 
-            return BuildNoDataItem(evaluationId, resolvedParameterId, RequiresSpecialistEvaluationReason);
+            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
         }
 
         // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol —
         // Universal-category parameters marked AppliesInPregnancy=false).
         if (patient.IsPregnant && !spec.AppliesInPregnancy)
-            return BuildNoDataItem(evaluationId, resolvedParameterId, NotEvaluatedInPregnancyReason);
+            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.NotEvaluatedInPregnancyReason);
 
         // Non-pregnancy-specific spec → apply the doctor's custom override when present.
         var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
-        return BuildEvaluatedItem(evaluationId, resolvedParameterId, value, effectiveSpec);
+        return BuildEvaluatedItem(evaluationId, parameterId, value, effectiveSpec);
     }
 
     // A null custom threshold keeps the catalog default; a set one overrides that band.

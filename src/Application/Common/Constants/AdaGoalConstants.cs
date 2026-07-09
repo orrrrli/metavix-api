@@ -8,8 +8,15 @@ public static class AdaGoalConstants
     public const string HbA1c = "hba1c";
     public const string FastingGlucose = "fasting_glucose";
     public const string SystolicBp = "systolic_bp";
-    public const string Ldl = "ldl";
+    public const string LdlPrimary = "ldl_primary";
+    public const string LdlSecondary = "ldl_secondary";
     public const string Bmi = "bmi";
+    public const string Hdl = "hdl";
+
+    // NoDataReason values for GoalEvaluationItem.Reason. Shared as constants so a rename can't
+    // silently desync production code from the tests asserting on it.
+    public const string NotEvaluatedInPregnancyReason = "not-evaluated-in-pregnancy";
+    public const string RequiresSpecialistEvaluationReason = "requires-specialist-evaluation";
 
     public static readonly IReadOnlyList<ParameterSpec> Catalog = new List<ParameterSpec>
     {
@@ -63,10 +70,9 @@ public static class AdaGoalConstants
         new("waist_circumference", PatientCategory.Universal, Gender.Male, null, null, 94m, 102m, false, TimeSpan.FromDays(30)),
     };
 
-    // Every parameter a doctor may set a custom clinical goal for. "ldl" itself is excluded:
-    // it is only the pre-resolution alias EvaluateGoalsCommandHandler uses internally before
-    // mapping to ldl_primary/ldl_secondary, and a goal stored under "ldl" would never match
-    // during evaluation since the lookup always keys on the resolved id.
+    // Every parameter a doctor may set a custom clinical goal for. LDL has no bare "ldl" entry:
+    // EvaluateGoalsCommandHandler resolves it to ldl_primary or ldl_secondary (by Patient.HasAscvd)
+    // before ever looking anything up, so a goal must be stored under one of those two ids.
     public static readonly IReadOnlySet<string> KnownParameterIds =
         Catalog.Select(s => s.ParameterId).ToHashSet();
 
