@@ -91,6 +91,9 @@ internal sealed class EvaluateGoalsCommandHandler
         // BuildItem stays parameter-agnostic — it only ever sees the final catalog id.
         var ldlParameterId = patient.HasAscvd ? AdaGoalConstants.LdlSecondary : AdaGoalConstants.LdlPrimary;
 
+        // Source of truth lives in AdaGoalConstants.EvaluatedParameterIds — the AdaGoalConstantsTests
+        // drift guard fails the build if this list and the catalog diverge, so don't edit it without
+        // updating the set (and adding a row to the catalog if it's a new parameter).
         var parameterValues = new (string ParameterId, decimal? Value)[]
         {
             (AdaGoalConstants.HbA1c,         latestLab?.Hba1c),
@@ -123,7 +126,7 @@ internal sealed class EvaluateGoalsCommandHandler
             evaluationId,
             now,
             items.Select(i => new GoalEvaluationItemResult(
-                i.ParameterId, i.ValueUsed, i.GoalUsed, i.Status, i.Reason)).ToList());
+                i.ParameterId, i.ValueUsed, i.ThresholdUsed, i.Status, i.Reason)).ToList());
     }
 
     // parameterId is always the final catalog id (e.g. "ldl_primary"/"ldl_secondary", already
@@ -183,6 +186,15 @@ internal sealed class EvaluateGoalsCommandHandler
 
         // Non-pregnancy-specific spec → apply the doctor's custom override when present.
         var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
+
+        // No reading for a parameter that does have a spec (e.g. HDL Female with no lab result).
+        // BuildEvaluatedItem used to emit Status=NoData with ThresholdUsed set to a fallback band —
+        // misleading because ThresholdUsed is the comparison threshold, and a NoData item has no
+        // threshold because it was not evaluated. Route through BuildNoDataItem so ThresholdUsed
+        // stays null.
+        if (value is null)
+            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
+
         return BuildEvaluatedItem(evaluationId, parameterId, value, effectiveSpec);
     }
 
@@ -215,11 +227,13 @@ internal sealed class EvaluateGoalsCommandHandler
     private static GoalEvaluationItem BuildEvaluatedItem(
         Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec)
     {
-        // GoalUsed surfaces the InRange/AtRisk boundary the patient is compared against (custom or
-        // spec default). Most specs are upper-bound-oriented (AtRiskHigh); low-only specs like HDL
-        // and eGFR (higher is better) have no AtRiskHigh, so fall back to AtRiskLow, then to
-        // whichever OutOfRange bound exists, in that order.
-        var goal = spec.AtRiskHigh ?? spec.AtRiskLow ?? spec.OutOfRangeHigh ?? spec.OutOfRangeLow ?? 0m;
+        // ThresholdUsed surfaces the InRange/AtRisk boundary the patient is compared against after
+        // ApplyCustom has merged the custom goal onto the catalog spec. Most specs are
+        // upper-bound-oriented (AtRiskHigh); low-only specs like HDL and eGFR (higher is better)
+        // have no AtRiskHigh, so fall back to AtRiskLow, then to whichever OutOfRange bound
+        // exists, in that order. A spec with no bounds at all yields null — surfacing that as 0m
+        // would be a phantom threshold for an unmeasurable parameter.
+        var threshold = spec.AtRiskHigh ?? spec.AtRiskLow ?? spec.OutOfRangeHigh ?? spec.OutOfRangeLow;
 
         return new GoalEvaluationItem
         {
@@ -227,7 +241,7 @@ internal sealed class EvaluateGoalsCommandHandler
             GoalEvaluationId = evaluationId,
             ParameterId = parameterId,
             ValueUsed = value,
-            GoalUsed = goal,
+            ThresholdUsed = threshold,
             Status = spec.Classify(value),
         };
     }
@@ -239,7 +253,7 @@ internal sealed class EvaluateGoalsCommandHandler
             GoalEvaluationId = evaluationId,
             ParameterId = parameterId,
             ValueUsed = null,
-            GoalUsed = 0m,
+            ThresholdUsed = null,
             Status = GoalStatus.NoData,
             Reason = reason,
         };

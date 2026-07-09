@@ -25,4 +25,44 @@ public class AdaGoalConstantsTests
         // field expected to differ, so it's normalized before comparing.
         embarazadaDM.Should().Be(conDiabetes with { Category = PatientCategory.EmbarazadaDM });
     }
+
+    // Drift guard for Finding 10: EvaluateGoalsCommandHandler resolves the LDL id from
+    // Patient.HasAscvd, so the handler's parameterValues table can list "ldl_primary" while
+    // "ldl_secondary" is the actual id a patient with established ASCVD gets. The evaluated
+    // set must therefore contain LdlPrimary (the default branch) — LdlSecondary is derived at
+    // runtime and shouldn't appear as a separate entry. Postprandial is intentionally absent
+    // (documented KNOWN GAP, not yet implemented in the evaluation loop).
+    [Fact]
+    public void EvaluatedParameterIds_AreConsistentWithCatalog()
+    {
+        var catalogIds = AdaGoalConstants.Catalog.Select(s => s.ParameterId).ToHashSet();
+
+        // Every evaluated id must exist somewhere in the catalog — no phantom ids.
+        AdaGoalConstants.EvaluatedParameterIds
+            .Should()
+            .BeSubsetOf(catalogIds, "every evaluated parameter must have at least one catalog row");
+
+        // LDL is resolved by the handler (primary/secondary), not listed twice.
+        AdaGoalConstants.EvaluatedParameterIds
+            .Should()
+            .NotContain(AdaGoalConstants.LdlSecondary,
+                "ldl_secondary is the ASCVD-resolved alias of ldl_primary and is set at runtime");
+
+        // Postprandial is the documented gap — pin the absence so adding it without
+        // implementation is a build failure.
+        AdaGoalConstants.EvaluatedParameterIds
+            .Should()
+            .NotContain("postprandial_1h",
+                "postprandial evaluation is a documented KNOWN GAP and not yet implemented");
+        AdaGoalConstants.EvaluatedParameterIds
+            .Should()
+            .NotContain("postprandial_2h",
+                "postprandial evaluation is a documented KNOWN GAP and not yet implemented");
+
+        // Evaluated ids must be a subset of KnownParameterIds (every evaluated parameter is
+        // one a doctor may set a custom goal for).
+        AdaGoalConstants.EvaluatedParameterIds
+            .Should()
+            .BeSubsetOf(AdaGoalConstants.KnownParameterIds);
+    }
 }

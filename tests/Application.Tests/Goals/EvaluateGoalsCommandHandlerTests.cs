@@ -177,7 +177,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
-        hba1cItem.GoalUsed.Should().Be(9.0m);
+        hba1cItem.ThresholdUsed.Should().Be(9.0m);
         hba1cItem.Status.Should().Be(GoalStatus.InRange);
     }
 
@@ -269,7 +269,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
-        ldlItem.GoalUsed.Should().Be(200m);
+        ldlItem.ThresholdUsed.Should().Be(200m);
         ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
     }
 
@@ -318,9 +318,9 @@ public class EvaluateGoalsCommandHandlerTests
 
         var hdlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Hdl);
         hdlItem.Status.Should().Be(GoalStatus.OutOfRange);
-        // Regression: HDL is a low-only spec (AtRiskHigh/OutOfRangeHigh are null), so GoalUsed
+        // Regression: HDL is a low-only spec (AtRiskHigh/OutOfRangeHigh are null), so ThresholdUsed
         // must fall back to AtRiskLow (50) instead of the old "?? 0m" phantom zero.
-        hdlItem.GoalUsed.Should().Be(50m);
+        hdlItem.ThresholdUsed.Should().Be(50m);
     }
 
     // Decision 2A: a genuine pregnancy-category spec wins over a doctor-set custom goal.
@@ -372,7 +372,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
-        hba1cItem.GoalUsed.Should().Be(6.0m);
+        hba1cItem.ThresholdUsed.Should().Be(6.0m);
         hba1cItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
@@ -385,7 +385,7 @@ public class EvaluateGoalsCommandHandlerTests
     [InlineData(false, AdaGoalConstants.LdlPrimary, 85, 70)]
     [InlineData(true, AdaGoalConstants.LdlSecondary, 60, 55)]
     public async Task Handle_WhenPregnancySpecExists_LdlCustomGoalIsIgnored(
-        bool hasAscvd, string expectedParameterId, decimal ldlValue, decimal expectedGoalUsed)
+        bool hasAscvd, string expectedParameterId, decimal ldlValue, decimal expectedThresholdUsed)
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -432,7 +432,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var ldlItem = result.Value.Items.First(i => i.ParameterId == expectedParameterId);
-        ldlItem.GoalUsed.Should().Be(expectedGoalUsed);
+        ldlItem.ThresholdUsed.Should().Be(expectedThresholdUsed);
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
@@ -529,7 +529,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
-        sbpItem.GoalUsed.Should().Be(135m);
+        sbpItem.ThresholdUsed.Should().Be(135m);
         sbpItem.Status.Should().Be(GoalStatus.AtRisk);   // 135 ≤ 140 < 150
     }
 
@@ -666,7 +666,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
-        ldlItem.GoalUsed.Should().Be(55m);
+        ldlItem.ThresholdUsed.Should().Be(55m);
         ldlItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
 
@@ -713,7 +713,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
-        ldlItem.GoalUsed.Should().Be(130m);
+        ldlItem.ThresholdUsed.Should().Be(130m);
         ldlItem.Status.Should().Be(GoalStatus.InRange);
     }
 
@@ -769,7 +769,7 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
-        ldlItem.GoalUsed.Should().Be(55m); // ldl_secondary ConDiabetes default, not the ldl_primary custom
+        ldlItem.ThresholdUsed.Should().Be(55m); // ldl_secondary ConDiabetes default, not the ldl_primary custom
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
@@ -813,7 +813,49 @@ public class EvaluateGoalsCommandHandlerTests
         result.IsError.Should().BeFalse();
 
         var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
-        ldlItem.GoalUsed.Should().Be(70m);
+        ldlItem.ThresholdUsed.Should().Be(70m);
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
+
+    // Finding 3: a parameter with a resolvable spec but no reading (e.g. HDL Female with no lab
+    // result) used to emit Status=NoData with ThresholdUsed set to a fallback band from the spec — a
+    // phantom threshold for an unevaluated parameter. ThresholdUsed is the comparison threshold,
+    // and a NoData item was not evaluated, so ThresholdUsed must be null. The handler now routes
+    // value=null through BuildNoDataItem, which sets ThresholdUsed=null alongside Status=NoData
+    // and the explanatory reason.
+    [Fact]
+    public async Task Handle_WhenSpecResolvedButNoReading_ThresholdUsedIsNullWithSpecialistReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = false,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        // No lab result → HDL value is null, but HDL Universal Female spec exists.
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var hdlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Hdl);
+        hdlItem.Status.Should().Be(GoalStatus.NoData);
+        hdlItem.ThresholdUsed.Should().BeNull("a NoData item has no threshold because it was not evaluated");
+        hdlItem.ValueUsed.Should().BeNull();
+        hdlItem.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
     }
 }

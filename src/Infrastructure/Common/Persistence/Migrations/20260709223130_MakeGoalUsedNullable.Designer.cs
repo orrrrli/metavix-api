@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Common.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Common.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260709223130_MakeGoalUsedNullable")]
+    partial class MakeGoalUsedNullable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -241,6 +244,10 @@ namespace Infrastructure.Common.Persistence.Migrations
                     b.Property<Guid>("GoalEvaluationId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("GoalUsed")
+                        .HasPrecision(10, 3)
+                        .HasColumnType("numeric(10,3)");
+
                     b.Property<string>("ParameterId")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -254,10 +261,6 @@ namespace Infrastructure.Common.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
-
-                    b.Property<decimal?>("ThresholdUsed")
-                        .HasPrecision(10, 3)
-                        .HasColumnType("numeric(10,3)");
 
                     b.Property<decimal?>("ValueUsed")
                         .HasPrecision(10, 3)
