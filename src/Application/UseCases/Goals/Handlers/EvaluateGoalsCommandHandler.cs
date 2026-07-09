@@ -89,8 +89,8 @@ internal sealed class EvaluateGoalsCommandHandler
         var evaluationId = Guid.NewGuid();
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        // Each entry: (parameterId, value). Ldl resolves to ldl_primary; the catalog maps both
-        // ldl_primary and ldl_secondary to distinct patient categories.
+        // Each entry: (parameterId, value). Ldl resolves to ldl_primary or ldl_secondary
+        // depending on Patient.HasAscvd (see BuildItem).
         var parameterValues = new (string ParameterId, decimal? Value)[]
         {
             (AdaGoalConstants.HbA1c,         latestLab?.Hba1c),
@@ -133,10 +133,12 @@ internal sealed class EvaluateGoalsCommandHandler
         Domain.Models.Patient patient,
         Dictionary<string, ClinicalGoal> customGoalMap)
     {
-        // Ldl in the command is the unclassified cholesterol reading; map to the primary spec
-        // unless a more specific one is desired. Today the catalog splits ldl_primary/ldl_secondary
-        // by patient category only, so the category resolver already picks the right row.
-        var resolvedParameterId = parameterId == AdaGoalConstants.Ldl ? "ldl_primary" : parameterId;
+        // Ldl in the command is the unclassified cholesterol reading; the catalog splits it into
+        // ldl_primary (primary prevention) vs ldl_secondary (established ASCVD, stricter targets)
+        // based on Patient.HasAscvd, not patient category.
+        var resolvedParameterId = parameterId == AdaGoalConstants.Ldl
+            ? (patient.HasAscvd ? "ldl_secondary" : "ldl_primary")
+            : parameterId;
 
         var category = AdaGoalConstants.ResolveCategory(patient.IsPregnant, patient.DiabetesType, resolvedParameterId);
         var spec = AdaGoalConstants.ResolveSpec(resolvedParameterId, category, patient.Gender);

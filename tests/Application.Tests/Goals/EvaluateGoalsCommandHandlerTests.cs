@@ -566,4 +566,49 @@ public class EvaluateGoalsCommandHandlerTests
         bmiItem.Status.Should().Be(GoalStatus.NoData);
         bmiItem.Reason.Should().Be("not-evaluated-in-pregnancy");
     }
+
+    // Patient.HasAscvd routes Ldl to the stricter ldl_secondary spec instead of ldl_primary.
+    // ldl_secondary was previously unreachable: nothing resolved it, so ASCVD patients were
+    // always evaluated against the looser primary-prevention thresholds.
+    [Fact]
+    public async Task Handle_WhenPatientHasAscvd_UsesLdlSecondarySpec()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            DiabetesType = DiabetesType.Type2,
+            HasAscvd = true,
+        };
+
+        // ldl_secondary ConDiabetes spec: AtRiskHigh=55, OutOfRangeHigh=70. Value 80 → OutOfRange.
+        // Under the (wrong) ldl_primary ConDiabetes spec (AtRiskHigh=70, OutOfRangeHigh=100) this
+        // same value would only be AtRisk.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 80m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Ldl);
+        ldlItem.GoalUsed.Should().Be(55m);
+        ldlItem.Status.Should().Be(GoalStatus.OutOfRange);
+    }
 }
