@@ -126,7 +126,7 @@ internal sealed class EvaluateGoalsCommandHandler
             evaluationId,
             now,
             items.Select(i => new GoalEvaluationItemResult(
-                i.ParameterId, i.ValueUsed, i.GoalUsed, i.Status, i.Reason)).ToList());
+                i.ParameterId, i.ValueUsed, i.ThresholdUsed, i.Status, i.Reason)).ToList());
     }
 
     // parameterId is always the final catalog id (e.g. "ldl_primary"/"ldl_secondary", already
@@ -188,9 +188,10 @@ internal sealed class EvaluateGoalsCommandHandler
         var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
 
         // No reading for a parameter that does have a spec (e.g. HDL Female with no lab result).
-        // BuildEvaluatedItem used to emit Status=NoData with GoalUsed set to a fallback band —
-        // misleading because GoalUsed is the comparison goal, and a NoData item has no goal
-        // because it was not evaluated. Route through BuildNoDataItem so GoalUsed stays null.
+        // BuildEvaluatedItem used to emit Status=NoData with ThresholdUsed set to a fallback band —
+        // misleading because ThresholdUsed is the comparison threshold, and a NoData item has no
+        // threshold because it was not evaluated. Route through BuildNoDataItem so ThresholdUsed
+        // stays null.
         if (value is null)
             return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
 
@@ -226,12 +227,13 @@ internal sealed class EvaluateGoalsCommandHandler
     private static GoalEvaluationItem BuildEvaluatedItem(
         Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec)
     {
-        // GoalUsed surfaces the InRange/AtRisk boundary the patient is compared against (custom or
-        // spec default). Most specs are upper-bound-oriented (AtRiskHigh); low-only specs like HDL
-        // and eGFR (higher is better) have no AtRiskHigh, so fall back to AtRiskLow, then to
-        // whichever OutOfRange bound exists, in that order. A spec with no bounds at all yields
-        // null — surfacing that as 0m would be a phantom goal for an unmeasurable parameter.
-        var goal = spec.AtRiskHigh ?? spec.AtRiskLow ?? spec.OutOfRangeHigh ?? spec.OutOfRangeLow;
+        // ThresholdUsed surfaces the InRange/AtRisk boundary the patient is compared against after
+        // ApplyCustom has merged the custom goal onto the catalog spec. Most specs are
+        // upper-bound-oriented (AtRiskHigh); low-only specs like HDL and eGFR (higher is better)
+        // have no AtRiskHigh, so fall back to AtRiskLow, then to whichever OutOfRange bound
+        // exists, in that order. A spec with no bounds at all yields null — surfacing that as 0m
+        // would be a phantom threshold for an unmeasurable parameter.
+        var threshold = spec.AtRiskHigh ?? spec.AtRiskLow ?? spec.OutOfRangeHigh ?? spec.OutOfRangeLow;
 
         return new GoalEvaluationItem
         {
@@ -239,7 +241,7 @@ internal sealed class EvaluateGoalsCommandHandler
             GoalEvaluationId = evaluationId,
             ParameterId = parameterId,
             ValueUsed = value,
-            GoalUsed = goal,
+            ThresholdUsed = threshold,
             Status = spec.Classify(value),
         };
     }
@@ -251,7 +253,7 @@ internal sealed class EvaluateGoalsCommandHandler
             GoalEvaluationId = evaluationId,
             ParameterId = parameterId,
             ValueUsed = null,
-            GoalUsed = null,
+            ThresholdUsed = null,
             Status = GoalStatus.NoData,
             Reason = reason,
         };

@@ -175,7 +175,7 @@ public class AppDbContext : DbContext
             entity.HasIndex(i => i.GoalEvaluationId);
             entity.Property(i => i.ParameterId).HasMaxLength(50).IsRequired();
             entity.Property(i => i.ValueUsed).HasPrecision(10, 3);
-            entity.Property(i => i.GoalUsed).HasPrecision(10, 3);
+            entity.Property(i => i.ThresholdUsed).HasPrecision(10, 3);
             entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
             entity.Property(i => i.Reason).HasMaxLength(50);
         });
