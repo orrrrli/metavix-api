@@ -373,9 +373,15 @@ public class EvaluateGoalsCommandHandlerTests
     }
 
     // Decision 2A also governs LDL: its EmbarazadaDM catalog row makes IsPregnancySpecific true,
-    // so a custom ldl_primary goal is ignored during pregnancy, same as HbA1c above.
-    [Fact]
-    public async Task Handle_WhenPregnancySpecExists_LdlCustomGoalIsIgnored()
+    // so a custom goal is ignored during pregnancy, same as HbA1c above. HasAscvd decides which
+    // id (ldl_primary vs ldl_secondary, both with an EmbarazadaDM row of the same shape) is
+    // active; the two cases only differ in HasAscvd, the resolved id, the value, and the
+    // catalog's AtRiskHigh for that id — parametrized rather than duplicated.
+    [Theory]
+    [InlineData(false, AdaGoalConstants.LdlPrimary, 85, 70)]
+    [InlineData(true, AdaGoalConstants.LdlSecondary, 60, 55)]
+    public async Task Handle_WhenPregnancySpecExists_LdlCustomGoalIsIgnored(
+        bool hasAscvd, string expectedParameterId, decimal ldlValue, decimal expectedGoalUsed)
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -388,14 +394,14 @@ public class EvaluateGoalsCommandHandlerTests
             Gender = Gender.Female,
             IsPregnant = true,
             DiabetesType = DiabetesType.Type2,
+            HasAscvd = hasAscvd,
         };
 
-        // ldl_primary EmbarazadaDM spec (same as ConDiabetes): AtRiskHigh=70, OutOfRangeHigh=100.
         var labResult = new LabResult
         {
             PatientId = patientId,
             SampleDate = new DateOnly(2026, 6, 21),
-            Ldl = 85m,
+            Ldl = ldlValue,
         };
 
         // Doctor tries to relax the target; the pregnancy spec must override it.
@@ -404,7 +410,7 @@ public class EvaluateGoalsCommandHandlerTests
             Id = Guid.NewGuid(),
             PatientId = patientId,
             DoctorId = Guid.NewGuid(),
-            ParameterId = AdaGoalConstants.LdlPrimary,
+            ParameterId = expectedParameterId,
             CustomAtRiskHigh = 150m,
             CustomOutOfRangeHigh = 200m,
         };
@@ -421,63 +427,8 @@ public class EvaluateGoalsCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
 
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary);
-        ldlItem.GoalUsed.Should().Be(70m);
-        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
-    }
-
-    // Mirrors the ldl_primary case above for a patient with established ASCVD: Decision 2A still
-    // wins, ignoring a custom ldl_secondary goal during pregnancy.
-    [Fact]
-    public async Task Handle_WhenPregnancySpecExists_LdlSecondaryCustomGoalIsIgnored()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var patient = new Patient
-        {
-            Id = patientId,
-            UserId = userId,
-            HeightCm = 165m,
-            Gender = Gender.Female,
-            IsPregnant = true,
-            DiabetesType = DiabetesType.Type2,
-            HasAscvd = true,
-        };
-
-        // ldl_secondary EmbarazadaDM spec (same as ConDiabetes): AtRiskHigh=55, OutOfRangeHigh=70.
-        var labResult = new LabResult
-        {
-            PatientId = patientId,
-            SampleDate = new DateOnly(2026, 6, 21),
-            Ldl = 60m,
-        };
-
-        // Doctor tries to relax the target; the pregnancy spec must override it.
-        var customGoal = new ClinicalGoal
-        {
-            Id = Guid.NewGuid(),
-            PatientId = patientId,
-            DoctorId = Guid.NewGuid(),
-            ParameterId = AdaGoalConstants.LdlSecondary,
-            CustomAtRiskHigh = 150m,
-            CustomOutOfRangeHigh = 200m,
-        };
-
-        SetupAuth(userId, patientId, patient);
-        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
-        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
-        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
-
-        // Act
-        ErrorOr<EvaluateGoalsResult> result =
-            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
-
-        // Assert
-        result.IsError.Should().BeFalse();
-
-        var ldlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary);
-        ldlItem.GoalUsed.Should().Be(55m);
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == expectedParameterId);
+        ldlItem.GoalUsed.Should().Be(expectedGoalUsed);
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
