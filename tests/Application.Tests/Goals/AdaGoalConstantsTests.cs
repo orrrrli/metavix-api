@@ -19,10 +19,10 @@ public class AdaGoalConstantsTests
         var embarazadaDM = AdaGoalConstants.Catalog.Single(s =>
             s.ParameterId == parameterId && s.Category == PatientCategory.EmbarazadaDM);
 
-        embarazadaDM.OutOfRangeLow.Should().Be(conDiabetes.OutOfRangeLow);
-        embarazadaDM.AtRiskLow.Should().Be(conDiabetes.AtRiskLow);
-        embarazadaDM.AtRiskHigh.Should().Be(conDiabetes.AtRiskHigh);
-        embarazadaDM.OutOfRangeHigh.Should().Be(conDiabetes.OutOfRangeHigh);
-        embarazadaDM.NoDataWindow.Should().Be(conDiabetes.NoDataWindow);
+        // Record equality covers every field — including AppliesInPregnancy, which gates
+        // Decision 2A and would otherwise be easy to drift without the test noticing — and
+        // automatically extends to any field ParameterSpec gains later. Category is the only
+        // field expected to differ, so it's normalized before comparing.
+        embarazadaDM.Should().Be(conDiabetes with { Category = PatientCategory.EmbarazadaDM });
     }
 }
