@@ -10,6 +10,6 @@ public sealed record EvaluateGoalsResult(
 public sealed record GoalEvaluationItemResult(
     string ParameterId,
     decimal? ValueUsed,
-    decimal GoalUsed,
+    decimal? GoalUsed,
     GoalStatus Status,
     string? Reason);

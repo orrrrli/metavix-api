@@ -816,4 +816,45 @@ public class EvaluateGoalsCommandHandlerTests
         ldlItem.GoalUsed.Should().Be(70m);
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
+
+    // Finding 3: a parameter with a resolvable spec but no reading (e.g. HDL Female with no lab
+    // result) used to emit Status=NoData with GoalUsed set to a fallback band from the spec — a
+    // phantom goal for an unevaluated parameter. GoalUsed is the comparison goal, and a NoData
+    // item was not evaluated, so GoalUsed must be null. The handler now routes value=null through
+    // BuildNoDataItem, which sets GoalUsed=null alongside Status=NoData and the explanatory reason.
+    [Fact]
+    public async Task Handle_WhenSpecResolvedButNoReading_GoalUsedIsNullWithSpecialistReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = false,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        // No lab result → HDL value is null, but HDL Universal Female spec exists.
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var hdlItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Hdl);
+        hdlItem.Status.Should().Be(GoalStatus.NoData);
+        hdlItem.GoalUsed.Should().BeNull("a NoData item has no goal because it was not evaluated");
+        hdlItem.ValueUsed.Should().BeNull();
+        hdlItem.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
+    }
 }
