@@ -91,6 +91,9 @@ internal sealed class EvaluateGoalsCommandHandler
         // BuildItem stays parameter-agnostic — it only ever sees the final catalog id.
         var ldlParameterId = patient.HasAscvd ? AdaGoalConstants.LdlSecondary : AdaGoalConstants.LdlPrimary;
 
+        // Source of truth lives in AdaGoalConstants.EvaluatedParameterIds — the AdaGoalConstantsTests
+        // drift guard fails the build if this list and the catalog diverge, so don't edit it without
+        // updating the set (and adding a row to the catalog if it's a new parameter).
         var parameterValues = new (string ParameterId, decimal? Value)[]
         {
             (AdaGoalConstants.HbA1c,         latestLab?.Hba1c),

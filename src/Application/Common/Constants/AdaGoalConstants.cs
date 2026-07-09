@@ -13,6 +13,14 @@ public static class AdaGoalConstants
     public const string Bmi = "bmi";
     public const string Hdl = "hdl";
 
+    // Parameters EvaluateGoalsCommandHandler actually evaluates per evaluation pass. Smaller than
+    // KnownParameterIds (which lists every catalog id a doctor may set a custom goal for). The
+    // AdaGoalConstantsTests drift guard asserts the two stay in sync with the handler's
+    // parameterValues array — adding a parameter to the catalog without wiring it through
+    // evaluation (or vice versa) becomes a build failure.
+    public static readonly IReadOnlySet<string> EvaluatedParameterIds =
+        new HashSet<string> { HbA1c, FastingGlucose, SystolicBp, LdlPrimary, Bmi, Hdl };
+
     // NoDataReason values for GoalEvaluationItem.Reason. Shared as constants so a rename can't
     // silently desync production code from the tests asserting on it.
     public const string NotEvaluatedInPregnancyReason = "not-evaluated-in-pregnancy";
