@@ -426,6 +426,61 @@ public class EvaluateGoalsCommandHandlerTests
         ldlItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
+    // Mirrors the ldl_primary case above for a patient with established ASCVD: Decision 2A still
+    // wins, ignoring a custom ldl_secondary goal during pregnancy.
+    [Fact]
+    public async Task Handle_WhenPregnancySpecExists_LdlSecondaryCustomGoalIsIgnored()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+            HasAscvd = true,
+        };
+
+        // ldl_secondary EmbarazadaDM spec (same as ConDiabetes): AtRiskHigh=55, OutOfRangeHigh=70.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 60m,
+        };
+
+        // Doctor tries to relax the target; the pregnancy spec must override it.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = "ldl_secondary",
+            CustomAtRiskHigh = 150m,
+            CustomOutOfRangeHigh = 200m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_secondary");
+        ldlItem.GoalUsed.Should().Be(55m);
+        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
+
     // When no pregnancy spec exists and no custom goal is set (blood pressure, which the
     // catalog deliberately omits for pregnancy categories), the parameter surfaces as NoData
     // with an explanatory reason instead of being silently dropped.
@@ -610,5 +665,52 @@ public class EvaluateGoalsCommandHandlerTests
         var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_secondary");
         ldlItem.GoalUsed.Should().Be(55m);
         ldlItem.Status.Should().Be(GoalStatus.OutOfRange);
+    }
+
+    // ResolveCategory maps a pregnant non-diabetic patient to SinDiabetes, not EmbarazadaDM —
+    // EmbarazadaDM only exists for patients with an active diabetes diagnosis during pregnancy.
+    // This predates the LDL catalog change and already governed HbA1c the same way; LDL simply
+    // inherits it now that AppliesInPregnancy is true. Locking in the intended behavior: a
+    // pregnant non-diabetic patient's LDL is evaluated against the plain SinDiabetes thresholds,
+    // consistent with "cholesterol targets don't change with pregnancy."
+    [Fact]
+    public async Task Handle_WhenPregnantNonDiabetic_LdlUsesSinDiabetesSpec()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.None,
+        };
+
+        // ldl_primary SinDiabetes spec: AtRiskHigh=130, OutOfRangeHigh=160. Value 120 → InRange.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 120m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_primary");
+        ldlItem.GoalUsed.Should().Be(130m);
+        ldlItem.Status.Should().Be(GoalStatus.InRange);
     }
 }
