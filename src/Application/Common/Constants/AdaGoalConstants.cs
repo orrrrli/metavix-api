@@ -34,6 +34,14 @@ public static class AdaGoalConstants
         new("postprandial_2h", PatientCategory.ConDiabetes, null, null, null, 180m, 250m, true, TimeSpan.FromDays(14)),
         new("postprandial_2h", PatientCategory.EmbarazadaDMG, null, 90m, 100m, 121m, 140m, true, TimeSpan.FromDays(14)),
 
+        // Blood pressure asymmetry is intentional and clinically grounded:
+        //   - ConDiabetes: ADA 2026 Rec. 10.4 — target < 130/80; SBP < 120 if high CV/renal risk
+        //     (BPROAD/ESPRIT evidence). The low-side band (OutOfRangeLow=90 SBP / 60 DBP) signals
+        //     "reduce treatment" — relevant for diabetics on antihypertensives where over-treatment
+        //     causes symptomatic hypotension.
+        //   - SinDiabetes: ACC/AHA 2017 — normal < 120/80, elevated 120–129/< 80, HTN ≥ 130/80.
+        //     No low-side band is defined for non-diabetics in the guideline, so an unusually low
+        //     reading stays InRange rather than triggering an out-of-range signal.
         new("systolic_bp", PatientCategory.SinDiabetes, null, null, null, 120m, 130m, true, TimeSpan.FromDays(7)),
         new("systolic_bp", PatientCategory.ConDiabetes, null, 90m, null, 130m, 140m, true, TimeSpan.FromDays(7)),
 

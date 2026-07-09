@@ -163,7 +163,15 @@ internal sealed class EvaluateGoalsCommandHandler
             // category with no pregnancy row — reintroduce that check with test coverage; today
             // every non-Universal catalog row has AppliesInPregnancy=true, so it would be dead.)
             if (hasCustom)
+            {
+                // No reading yet — surface the same "specialist must evaluate" reason the
+                // no-custom branch emits, instead of letting BuildEvaluatedItem emit a bare
+                // NoData item that loses the explanation.
+                if (value is null)
+                    return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
+
                 return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(parameterId, custom!));
+            }
 
             return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
         }

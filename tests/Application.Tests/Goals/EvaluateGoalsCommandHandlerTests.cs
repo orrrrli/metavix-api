@@ -226,9 +226,10 @@ public class EvaluateGoalsCommandHandlerTests
         hba1cItem.Status.Should().Be(GoalStatus.OutOfRange);
     }
 
-    // Regression: a custom goal stored under the canonical "ldl_primary" id (the id
-    // CreateClinicalGoalCommandHandler actually accepts) must be found during evaluation, even
-    // though the evaluation loop iterates the unresolved "ldl" alias internally.
+    // Regression: a custom goal stored under "ldl_primary" (the id CreateClinicalGoalCommandHandler
+    // accepts) must be found during evaluation. The handler resolves the active LDL id from
+    // Patient.HasAscvd before iterating the parameterValues table, so for a non-ASCVD patient
+    // BuildItem is called with "ldl_primary" directly and the lookup hits the custom goal.
     [Fact]
     public async Task Handle_WhenCustomGoalStoredUnderLdlPrimary_IsAppliedDuringEvaluation()
     {
@@ -530,6 +531,54 @@ public class EvaluateGoalsCommandHandlerTests
         var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
         sbpItem.GoalUsed.Should().Be(135m);
         sbpItem.Status.Should().Be(GoalStatus.AtRisk);   // 135 ≤ 140 < 150
+    }
+
+    // Specialist custom SBP exists for a pregnant patient but no daily record has been logged yet.
+    // BuildItem previously called BuildEvaluatedItem with SpecFromCustom, which emits a NoData
+    // item (value=null) without a Reason — silently dropping the "specialist must evaluate"
+    // explanation. The fix routes this exact shape through BuildNoDataItem so the reason survives.
+    [Fact]
+    public async Task Handle_WhenPregnantAndSbpCustomGoalButNoReading_EmitsNoDataWithSpecialistReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        // Specialist has set SBP bands for this patient, but no daily record exists yet — no SBP value.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.SystolicBp,
+            CustomAtRiskHigh = 135m,
+            CustomOutOfRangeHigh = 150m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);   // no readings
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
+        sbpItem.Status.Should().Be(GoalStatus.NoData);
+        sbpItem.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
     }
 
     // BMI resolves via the Universal catalog fallback (AppliesInPregnancy=false), so a pregnant
