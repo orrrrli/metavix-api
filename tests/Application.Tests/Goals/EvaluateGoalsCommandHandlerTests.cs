@@ -713,4 +713,60 @@ public class EvaluateGoalsCommandHandlerTests
         ldlItem.GoalUsed.Should().Be(130m);
         ldlItem.Status.Should().Be(GoalStatus.InRange);
     }
+
+    // Intentional consequence, not a bug: ParameterId is the override key, and HasAscvd changes
+    // which id is active for LDL. A custom goal stored under "ldl_primary" does not carry over
+    // once the patient's ASCVD status makes "ldl_secondary" the active id — the doctor must set a
+    // new custom goal under the newly-active id. See clinical-goal.md for the documented rule.
+    [Fact]
+    public async Task Handle_WhenAscvdChangesActiveLdlId_PreviousLdlPrimaryCustomGoalNoLongerApplies()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            DiabetesType = DiabetesType.Type2,
+            HasAscvd = true,
+        };
+
+        // Doctor previously relaxed ldl_primary to 80/110, back when HasAscvd was false. Now that
+        // HasAscvd is true, evaluation resolves to ldl_secondary instead, so this custom goal is
+        // never looked up — the ldl_secondary ConDiabetes default (AtRiskHigh=55) applies instead.
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = "ldl_primary",
+            CustomAtRiskHigh = 80m,
+            CustomOutOfRangeHigh = 110m,
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = 60m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var ldlItem = result.Value.Items.First(i => i.ParameterId == "ldl_secondary");
+        ldlItem.GoalUsed.Should().Be(55m); // ldl_secondary ConDiabetes default, not the ldl_primary custom
+        ldlItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
 }
