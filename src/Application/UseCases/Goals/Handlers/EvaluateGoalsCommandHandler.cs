@@ -12,6 +12,9 @@ namespace Application.UseCases.Goals.Handlers;
 internal sealed class EvaluateGoalsCommandHandler
     : IRequestHandler<EvaluateGoalsCommand, ErrorOr<EvaluateGoalsResult>>
 {
+    private const string NotEvaluatedInPregnancyReason = "not-evaluated-in-pregnancy";
+    private const string RequiresSpecialistEvaluationReason = "requires-specialist-evaluation";
+
     private readonly IPatientRepository _patientRepository;
     private readonly ILabResultRepository _labResultRepository;
     private readonly IDailyRecordRepository _dailyRecordRepository;
@@ -158,16 +161,19 @@ internal sealed class EvaluateGoalsCommandHandler
             var baseCategory = AdaGoalConstants.ResolveCategory(false, patient.DiabetesType, resolvedParameterId);
             var baseSpec = AdaGoalConstants.ResolveSpec(resolvedParameterId, baseCategory, patient.Gender);
 
-            // Not evaluated during pregnancy (e.g. BMI, waist circumference).
+            // A category-only parameter (no Universal row) explicitly excluded from pregnancy
+            // with no dedicated pregnancy-category row either. Universal parameters like BMI
+            // and waist circumference never reach this branch — they resolve via the Universal
+            // fallback in ResolveSpec, so `spec` above is non-null for them (see line 173 instead).
             if (baseSpec is { AppliesInPregnancy: false })
-                return BuildNoDataItem(evaluationId, parameterId, "not-evaluated-in-pregnancy");
+                return BuildNoDataItem(evaluationId, parameterId, NotEvaluatedInPregnancyReason);
 
             // Applies in pregnancy but has no universal threshold (e.g. blood pressure): the
             // specialist assigns it per patient via a custom clinical goal.
             if (hasCustom)
                 return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(resolvedParameterId, custom!));
 
-            return BuildNoDataItem(evaluationId, parameterId, "requires-specialist-evaluation");
+            return BuildNoDataItem(evaluationId, parameterId, RequiresSpecialistEvaluationReason);
         }
 
         // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol).
