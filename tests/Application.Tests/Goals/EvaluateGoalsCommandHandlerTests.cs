@@ -90,9 +90,10 @@ public class EvaluateGoalsCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeFalse();
-        // All 13 evaluated parameters (EvaluatedParameterIds) are present and in range. eGFR and
-        // postprandial aren't wired into evaluation yet, so they're not expected here.
-        result.Value.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count);
+        // All evaluated parameters are present and in range, except postprandial_1h/2h: they have
+        // no SinDiabetes catalog row, so BuildItem omits them entirely for this non-pregnant,
+        // non-diabetic patient (see AdaGoalConstants.ResolveSpec's non-pregnant "omit" branch).
+        result.Value.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count - 2);
         result.Value.Items.Should().AllSatisfy(i => i.Status.Should().Be(GoalStatus.InRange));
     }
 

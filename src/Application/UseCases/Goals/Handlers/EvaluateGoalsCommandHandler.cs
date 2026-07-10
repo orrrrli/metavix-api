@@ -86,6 +86,18 @@ internal sealed class EvaluateGoalsCommandHandler
         var (waist, waistDate) = LatestVital(r => r.WaistCm);
         var (weight, weightDate) = LatestVital(r => r.WeightKg);
 
+        // Most recent reading explicitly marked 1h/2h post-meal, regardless of which meal.
+        // The marker (GlucoseReading.PostprandialWindow) is set at capture time — see #235.
+        (decimal? Value, DateOnly? MeasuredOn) LatestPostprandial(PostprandialWindow window)
+        {
+            var record = allRecords.FirstOrDefault(r => r.GlucoseReadings.Any(g => g.PostprandialWindow == window));
+            if (record is null) return (null, null);
+            return (record.GlucoseReadings.First(g => g.PostprandialWindow == window).ValueMgDl, record.RecordDate);
+        }
+
+        var (postprandial1h, postprandial1hDate) = LatestPostprandial(PostprandialWindow.OneHour);
+        var (postprandial2h, postprandial2hDate) = LatestPostprandial(PostprandialWindow.TwoHour);
+
         // Lab-derived values all share the sample date of the latest lab result.
         DateOnly? labDate = latestLab?.SampleDate;
 
@@ -133,6 +145,8 @@ internal sealed class EvaluateGoalsCommandHandler
             (AdaGoalConstants.Egfr,             egfr,                       labDate),
             (AdaGoalConstants.Bun,              latestLab?.Bun,             labDate),
             (AdaGoalConstants.WaistCircumference, waist,                    waistDate),
+            (AdaGoalConstants.Postprandial1h,   postprandial1h,             postprandial1hDate),
+            (AdaGoalConstants.Postprandial2h,   postprandial2h,             postprandial2hDate),
         };
 
         var items = new List<GoalEvaluationItem>();

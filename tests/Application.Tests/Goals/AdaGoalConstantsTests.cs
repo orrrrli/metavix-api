@@ -30,8 +30,7 @@ public class AdaGoalConstantsTests
     // Patient.HasAscvd, so the handler's parameterValues table can list "ldl_primary" while
     // "ldl_secondary" is the actual id a patient with established ASCVD gets. The evaluated
     // set must therefore contain LdlPrimary (the default branch) — LdlSecondary is derived at
-    // runtime and shouldn't appear as a separate entry. Postprandial is intentionally absent
-    // (documented KNOWN GAP, not yet implemented in the evaluation loop).
+    // runtime and shouldn't appear as a separate entry.
     [Fact]
     public void EvaluatedParameterIds_AreConsistentWithCatalog()
     {
@@ -47,17 +46,6 @@ public class AdaGoalConstantsTests
             .Should()
             .NotContain(AdaGoalConstants.LdlSecondary,
                 "ldl_secondary is the ASCVD-resolved alias of ldl_primary and is set at runtime");
-
-        // Postprandial is the documented gap — pin the absence so adding it without
-        // implementation is a build failure.
-        AdaGoalConstants.EvaluatedParameterIds
-            .Should()
-            .NotContain("postprandial_1h",
-                "postprandial evaluation is a documented KNOWN GAP and not yet implemented");
-        AdaGoalConstants.EvaluatedParameterIds
-            .Should()
-            .NotContain("postprandial_2h",
-                "postprandial evaluation is a documented KNOWN GAP and not yet implemented");
 
         // Evaluated ids must be a subset of KnownParameterIds (every evaluated parameter is
         // one a doctor may set a custom goal for).

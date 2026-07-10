@@ -20,18 +20,20 @@ public static class AdaGoalConstants
     public const string Egfr = "egfr";
     public const string Bun = "bun";
     public const string WaistCircumference = "waist_circumference";
+    public const string Postprandial1h = "postprandial_1h";
+    public const string Postprandial2h = "postprandial_2h";
 
     // Parameters EvaluateGoalsCommandHandler actually evaluates per evaluation pass. Smaller than
     // KnownParameterIds (which lists every catalog id a doctor may set a custom goal for). The
     // AdaGoalConstantsTests drift guard asserts the two stay in sync with the handler's
     // parameterValues array — adding a parameter to the catalog without wiring it through
-    // evaluation (or vice versa) becomes a build failure. postprandial_1h/2h are the remaining
-    // catalog rows deliberately absent here: they need meal-window detection, tracked separately.
+    // evaluation (or vice versa) becomes a build failure.
     public static readonly IReadOnlySet<string> EvaluatedParameterIds =
         new HashSet<string>
         {
             HbA1c, FastingGlucose, SystolicBp, DiastolicBp, HeartRate, LdlPrimary, Bmi, Hdl,
             TotalCholesterol, Triglycerides, Creatinine, Egfr, Bun, WaistCircumference,
+            Postprandial1h, Postprandial2h,
         };
 
     // NoDataReason values for GoalEvaluationItem.Reason. Shared as constants so a rename can't
@@ -108,14 +110,12 @@ public static class AdaGoalConstants
 
     private static readonly HashSet<string> PostprandialParameterIds = new() { "postprandial_1h", "postprandial_2h" };
 
-    // KNOWN GAP — tracked in issue #235 (postprandial is deferred: GlucoseReading can't yet tell a
-    // 1h from a 2h reading, see #183). postprandial_1h/2h aren't in EvaluatedParameterIds, so this
-    // arm isn't reachable for them today. When postprandial is wired: a pregnant patient with
-    // pre-existing Type1/Type2 diabetes resolves postprandial glucose to EmbarazadaDM (the `_` arm
-    // below), but the catalog only has postprandial rows for ConDiabetes and EmbarazadaDMG — no
-    // EmbarazadaDM row. That wiring must either add an EmbarazadaDM row or fall back to a doctor-set
-    // custom goal (blood pressure's pattern), with test coverage — don't let it ship silently
-    // unreachable like blood pressure's low-side band once did.
+    // A pregnant patient with pre-existing Type1/Type2/LADA diabetes resolves postprandial glucose
+    // to EmbarazadaDM (the `_` arm below), but the catalog only has postprandial rows for
+    // ConDiabetes and EmbarazadaDMG — no EmbarazadaDM row. ResolveSpec then returns null, and
+    // BuildItem's existing pregnancy fallback (the same path blood pressure uses in pregnancy)
+    // takes over: a doctor-set custom goal if present, otherwise NoData
+    // "requires-specialist-evaluation". See EvaluateGoalsCommandHandlerTests for coverage.
     public static PatientCategory ResolveCategory(bool isPregnant, DiabetesType diabetesType, string parameterId)
     {
         if (!isPregnant)
