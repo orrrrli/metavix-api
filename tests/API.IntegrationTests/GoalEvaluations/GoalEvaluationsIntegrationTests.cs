@@ -136,6 +136,67 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    // SEC-METAS-1-T2: persisted GoalEvaluation.PatientId matches the route, not the JWT.
+    // Asserts the data-isolation property directly: after Patient A triggers an evaluation on
+    // /api/patient/{A}/goal-evaluations, the row written to the DB must belong to A, and the
+    // items must reflect A's measurements, not any other patient's. Pinned to a fixed evaluation
+    // date (2026-06-21) so NoDataWindow checks are deterministic across CI runs.
+    [Fact]
+    public async Task PostGoalEvaluations_PersistsGoalEvaluationWithRoutePatientId()
+    {
+        // Arrange — pinned evaluation date (matches the deterministic anchor used in
+        // feat/QA-METAS-1 so NoDataWindow-driven outcomes stay stable).
+        var evaluationDate = new DateOnly(2026, 6, 21);
+        var labDate        = evaluationDate;          // sample taken on the evaluation day
+        var recordDate     = evaluationDate;
+
+        // Patient A: healthy numbers (InRange)
+        var (userIdA, patientIdA) = await SeedPatientWithFixedHeightAsync(heightCm: 170m);
+        var labIdA = await SeedLabResultAsync(patientIdA, labDate, hba1c: 5.5m, ldl: 80m);
+        var recordIdA = await SeedDailyRecordWithFastingAsync(
+            patientIdA, recordDate, sbp: 110, weightKg: 60m, fastingGlucose: 100);
+
+        // Patient B: deliberately out-of-range numbers — if the handler ever bled data across
+        // patients, the persisted GoalEvaluation would carry B's values under A's PatientId.
+        var (userIdB, patientIdB) = await SeedPatientWithFixedHeightAsync(heightCm: 170m);
+        await SeedLabResultAsync(patientIdB, labDate, hba1c: 12.0m, ldl: 200m);
+        await SeedDailyRecordWithFastingAsync(
+            patientIdB, recordDate, sbp: 180, weightKg: 100m, fastingGlucose: 300);
+
+        var client = CreateAuthenticatedClient(userIdA);
+
+        // Act
+        var response = await client.PostAsync($"/api/patient/{patientIdA}/goal-evaluations", null);
+
+        // Assert — HTTP layer
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var body = await response.Content.ReadFromJsonAsync<ApiSuccessResponse<EvaluateGoalsResult>>(JsonOptions);
+        body.Should().NotBeNull();
+
+        // Response items reflect A's values (Hba1c 5.5 → InRange, not B's 12.0 → OutOfRange).
+        body!.Data.Items.Should().Contain(i =>
+            i.ParameterId == AdaGoalConstants.HbA1c && i.ValueUsed == 5.5m);
+        body.Data.Items.Should().NotContain(i =>
+            i.ParameterId == AdaGoalConstants.HbA1c && i.ValueUsed == 12.0m);
+
+        // Assert — persistence layer (the real data-isolation proof).
+        await using var db = CreateDbContext();
+        var persisted = await db.GoalEvaluations
+            .Include(e => e.Items)
+            .SingleAsync(e => e.Id == body.Data.EvaluationId);
+
+        persisted.PatientId.Should().Be(patientIdA, "the route's PatientId, not the JWT, is the scope");
+        persisted.PatientId.Should().NotBe(patientIdB);
+
+        // The persisted evaluation links back to A's measurements through its items' ValueUsed;
+        // if the handler ever substituted B's data, ValueUsed would carry 12.0/200/300, not A's.
+        persisted.Items.Should().Contain(i => i.ParameterId == AdaGoalConstants.HbA1c    && i.ValueUsed == 5.5m);
+        persisted.Items.Should().Contain(i => i.ParameterId == AdaGoalConstants.LdlPrimary && i.ValueUsed == 80m);
+        persisted.Items.Should().Contain(i => i.ParameterId == AdaGoalConstants.SystolicBp && i.ValueUsed == 110m);
+        persisted.Items.Should().Contain(i => i.ParameterId == AdaGoalConstants.FastingGlucose && i.ValueUsed == 100m);
+    }
+
     // --- Helpers ---
 
     private async Task<(Guid UserId, Guid PatientId)> SeedPatientAsync(decimal? heightCm)
@@ -264,6 +325,77 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         patient.UpdatedAt        = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
+    }
+
+    private async Task<Guid> SeedLabResultAsync(
+        Guid patientId, DateOnly sampleDate, decimal hba1c, decimal ldl)
+    {
+        var id = Guid.NewGuid();
+        await using var db = CreateDbContext();
+        db.LabResults.Add(new LabResult
+        {
+            Id         = id,
+            PatientId  = patientId,
+            SampleDate = sampleDate,
+            Hba1c      = hba1c,
+            Ldl        = ldl,
+            CreatedAt  = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private async Task<Guid> SeedDailyRecordWithFastingAsync(
+        Guid patientId, DateOnly recordDate, int sbp, decimal weightKg, int fastingGlucose)
+    {
+        var recordId = Guid.NewGuid();
+        await using var db = CreateDbContext();
+        db.DailyRecords.Add(new DailyRecord
+        {
+            Id               = recordId,
+            PatientId        = patientId,
+            RecordDate       = recordDate,
+            SystolicPressure = sbp,
+            WeightKg         = weightKg,
+            CreatedAt        = DateTime.UtcNow,
+        });
+        db.GlucoseReadings.Add(new GlucoseReading
+        {
+            Id            = Guid.NewGuid(),
+            DailyRecordId = recordId,
+            ReadingType   = GlucoseReadingType.Fasting,
+            ValueMgDl     = fastingGlucose,
+        });
+        await db.SaveChangesAsync();
+        return recordId;
+    }
+
+    private async Task<(Guid UserId, Guid PatientId)> SeedPatientWithFixedHeightAsync(decimal? heightCm)
+    {
+        var userId    = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        await using var db = CreateDbContext();
+        db.Users.Add(new User
+        {
+            Id           = userId,
+            Email        = $"{userId}@test.com",
+            PasswordHash = "not-used",
+            Role         = UserRole.Patient,
+            CreatedAt    = DateTime.UtcNow,
+        });
+        db.Patients.Add(new Patient
+        {
+            Id                  = patientId,
+            UserId              = userId,
+            FirstName           = "Test",
+            LastName            = "Patient",
+            MedicalRecordNumber = Guid.NewGuid().ToString("N")[..8],
+            DateOfBirth         = new DateOnly(1990, 1, 1),
+            HeightCm            = heightCm,
+            CreatedAt           = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return (userId, patientId);
     }
 
     private AppDbContext CreateDbContext()
