@@ -90,9 +90,10 @@ public class EvaluateGoalsCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeFalse();
-        // All 13 evaluated parameters (EvaluatedParameterIds) are present and in range. eGFR and
-        // postprandial aren't wired into evaluation yet, so they're not expected here.
-        result.Value.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count);
+        // All evaluated parameters are present and in range, except postprandial_1h/2h: they have
+        // no SinDiabetes catalog row, so BuildItem omits them entirely for this non-pregnant,
+        // non-diabetic patient (see AdaGoalConstants.ResolveSpec's non-pregnant "omit" branch).
+        result.Value.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count - 2);
         result.Value.Items.Should().AllSatisfy(i => i.Status.Should().Be(GoalStatus.InRange));
     }
 
@@ -1030,5 +1031,167 @@ public class EvaluateGoalsCommandHandlerTests
         hdlItem.ThresholdUsed.Should().BeNull("a NoData item has no threshold because it was not evaluated");
         hdlItem.ValueUsed.Should().BeNull();
         hdlItem.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
+    }
+
+    // #235: ConDiabetes shares one threshold (180/250) across postprandial_1h and postprandial_2h —
+    // the window only changes which catalog row EmbarazadaDMG resolves to (see Theory below).
+    [Theory]
+    [InlineData(AdaGoalConstants.Postprandial1h, PostprandialWindow.OneHour, 150, GoalStatus.InRange)]
+    [InlineData(AdaGoalConstants.Postprandial1h, PostprandialWindow.OneHour, 200, GoalStatus.AtRisk)]
+    [InlineData(AdaGoalConstants.Postprandial1h, PostprandialWindow.OneHour, 260, GoalStatus.OutOfRange)]
+    [InlineData(AdaGoalConstants.Postprandial2h, PostprandialWindow.TwoHour, 150, GoalStatus.InRange)]
+    [InlineData(AdaGoalConstants.Postprandial2h, PostprandialWindow.TwoHour, 200, GoalStatus.AtRisk)]
+    [InlineData(AdaGoalConstants.Postprandial2h, PostprandialWindow.TwoHour, 260, GoalStatus.OutOfRange)]
+    public async Task Handle_ConDiabetes_ClassifiesPostprandialByWindowMarker(
+        string parameterId, PostprandialWindow window, int value, GoalStatus expectedStatus)
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            GlucoseReadings =
+            [
+                new GlucoseReading
+                {
+                    ReadingType = GlucoseReadingType.PostBreakfast,
+                    ValueMgDl = value,
+                    PostprandialWindow = window,
+                }
+            ]
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var item = result.Value.Items.First(i => i.ParameterId == parameterId);
+        item.ValueUsed.Should().Be(value);
+        item.Status.Should().Be(expectedStatus);
+    }
+
+    // #235: gestational diabetes (EmbarazadaDMG) has stricter, window-specific thresholds —
+    // 1h: 141/160, 2h: 121/140 — distinct from ConDiabetes's flat 180/250.
+    [Theory]
+    [InlineData(AdaGoalConstants.Postprandial1h, PostprandialWindow.OneHour, 130, GoalStatus.InRange)]
+    [InlineData(AdaGoalConstants.Postprandial1h, PostprandialWindow.OneHour, 150, GoalStatus.AtRisk)]
+    [InlineData(AdaGoalConstants.Postprandial1h, PostprandialWindow.OneHour, 165, GoalStatus.OutOfRange)]
+    [InlineData(AdaGoalConstants.Postprandial2h, PostprandialWindow.TwoHour, 110, GoalStatus.InRange)]
+    [InlineData(AdaGoalConstants.Postprandial2h, PostprandialWindow.TwoHour, 130, GoalStatus.AtRisk)]
+    [InlineData(AdaGoalConstants.Postprandial2h, PostprandialWindow.TwoHour, 145, GoalStatus.OutOfRange)]
+    public async Task Handle_EmbarazadaDMG_ClassifiesPostprandialByWindowMarker(
+        string parameterId, PostprandialWindow window, int value, GoalStatus expectedStatus)
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Gestational,
+        };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            GlucoseReadings =
+            [
+                new GlucoseReading
+                {
+                    ReadingType = GlucoseReadingType.PostBreakfast,
+                    ValueMgDl = value,
+                    PostprandialWindow = window,
+                }
+            ]
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var item = result.Value.Items.First(i => i.ParameterId == parameterId);
+        item.ValueUsed.Should().Be(value);
+        item.Status.Should().Be(expectedStatus);
+    }
+
+    // #235 KNOWN GAP resolution: a pregnant patient with pre-existing diabetes (not gestational)
+    // resolves postprandial to EmbarazadaDM, which has no postprandial catalog row. This must fall
+    // back to the same "specialist must evaluate" path blood pressure already uses in pregnancy,
+    // not silently disappear.
+    [Fact]
+    public async Task Handle_EmbarazadaDM_PostprandialWithNoCatalogRow_EmitsNoDataWithSpecialistReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,   // pre-existing, not gestational
+        };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            GlucoseReadings =
+            [
+                new GlucoseReading
+                {
+                    ReadingType = GlucoseReadingType.PostBreakfast,
+                    ValueMgDl = 145,
+                    PostprandialWindow = PostprandialWindow.OneHour,
+                }
+            ]
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var item = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Postprandial1h);
+        item.Status.Should().Be(GoalStatus.NoData);
+        item.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
     }
 }

@@ -61,7 +61,7 @@ internal sealed class GetPatientDailyRecordsQueryHandler
             r.Notes,
             r.CreatedAt,
             r.GlucoseReadings.Select(g => new GlucoseReadingResult(
-                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods)).ToList())).ToList();
+                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods, g.PostprandialWindow)).ToList())).ToList();
 
         if (!hasRange && results.Count == 0)
         {

@@ -51,7 +51,7 @@ internal sealed class GetLinkedPatientDailyRecordsQueryHandler
             r.Notes,
             r.CreatedAt,
             r.GlucoseReadings.Select(g => new GlucoseReadingResult(
-                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods)).ToList())).ToList();
+                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods, g.PostprandialWindow)).ToList())).ToList();
 
         if (results.Count == 0)
             return RecordErrors.RecordsNotFound;

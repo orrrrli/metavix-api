@@ -7,4 +7,5 @@ public sealed record GlucoseReadingResult(
     GlucoseReadingType ReadingType,
     int ValueMgDl,
     TimeOnly? Time,
-    string? Foods);
+    string? Foods,
+    PostprandialWindow? PostprandialWindow);

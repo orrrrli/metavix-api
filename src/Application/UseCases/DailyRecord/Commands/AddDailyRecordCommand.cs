@@ -7,7 +7,8 @@ public sealed record GlucoseReadingDto(
     GlucoseReadingType ReadingType,
     int ValueMgDl,
     TimeOnly? Time,
-    string? Foods);
+    string? Foods,
+    PostprandialWindow? PostprandialWindow = null);
 
 public sealed record AddDailyRecordCommand(
     Guid PatientId,
