@@ -79,6 +79,63 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    // SEC-METAS-1-T1a: no JWT provided → 401 Unauthorized
+    // The [Authorize] policy on the patient group rejects anonymous requests before the handler runs.
+    [Fact]
+    public async Task PostGoalEvaluations_WhenNoJwtIsProvided_Returns401()
+    {
+        // Arrange
+        var (_, patientId) = await SeedPatientAsync(heightCm: null);
+
+        var client = _factory.CreateClient(); // No Authorization header
+
+        // Act
+        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // SEC-METAS-1-T1b: caller is a doctor with no link to the patient → 403 Forbidden
+    // The role check on the patient group rejects Doctor-role tokens before the handler runs,
+    // regardless of any link state.
+    [Fact]
+    public async Task PostGoalEvaluations_WhenCallerIsADoctorWithoutLink_Returns403()
+    {
+        // Arrange
+        var (_, patientId) = await SeedPatientAsync(heightCm: null);
+        var (doctorUserId, _) = await SeedDoctorAsync();
+
+        var client = CreateAuthenticatedClient(doctorUserId, role: "Doctor");
+
+        // Act
+        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // SEC-METAS-1-T1c: caller is a doctor WITH an accepted link to the patient → 403 Forbidden
+    // The role check fires even when the doctor is the patient's primary doctor. Evaluation is a
+    // patient-initiated event (EvaluationTrigger.Patient); a doctor must not be able to trigger it
+    // on the patient's behalf through this route, even with full record access.
+    [Fact]
+    public async Task PostGoalEvaluations_WhenCallerIsADoctorWithAcceptedLink_Returns403()
+    {
+        // Arrange
+        var (_, patientId) = await SeedPatientAsync(heightCm: null);
+        var (doctorUserId, doctorId) = await SeedDoctorAsync();
+        await SeedAcceptedLinkAsync(patientId, doctorId);
+
+        var client = CreateAuthenticatedClient(doctorUserId, role: "Doctor");
+
+        // Act
+        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     // --- Helpers ---
 
     private async Task<(Guid UserId, Guid PatientId)> SeedPatientAsync(decimal? heightCm)
@@ -153,6 +210,62 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         await db.SaveChangesAsync();
     }
 
+    private async Task<(Guid UserId, Guid DoctorId)> SeedDoctorAsync()
+    {
+        var userId   = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+
+        await using var db = CreateDbContext();
+
+        db.Users.Add(new User
+        {
+            Id           = userId,
+            Email        = $"{userId}@test.com",
+            PasswordHash = "not-used",
+            Role         = UserRole.Doctor,
+            CreatedAt    = DateTime.UtcNow,
+        });
+
+        db.Doctors.Add(new Doctor
+        {
+            Id                 = doctorId,
+            UserId             = userId,
+            FirstName          = "Test",
+            PaternalLastName   = "Doctor",
+            MaternalLastName   = "Test",
+            LicenseNumber      = Guid.NewGuid().ToString("N")[..8],
+            Speciality         = "Endocrinología",
+            Email              = $"{doctorId}@test.com",
+            CreatedAt          = DateTime.UtcNow,
+        });
+
+        await db.SaveChangesAsync();
+        return (userId, doctorId);
+    }
+
+    private async Task SeedAcceptedLinkAsync(Guid patientId, Guid doctorId)
+    {
+        await using var db = CreateDbContext();
+
+        db.PatientDoctorRequests.Add(new PatientDoctorRequest
+        {
+            Id          = Guid.NewGuid(),
+            PatientId   = patientId,
+            DoctorId    = doctorId,
+            Status      = RequestStatus.Accepted,
+            CreatedAt   = DateTime.UtcNow,
+            ResolvedAt  = DateTime.UtcNow,
+        });
+
+        // Reflect the accepted link in the Patient's PrimaryDoctorId, matching the
+        // AcceptLinkRequestCommand invariant.
+        var patient = await db.Patients.FindAsync(patientId);
+        patient!.PrimaryDoctorId = doctorId;
+        patient.UpdatedAt        = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+    }
+
     private AppDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -162,10 +275,13 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
     }
 
     private HttpClient CreateAuthenticatedClient(Guid userId)
+        => CreateAuthenticatedClient(userId, "Patient");
+
+    private HttpClient CreateAuthenticatedClient(Guid userId, string role)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", JwtTestHelper.GenerateToken(userId));
+            new AuthenticationHeaderValue("Bearer", JwtTestHelper.GenerateToken(userId, role));
         return client;
     }
 }
