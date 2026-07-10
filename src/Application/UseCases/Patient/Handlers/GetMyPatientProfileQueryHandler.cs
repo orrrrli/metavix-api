@@ -47,6 +47,8 @@ internal sealed class GetMyPatientProfileQueryHandler
             patient.IsPregnant,
             patient.DiabetesType.ToString(),
             patient.MedicalRecordNumber,
-            patient.CreatedAt);
+            patient.CreatedAt,
+            patient.PregnancyStartDate,
+            patient.PregnancyDueDate);
     }
 }
