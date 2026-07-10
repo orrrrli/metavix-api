@@ -38,6 +38,7 @@ public static class AdaGoalConstants
     // silently desync production code from the tests asserting on it.
     public const string NotEvaluatedInPregnancyReason = "not-evaluated-in-pregnancy";
     public const string RequiresSpecialistEvaluationReason = "requires-specialist-evaluation";
+    public const string NoRecentDataReason = "no-recent-data";
 
     public static readonly IReadOnlyList<ParameterSpec> Catalog = new List<ParameterSpec>
     {

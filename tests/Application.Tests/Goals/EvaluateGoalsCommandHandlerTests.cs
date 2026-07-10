@@ -195,6 +195,56 @@ public class EvaluateGoalsCommandHandlerTests
         egfrItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
+    // NoDataWindow: a present value measured longer ago than its spec's freshness window is too
+    // stale to classify and surfaces as NoData "no-recent-data" instead of a band status. BP's
+    // window is 7 days; HbA1c's is 90, so the same-dated HbA1c stays evaluable — proving the window
+    // is applied per parameter, not globally.
+    [Fact]
+    public async Task Handle_WhenValueOlderThanNoDataWindow_EmitsNoDataWithNoRecentDataReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        // EvaluationNow is 2026-06-22; this reading is 30 days old → outside BP's 7-day window.
+        var staleDate = new DateOnly(2026, 5, 23);
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = staleDate,
+            SystolicPressure = 110,   // in-range value, but stale
+        };
+
+        // HbA1c dated the same day is still inside its 90-day window → evaluated normally.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = staleDate,
+            Hba1c = 5.0m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
+        sbpItem.Status.Should().Be(GoalStatus.NoData);
+        sbpItem.Reason.Should().Be("no-recent-data");
+
+        var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
+        hba1cItem.Status.Should().Be(GoalStatus.InRange);
+    }
+
     // T12: one parameter missing → Status=NoData for that item
     [Fact]
     public async Task Handle_WhenLabResultAbsent_ReturnsNoDataForHbA1cAndLdl()
@@ -390,12 +440,18 @@ public class EvaluateGoalsCommandHandlerTests
         ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
     }
 
+    // Fixtures date their records/labs on 2026-06-21; evaluating one day later keeps every value
+    // comfortably inside its NoDataWindow (shortest is BP/heart-rate at 7 days), so the freshness
+    // guard doesn't turn otherwise-valid fixtures into NoData. A fixed clock also keeps the
+    // date-sensitive assertions deterministic.
+    private static readonly DateTimeOffset EvaluationNow = new(2026, 6, 22, 0, 0, 0, TimeSpan.Zero);
+
     private void SetupAuth(Guid userId, Guid patientId, Patient patient)
     {
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
-        _timeProvider.SetUtcNow(DateTimeOffset.UtcNow);
+        _timeProvider.SetUtcNow(EvaluationNow);
         _goalEvaluationRepository.AddAsync(Arg.Any<GoalEvaluation>()).Returns(Task.CompletedTask);
     }
 

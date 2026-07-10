@@ -66,22 +66,37 @@ internal sealed class EvaluateGoalsCommandHandler
         var customGoals = await _clinicalGoalRepository.GetByPatientIdAsync(request.PatientId);
         var customGoalMap = customGoals.ToDictionary(g => g.ParameterId, g => g);
 
-        // Extract values from records. Records arrive newest-first, so the first record carrying a
-        // given vital is the most recent reading for it (a vital may be absent on some days).
-        decimal? sbp = allRecords.FirstOrDefault(r => r.SystolicPressure.HasValue)?.SystolicPressure;
-        decimal? dbp = allRecords.FirstOrDefault(r => r.DiastolicPressure.HasValue)?.DiastolicPressure;
-        decimal? heartRate = allRecords.FirstOrDefault(r => r.HeartRate.HasValue)?.HeartRate;
-        decimal? waist = allRecords.FirstOrDefault(r => r.WaistCm.HasValue)?.WaistCm;
-        decimal? weight = allRecords.FirstOrDefault(r => r.WeightKg.HasValue)?.WeightKg;
+        // T8/T9: evaluate and build items
+        var evaluationId = Guid.NewGuid();
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var today = DateOnly.FromDateTime(now);
 
-        // T5: most recent fasting glucose across all records
-        decimal? fastingGlucose = allRecords
-            .SelectMany(r => r.GlucoseReadings)
-            .Where(g => g.ReadingType == GlucoseReadingType.Fasting)
-            .Select(g => (decimal?)g.ValueMgDl)
-            .FirstOrDefault();
+        // Extract values with their measurement date. Records arrive newest-first, so the first
+        // record carrying a given vital is the most recent reading for it (a vital may be absent on
+        // some days). The date lets BuildItem enforce each spec's NoDataWindow.
+        (decimal? Value, DateOnly? MeasuredOn) LatestVital(Func<Domain.Models.DailyRecord, decimal?> selector)
+        {
+            var record = allRecords.FirstOrDefault(r => selector(r).HasValue);
+            return record is null ? (null, null) : (selector(record), record.RecordDate);
+        }
 
-        // T6: BMI from weight + patient height
+        var (sbp, sbpDate) = LatestVital(r => r.SystolicPressure);
+        var (dbp, dbpDate) = LatestVital(r => r.DiastolicPressure);
+        var (heartRate, heartRateDate) = LatestVital(r => r.HeartRate);
+        var (waist, waistDate) = LatestVital(r => r.WaistCm);
+        var (weight, weightDate) = LatestVital(r => r.WeightKg);
+
+        // Lab-derived values all share the sample date of the latest lab result.
+        DateOnly? labDate = latestLab?.SampleDate;
+
+        // T5: most recent fasting glucose across all records, with its record date.
+        var fastingRecord = allRecords
+            .FirstOrDefault(r => r.GlucoseReadings.Any(g => g.ReadingType == GlucoseReadingType.Fasting));
+        decimal? fastingGlucose = fastingRecord?.GlucoseReadings
+            .First(g => g.ReadingType == GlucoseReadingType.Fasting).ValueMgDl;
+        DateOnly? fastingDate = fastingRecord?.RecordDate;
+
+        // T6: BMI from weight + patient height; freshness tracks the weight reading.
         decimal? bmi = null;
         if (weight.HasValue && patient.HeightCm is > 0)
         {
@@ -89,45 +104,41 @@ internal sealed class EvaluateGoalsCommandHandler
             bmi = weight.Value / (heightM * heightM);
         }
 
-        // T8/T9: evaluate and build items
-        var evaluationId = Guid.NewGuid();
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-
         // Ldl resolves to ldl_primary (primary prevention) or ldl_secondary (established ASCVD,
         // stricter targets) based on Patient.HasAscvd, not patient category. Resolved here so
         // BuildItem stays parameter-agnostic — it only ever sees the final catalog id.
         var ldlParameterId = patient.HasAscvd ? AdaGoalConstants.LdlSecondary : AdaGoalConstants.LdlPrimary;
 
         // eGFR is derived, not measured: CKD-EPI 2021 from the latest creatinine + age + sex.
-        // Returns null (→ NoData) when creatinine or gender is missing.
-        var ageYears = AgeInYears(patient.DateOfBirth, DateOnly.FromDateTime(now));
+        // Returns null (→ NoData) when creatinine or gender is missing; freshness tracks the lab.
+        var ageYears = AgeInYears(patient.DateOfBirth, today);
         decimal? egfr = _egfrCalculator.Calculate(latestLab?.Creatinine, ageYears, patient.Gender);
 
         // Source of truth lives in AdaGoalConstants.EvaluatedParameterIds — the AdaGoalConstantsTests
         // drift guard fails the build if this list and the catalog diverge, so don't edit it without
         // updating the set (and adding a row to the catalog if it's a new parameter).
-        var parameterValues = new (string ParameterId, decimal? Value)[]
+        var parameterValues = new (string ParameterId, decimal? Value, DateOnly? MeasuredOn)[]
         {
-            (AdaGoalConstants.HbA1c,            latestLab?.Hba1c),
-            (AdaGoalConstants.FastingGlucose,   fastingGlucose),
-            (AdaGoalConstants.SystolicBp,       sbp),
-            (AdaGoalConstants.DiastolicBp,      dbp),
-            (AdaGoalConstants.HeartRate,        heartRate),
-            (ldlParameterId,                    latestLab?.Ldl),
-            (AdaGoalConstants.Bmi,              bmi),
-            (AdaGoalConstants.Hdl,              latestLab?.Hdl),
-            (AdaGoalConstants.TotalCholesterol, latestLab?.TotalCholesterol),
-            (AdaGoalConstants.Triglycerides,    latestLab?.Triglycerides),
-            (AdaGoalConstants.Creatinine,       latestLab?.Creatinine),
-            (AdaGoalConstants.Egfr,             egfr),
-            (AdaGoalConstants.Bun,              latestLab?.Bun),
-            (AdaGoalConstants.WaistCircumference, waist),
+            (AdaGoalConstants.HbA1c,            latestLab?.Hba1c,            labDate),
+            (AdaGoalConstants.FastingGlucose,   fastingGlucose,             fastingDate),
+            (AdaGoalConstants.SystolicBp,       sbp,                        sbpDate),
+            (AdaGoalConstants.DiastolicBp,      dbp,                        dbpDate),
+            (AdaGoalConstants.HeartRate,        heartRate,                  heartRateDate),
+            (ldlParameterId,                    latestLab?.Ldl,             labDate),
+            (AdaGoalConstants.Bmi,              bmi,                        weightDate),
+            (AdaGoalConstants.Hdl,              latestLab?.Hdl,             labDate),
+            (AdaGoalConstants.TotalCholesterol, latestLab?.TotalCholesterol, labDate),
+            (AdaGoalConstants.Triglycerides,    latestLab?.Triglycerides,   labDate),
+            (AdaGoalConstants.Creatinine,       latestLab?.Creatinine,      labDate),
+            (AdaGoalConstants.Egfr,             egfr,                       labDate),
+            (AdaGoalConstants.Bun,              latestLab?.Bun,             labDate),
+            (AdaGoalConstants.WaistCircumference, waist,                    waistDate),
         };
 
         var items = new List<GoalEvaluationItem>();
-        foreach (var (parameterId, value) in parameterValues)
+        foreach (var (parameterId, value, measuredOn) in parameterValues)
         {
-            var item = BuildItem(evaluationId, parameterId, value, patient, customGoalMap);
+            var item = BuildItem(evaluationId, parameterId, value, measuredOn, today, patient, customGoalMap);
             if (item is not null) items.Add(item);
         }
 
@@ -166,6 +177,8 @@ internal sealed class EvaluateGoalsCommandHandler
         Guid evaluationId,
         string parameterId,
         decimal? value,
+        DateOnly? measuredOn,
+        DateOnly today,
         Domain.Models.Patient patient,
         Dictionary<string, ClinicalGoal> customGoalMap)
     {
@@ -173,6 +186,18 @@ internal sealed class EvaluateGoalsCommandHandler
         var spec = AdaGoalConstants.ResolveSpec(parameterId, category, patient.Gender);
 
         var hasCustom = customGoalMap.TryGetValue(parameterId, out var custom);
+
+        // NoDataWindow: a value measured longer ago than the spec's freshness window is too stale
+        // to evaluate, so it surfaces as NoData "no-recent-data" rather than being classified
+        // against a boundary. Only the catalog spec carries a window (custom-only specs, e.g. BP in
+        // pregnancy, have none), and only present, dated values can be stale.
+        if (value is not null
+            && spec?.NoDataWindow is { } window
+            && measuredOn is { } measured
+            && today.DayNumber - measured.DayNumber > window.TotalDays)
+        {
+            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.NoRecentDataReason);
+        }
 
         // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c or LDL targets in
         // gestation) takes precedence over any doctor-set custom goal. This also governs LDL: its
