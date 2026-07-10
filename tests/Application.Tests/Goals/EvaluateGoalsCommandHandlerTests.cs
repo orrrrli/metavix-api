@@ -1194,4 +1194,592 @@ public class EvaluateGoalsCommandHandlerTests
         item.Status.Should().Be(GoalStatus.NoData);
         item.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
     }
+
+    // ====================================================================================
+    // #186: 16 RFs × 3 value scenarios grid.
+    //
+    // The grid exists to catch catalog threshold drift: if a single number in
+    // AdaGoalConstants.Catalog is edited, the matching theory fails with a name that points
+    // straight at the parameter and band. Behavior tests above (custom goals, ASCVD rerouting,
+    // pregnancy, NoDataWindow, postprandial window marker) stay where they are — the grid is
+    // only the threshold-drift canary.
+    //
+    // Each theory exercises the *default category* for the RF (SinDiabetes for hba1c /
+    // fasting / BP / LDL; Universal for HR / BMI / HDL / TC / TG / creatinine / eGFR / BUN /
+    // waist; ConDiabetes for postprandial 1h / 2h because they have no SinDiabetes row).
+    // Boundary choice: ParameterSpec.Classify treats the high edge as inclusive
+    // (>= OutOfRangeHigh → OutOfRange), so each value is picked strictly between two bands
+    // to keep the assertion unambiguous.
+    // ====================================================================================
+
+    // RF-001 · hba1c · SinDiabetes: InRange < 5.7, AtRisk 5.7–6.4, OutOfRange ≥ 6.5.
+    [Theory]
+    [InlineData(5.0, GoalStatus.InRange)]
+    [InlineData(6.0, GoalStatus.AtRisk)]
+    [InlineData(7.0, GoalStatus.OutOfRange)]
+    public async Task Handle_HbA1c_SinDiabetes_ClassifiesByCatalogBand(decimal hba1c, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hba1c = hba1c,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-002 · fasting_glucose · SinDiabetes: InRange 70–99, AtRisk 100–125, OutOfRange ≥ 126.
+    [Theory]
+    [InlineData(90, GoalStatus.InRange)]
+    [InlineData(110, GoalStatus.AtRisk)]
+    [InlineData(130, GoalStatus.OutOfRange)]
+    public async Task Handle_FastingGlucose_SinDiabetes_ClassifiesByCatalogBand(int value, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            GlucoseReadings = [new GlucoseReading { ReadingType = GlucoseReadingType.Fasting, ValueMgDl = value }],
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.FastingGlucose)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-003 · postprandial_1h · ConDiabetes: InRange < 180, AtRisk 180–250, OutOfRange ≥ 250.
+    // The existing postprandial window-marker theory covers EmbarazadaDMG / ConDiabetes × 1h/2h
+    // in depth; this row is the band-drift canary for ConDiabetes 1h only.
+    [Theory]
+    [InlineData(150, GoalStatus.InRange)]
+    [InlineData(200, GoalStatus.AtRisk)]
+    [InlineData(260, GoalStatus.OutOfRange)]
+    public async Task Handle_Postprandial1h_ConDiabetes_ClassifiesByCatalogBand(int value, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, DiabetesType = DiabetesType.Type2 };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            GlucoseReadings = [new GlucoseReading
+            {
+                ReadingType = GlucoseReadingType.PostBreakfast,
+                ValueMgDl = value,
+                PostprandialWindow = PostprandialWindow.OneHour,
+            }],
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Postprandial1h)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-004 · postprandial_2h · ConDiabetes: same bands as 1h (180/250) in the catalog.
+    [Theory]
+    [InlineData(150, GoalStatus.InRange)]
+    [InlineData(200, GoalStatus.AtRisk)]
+    [InlineData(260, GoalStatus.OutOfRange)]
+    public async Task Handle_Postprandial2h_ConDiabetes_ClassifiesByCatalogBand(int value, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, DiabetesType = DiabetesType.Type2 };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            GlucoseReadings = [new GlucoseReading
+            {
+                ReadingType = GlucoseReadingType.PostBreakfast,
+                ValueMgDl = value,
+                PostprandialWindow = PostprandialWindow.TwoHour,
+            }],
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Postprandial2h)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-005a · systolic_bp · SinDiabetes: InRange < 120, AtRisk 120–129, OutOfRange ≥ 130.
+    [Theory]
+    [InlineData(110, GoalStatus.InRange)]
+    [InlineData(125, GoalStatus.AtRisk)]
+    [InlineData(135, GoalStatus.OutOfRange)]
+    public async Task Handle_SystolicBp_SinDiabetes_ClassifiesByCatalogBand(int value, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            SystolicPressure = value,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-005b · diastolic_bp · SinDiabetes: InRange < 80, AtRisk 80–89, OutOfRange ≥ 90.
+    [Theory]
+    [InlineData(70, GoalStatus.InRange)]
+    [InlineData(85, GoalStatus.AtRisk)]
+    [InlineData(95, GoalStatus.OutOfRange)]
+    public async Task Handle_DiastolicBp_SinDiabetes_ClassifiesByCatalogBand(int value, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            DiastolicPressure = value,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.DiastolicBp)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-006 · heart_rate · Universal: InRange 60–100, AtRisk 50–59 or 101–110, OutOfRange < 50 or > 110.
+    [Theory]
+    [InlineData(70, GoalStatus.InRange)]
+    [InlineData(105, GoalStatus.AtRisk)]
+    [InlineData(115, GoalStatus.OutOfRange)]
+    public async Task Handle_HeartRate_Universal_ClassifiesByCatalogBand(int value, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            HeartRate = value,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HeartRate)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-007 · bmi · Universal: InRange 18.5–24.9, AtRisk 25.0–29.9, OutOfRange ≥ 30.
+    // Weight is back-computed from BMI × height² (height fixed at 170 cm) so the
+    // (weight → bmi) computation in BuildItem yields exactly the target BMI value.
+    [Theory]
+    [InlineData(63.58, 22.0, GoalStatus.InRange)]   // 63.58 / 1.7² = 22.0
+    [InlineData(78.03, 27.0, GoalStatus.AtRisk)]    // 78.03 / 1.7² = 27.0
+    [InlineData(92.48, 32.0, GoalStatus.OutOfRange)] // 92.48 / 1.7² = 32.0
+    public async Task Handle_Bmi_Universal_ClassifiesByCatalogBand(decimal weightKg, decimal expectedBmi, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            WeightKg = weightKg,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        var item = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Bmi);
+        item.ValueUsed.Should().Be(expectedBmi);
+        item.Status.Should().Be(expected);
+    }
+
+    // RF-008 · ldl_primary · SinDiabetes: InRange < 130, AtRisk 130–159, OutOfRange ≥ 160.
+    [Theory]
+    [InlineData(100, GoalStatus.InRange)]
+    [InlineData(145, GoalStatus.AtRisk)]
+    [InlineData(170, GoalStatus.OutOfRange)]
+    public async Task Handle_LdlPrimary_SinDiabetes_ClassifiesByCatalogBand(decimal ldl, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, HasAscvd = false };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = ldl,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlPrimary)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-009 · ldl_secondary · SinDiabetes: InRange < 100, AtRisk 100–129, OutOfRange ≥ 130.
+    // HasAscvd = true routes the LDL field to ldl_secondary (stricter thresholds).
+    [Theory]
+    [InlineData(80, GoalStatus.InRange)]
+    [InlineData(115, GoalStatus.AtRisk)]
+    [InlineData(140, GoalStatus.OutOfRange)]
+    public async Task Handle_LdlSecondary_SinDiabetes_ClassifiesByCatalogBand(decimal ldl, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, HasAscvd = true };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Ldl = ldl,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.LdlSecondary)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-010 · hdl · Universal Female: InRange ≥ 50, AtRisk 40–49, OutOfRange < 40.
+    // HDL is a low-only spec (no AtRiskHigh / OutOfRangeHigh), so the InRange/AtRisk/OutOfRange
+    // band order is reversed from the rest of the grid: a *low* value is worse.
+    [Theory]
+    [InlineData(60, GoalStatus.InRange)]
+    [InlineData(45, GoalStatus.AtRisk)]
+    [InlineData(35, GoalStatus.OutOfRange)]
+    public async Task Handle_Hdl_Universal_ClassifiesByCatalogBand(decimal hdl, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, Gender = Gender.Female };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hdl = hdl,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Hdl)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-011 · total_cholesterol · Universal: InRange < 200, AtRisk 200–239, OutOfRange ≥ 240.
+    [Theory]
+    [InlineData(180, GoalStatus.InRange)]
+    [InlineData(220, GoalStatus.AtRisk)]
+    [InlineData(250, GoalStatus.OutOfRange)]
+    public async Task Handle_TotalCholesterol_Universal_ClassifiesByCatalogBand(decimal total, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            TotalCholesterol = total,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.TotalCholesterol)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-012 · triglycerides · Universal: InRange < 150, AtRisk 150–499, OutOfRange ≥ 500
+    // (pancreatitis threshold per ADA Sec. 10).
+    [Theory]
+    [InlineData(130, GoalStatus.InRange)]
+    [InlineData(300, GoalStatus.AtRisk)]
+    [InlineData(550, GoalStatus.OutOfRange)]
+    public async Task Handle_Triglycerides_Universal_ClassifiesByCatalogBand(decimal tg, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Triglycerides = tg,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Triglycerides)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-013 · creatinine · Universal Female: InRange 0.5–1.1, AtRisk 1.2–1.4, OutOfRange > 1.4.
+    [Theory]
+    [InlineData(1.0, GoalStatus.InRange)]
+    [InlineData(1.3, GoalStatus.AtRisk)]
+    [InlineData(1.5, GoalStatus.OutOfRange)]
+    public async Task Handle_Creatinine_Universal_ClassifiesByCatalogBand(decimal creatinine, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, Gender = Gender.Female };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Creatinine = creatinine,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Creatinine)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-014 · egfr · Universal: InRange ≥ 60, AtRisk 30–59, OutOfRange < 30.
+    // eGFR is *derived* via IEgfrCalculator from creatinine + age + gender, not measured
+    // directly. Override the default calculator stub (which returns a healthy 95m whenever
+    // creatinine is present) so each band gets the right value, mirroring the existing
+    // Handle_WhenCreatininePresent_EvaluatesEgfrFromCalculatorOutput test.
+    [Theory]
+    [InlineData(90, GoalStatus.InRange)]
+    [InlineData(45, GoalStatus.AtRisk)]
+    [InlineData(20, GoalStatus.OutOfRange)]
+    public async Task Handle_Egfr_Universal_ClassifiesByCatalogBand(decimal egfrValue, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            Gender = Gender.Male,
+            DateOfBirth = new DateOnly(1976, 1, 1),
+        };
+
+        // Creatinine is set so the handler feeds the calculator; the calculator stub is
+        // overridden per case to return the band-specific eGFR.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Creatinine = 1.0m,
+        };
+
+        _egfrCalculator
+            .Calculate(1.0m, Arg.Any<int>(), Gender.Male)
+            .Returns(egfrValue);
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Egfr)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-015 · bun · Universal: InRange 7–20, AtRisk 21–40, OutOfRange < 7 or > 40.
+    [Theory]
+    [InlineData(15, GoalStatus.InRange)]
+    [InlineData(30, GoalStatus.AtRisk)]
+    [InlineData(45, GoalStatus.OutOfRange)]
+    public async Task Handle_Bun_Universal_ClassifiesByCatalogBand(decimal bun, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Bun = bun,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Bun)
+            .Status.Should().Be(expected);
+    }
+
+    // RF-016 · waist_circumference · Universal Female: InRange < 80, AtRisk 80–88, OutOfRange > 88.
+    [Theory]
+    [InlineData(75, GoalStatus.InRange)]
+    [InlineData(85, GoalStatus.AtRisk)]
+    [InlineData(90, GoalStatus.OutOfRange)]
+    public async Task Handle_WaistCircumference_Universal_ClassifiesByCatalogBand(int value, GoalStatus expected)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, Gender = Gender.Female };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            WaistCm = value,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.WaistCircumference)
+            .Status.Should().Be(expected);
+    }
 }
