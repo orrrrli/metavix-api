@@ -63,8 +63,12 @@ internal sealed class EvaluateGoalsCommandHandler
         var customGoals = await _clinicalGoalRepository.GetByPatientIdAsync(request.PatientId);
         var customGoalMap = customGoals.ToDictionary(g => g.ParameterId, g => g);
 
-        // Extract values from records
+        // Extract values from records. Records arrive newest-first, so the first record carrying a
+        // given vital is the most recent reading for it (a vital may be absent on some days).
         decimal? sbp = allRecords.FirstOrDefault(r => r.SystolicPressure.HasValue)?.SystolicPressure;
+        decimal? dbp = allRecords.FirstOrDefault(r => r.DiastolicPressure.HasValue)?.DiastolicPressure;
+        decimal? heartRate = allRecords.FirstOrDefault(r => r.HeartRate.HasValue)?.HeartRate;
+        decimal? waist = allRecords.FirstOrDefault(r => r.WaistCm.HasValue)?.WaistCm;
         decimal? weight = allRecords.FirstOrDefault(r => r.WeightKg.HasValue)?.WeightKg;
 
         // T5: most recent fasting glucose across all records
@@ -96,12 +100,19 @@ internal sealed class EvaluateGoalsCommandHandler
         // updating the set (and adding a row to the catalog if it's a new parameter).
         var parameterValues = new (string ParameterId, decimal? Value)[]
         {
-            (AdaGoalConstants.HbA1c,         latestLab?.Hba1c),
-            (AdaGoalConstants.FastingGlucose, fastingGlucose),
-            (AdaGoalConstants.SystolicBp,     sbp),
-            (ldlParameterId,                  latestLab?.Ldl),
-            (AdaGoalConstants.Bmi,            bmi),
-            (AdaGoalConstants.Hdl,            latestLab?.Hdl),
+            (AdaGoalConstants.HbA1c,            latestLab?.Hba1c),
+            (AdaGoalConstants.FastingGlucose,   fastingGlucose),
+            (AdaGoalConstants.SystolicBp,       sbp),
+            (AdaGoalConstants.DiastolicBp,      dbp),
+            (AdaGoalConstants.HeartRate,        heartRate),
+            (ldlParameterId,                    latestLab?.Ldl),
+            (AdaGoalConstants.Bmi,              bmi),
+            (AdaGoalConstants.Hdl,              latestLab?.Hdl),
+            (AdaGoalConstants.TotalCholesterol, latestLab?.TotalCholesterol),
+            (AdaGoalConstants.Triglycerides,    latestLab?.Triglycerides),
+            (AdaGoalConstants.Creatinine,       latestLab?.Creatinine),
+            (AdaGoalConstants.Bun,              latestLab?.Bun),
+            (AdaGoalConstants.WaistCircumference, waist),
         };
 
         var items = new List<GoalEvaluationItem>();

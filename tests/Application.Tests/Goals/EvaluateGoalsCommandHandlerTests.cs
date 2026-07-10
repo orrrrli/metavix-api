@@ -36,20 +36,24 @@ public class EvaluateGoalsCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+        // Female so the gender-specific specs (hdl, creatinine, waist_circumference) resolve.
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, Gender = Gender.Female };
 
-        // Weight 60 kg, height 170 cm → BMI = 60 / 1.7² = 20.76 → InRange (18.5 ≤ 20.76 < 25)
-        // Thresholds now come from AdaGoalConstants.Catalog per patient category (SinDiabetes here).
+        // Weight 60 kg, height 170 cm → BMI = 60 / 1.7² = 20.76 → InRange (18.5 ≤ 20.76 < 25).
+        // Every value below sits inside the SinDiabetes/Universal/Female InRange band for its spec.
         var dailyRecord = new DailyRecord
         {
             Id = Guid.NewGuid(),
             PatientId = patientId,
             RecordDate = new DateOnly(2026, 6, 21),
-            SystolicPressure = 110,   // SinDiabetes spec: < 120 → InRange
-            WeightKg = 60m,            // BMI = 20.76 → InRange
+            SystolicPressure = 110,   // SinDiabetes: < 120 → InRange
+            DiastolicPressure = 70,   // SinDiabetes: < 80 → InRange
+            HeartRate = 70,           // Universal: 60 ≤ 70 < 101 → InRange
+            WeightKg = 60m,           // BMI = 20.76 → InRange
+            WaistCm = 70,             // Female: < 80 → InRange
             GlucoseReadings =
             [
-                new GlucoseReading { ReadingType = GlucoseReadingType.Fasting, ValueMgDl = 90 } // SinDiabetes spec: 60 ≤ 90 < 100 → InRange
+                new GlucoseReading { ReadingType = GlucoseReadingType.Fasting, ValueMgDl = 90 } // SinDiabetes: 60 ≤ 90 < 100 → InRange
             ]
         };
 
@@ -57,8 +61,13 @@ public class EvaluateGoalsCommandHandlerTests
         {
             PatientId = patientId,
             SampleDate = new DateOnly(2026, 6, 21),
-            Hba1c = 5.0m,   // SinDiabetes spec: < 5.7 → InRange
-            Ldl = 80m,       // ldl_primary SinDiabetes spec: < 130 → InRange
+            Hba1c = 5.0m,             // SinDiabetes: < 5.7 → InRange
+            Ldl = 80m,                // ldl_primary SinDiabetes: < 130 → InRange
+            Hdl = 60m,                // Female: ≥ 50 → InRange
+            TotalCholesterol = 180m,  // Universal: < 200 → InRange
+            Triglycerides = 100m,     // Universal: < 150 → InRange
+            Creatinine = 1.0m,        // Female: 0.5 ≤ 1.0 < 1.2 → InRange
+            Bun = 15m,                // Universal: 7 ≤ 15 < 21 → InRange
         };
 
         SetupAuth(userId, patientId, patient);
@@ -72,10 +81,62 @@ public class EvaluateGoalsCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeFalse();
-        // 5 parameters + hdl. hdl is gender-specific and the test patient has no gender, so
-        // the lookup returns null and hdl is omitted from the items list.
-        result.Value.Items.Should().HaveCount(5);
+        // All 13 evaluated parameters (EvaluatedParameterIds) are present and in range. eGFR and
+        // postprandial aren't wired into evaluation yet, so they're not expected here.
+        result.Value.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count);
         result.Value.Items.Should().AllSatisfy(i => i.Status.Should().Be(GoalStatus.InRange));
+    }
+
+    // Locks in the wiring of the newly-evaluated parameters: each is read from the right
+    // record/lab field and classified against its catalog spec, not silently dropped.
+    [Fact]
+    public async Task Handle_WhenNewlyWiredParametersOutOfRange_ClassifiesEachPerCatalog()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, Gender = Gender.Female };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            DiastolicPressure = 95,   // SinDiabetes: ≥ 90 → OutOfRange
+            HeartRate = 120,          // Universal: ≥ 110 → OutOfRange
+            WaistCm = 85,             // Female: 80 ≤ 85 < 88 → AtRisk
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            TotalCholesterol = 260m,  // Universal: ≥ 240 → OutOfRange
+            Triglycerides = 200m,     // Universal: 150 ≤ 200 < 500 → AtRisk
+            Creatinine = 1.5m,        // Female: ≥ 1.4 → OutOfRange
+            Bun = 45m,                // Universal: ≥ 40 → OutOfRange
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        GoalStatus StatusOf(string id) => result.Value.Items.First(i => i.ParameterId == id).Status;
+        StatusOf(AdaGoalConstants.DiastolicBp).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.HeartRate).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.WaistCircumference).Should().Be(GoalStatus.AtRisk);
+        StatusOf(AdaGoalConstants.TotalCholesterol).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.Triglycerides).Should().Be(GoalStatus.AtRisk);
+        StatusOf(AdaGoalConstants.Creatinine).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.Bun).Should().Be(GoalStatus.OutOfRange);
     }
 
     // T12: one parameter missing → Status=NoData for that item

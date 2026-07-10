@@ -8,18 +8,31 @@ public static class AdaGoalConstants
     public const string HbA1c = "hba1c";
     public const string FastingGlucose = "fasting_glucose";
     public const string SystolicBp = "systolic_bp";
+    public const string DiastolicBp = "diastolic_bp";
+    public const string HeartRate = "heart_rate";
     public const string LdlPrimary = "ldl_primary";
     public const string LdlSecondary = "ldl_secondary";
     public const string Bmi = "bmi";
     public const string Hdl = "hdl";
+    public const string TotalCholesterol = "total_cholesterol";
+    public const string Triglycerides = "triglycerides";
+    public const string Creatinine = "creatinine";
+    public const string Bun = "bun";
+    public const string WaistCircumference = "waist_circumference";
 
     // Parameters EvaluateGoalsCommandHandler actually evaluates per evaluation pass. Smaller than
     // KnownParameterIds (which lists every catalog id a doctor may set a custom goal for). The
     // AdaGoalConstantsTests drift guard asserts the two stay in sync with the handler's
     // parameterValues array — adding a parameter to the catalog without wiring it through
-    // evaluation (or vice versa) becomes a build failure.
+    // evaluation (or vice versa) becomes a build failure. eGFR and postprandial_1h/2h are the
+    // remaining catalog rows deliberately absent here: eGFR needs the CKD-EPI calculator and
+    // postprandial needs meal-window detection, both tracked as separate work.
     public static readonly IReadOnlySet<string> EvaluatedParameterIds =
-        new HashSet<string> { HbA1c, FastingGlucose, SystolicBp, LdlPrimary, Bmi, Hdl };
+        new HashSet<string>
+        {
+            HbA1c, FastingGlucose, SystolicBp, DiastolicBp, HeartRate, LdlPrimary, Bmi, Hdl,
+            TotalCholesterol, Triglycerides, Creatinine, Bun, WaistCircumference,
+        };
 
     // NoDataReason values for GoalEvaluationItem.Reason. Shared as constants so a rename can't
     // silently desync production code from the tests asserting on it.
