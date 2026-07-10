@@ -12,4 +12,6 @@ public sealed record PatientProfileResult(
     bool IsPregnant,
     string DiabetesType,
     string MedicalRecordNumber,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    DateOnly? PregnancyStartDate,
+    DateOnly? PregnancyDueDate);
