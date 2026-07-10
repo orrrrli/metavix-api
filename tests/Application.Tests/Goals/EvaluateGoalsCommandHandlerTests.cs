@@ -13,12 +13,20 @@ public class EvaluateGoalsCommandHandlerTests
     private readonly IClinicalGoalRepository _clinicalGoalRepository = Substitute.For<IClinicalGoalRepository>();
     private readonly IGoalEvaluationRepository _goalEvaluationRepository = Substitute.For<IGoalEvaluationRepository>();
     private readonly ICurrentUserService _currentUser = Substitute.For<ICurrentUserService>();
+    private readonly IEgfrCalculator _egfrCalculator = Substitute.For<IEgfrCalculator>();
     private readonly FakeTimeProvider _timeProvider = new();
 
     private readonly EvaluateGoalsCommandHandler _handler;
 
     public EvaluateGoalsCommandHandlerTests()
     {
+        // Keep the handler tests focused on wiring/classification, not the CKD-EPI math (covered
+        // in EgfrCalculatorTests): return an in-range eGFR whenever creatinine is present, null
+        // otherwise, mirroring the real calculator's null-on-missing-input contract.
+        _egfrCalculator
+            .Calculate(Arg.Any<decimal?>(), Arg.Any<int>(), Arg.Any<Gender?>())
+            .Returns(ci => ci.ArgAt<decimal?>(0) is null ? (decimal?)null : 95m);
+
         _handler = new EvaluateGoalsCommandHandler(
             _patientRepository,
             _labResultRepository,
@@ -26,6 +34,7 @@ public class EvaluateGoalsCommandHandlerTests
             _clinicalGoalRepository,
             _goalEvaluationRepository,
             _currentUser,
+            _egfrCalculator,
             _timeProvider);
     }
 
@@ -137,6 +146,53 @@ public class EvaluateGoalsCommandHandlerTests
         StatusOf(AdaGoalConstants.Triglycerides).Should().Be(GoalStatus.AtRisk);
         StatusOf(AdaGoalConstants.Creatinine).Should().Be(GoalStatus.OutOfRange);
         StatusOf(AdaGoalConstants.Bun).Should().Be(GoalStatus.OutOfRange);
+    }
+
+    // eGFR is derived from creatinine via IEgfrCalculator: the handler must feed the latest
+    // creatinine to the calculator and classify its output against the egfr catalog spec
+    // (≥60 InRange, 30–60 AtRisk, <30 OutOfRange).
+    [Fact]
+    public async Task Handle_WhenCreatininePresent_EvaluatesEgfrFromCalculatorOutput()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            Gender = Gender.Male,
+            DateOfBirth = new DateOnly(1956, 1, 1),
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Creatinine = 1.8m,
+        };
+
+        // Override the default fake: this creatinine yields a G3b eGFR → AtRisk band (30–60).
+        _egfrCalculator
+            .Calculate(1.8m, Arg.Any<int>(), Gender.Male)
+            .Returns(42m);
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var egfrItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Egfr);
+        egfrItem.ValueUsed.Should().Be(42m);
+        egfrItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
     // T12: one parameter missing → Status=NoData for that item

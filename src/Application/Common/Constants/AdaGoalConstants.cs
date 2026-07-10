@@ -17,6 +17,7 @@ public static class AdaGoalConstants
     public const string TotalCholesterol = "total_cholesterol";
     public const string Triglycerides = "triglycerides";
     public const string Creatinine = "creatinine";
+    public const string Egfr = "egfr";
     public const string Bun = "bun";
     public const string WaistCircumference = "waist_circumference";
 
@@ -24,14 +25,13 @@ public static class AdaGoalConstants
     // KnownParameterIds (which lists every catalog id a doctor may set a custom goal for). The
     // AdaGoalConstantsTests drift guard asserts the two stay in sync with the handler's
     // parameterValues array — adding a parameter to the catalog without wiring it through
-    // evaluation (or vice versa) becomes a build failure. eGFR and postprandial_1h/2h are the
-    // remaining catalog rows deliberately absent here: eGFR needs the CKD-EPI calculator and
-    // postprandial needs meal-window detection, both tracked as separate work.
+    // evaluation (or vice versa) becomes a build failure. postprandial_1h/2h are the remaining
+    // catalog rows deliberately absent here: they need meal-window detection, tracked separately.
     public static readonly IReadOnlySet<string> EvaluatedParameterIds =
         new HashSet<string>
         {
             HbA1c, FastingGlucose, SystolicBp, DiastolicBp, HeartRate, LdlPrimary, Bmi, Hdl,
-            TotalCholesterol, Triglycerides, Creatinine, Bun, WaistCircumference,
+            TotalCholesterol, Triglycerides, Creatinine, Egfr, Bun, WaistCircumference,
         };
 
     // NoDataReason values for GoalEvaluationItem.Reason. Shared as constants so a rename can't

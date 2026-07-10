@@ -18,6 +18,7 @@ internal sealed class EvaluateGoalsCommandHandler
     private readonly IClinicalGoalRepository _clinicalGoalRepository;
     private readonly IGoalEvaluationRepository _goalEvaluationRepository;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEgfrCalculator _egfrCalculator;
     private readonly TimeProvider _timeProvider;
 
     public EvaluateGoalsCommandHandler(
@@ -27,6 +28,7 @@ internal sealed class EvaluateGoalsCommandHandler
         IClinicalGoalRepository clinicalGoalRepository,
         IGoalEvaluationRepository goalEvaluationRepository,
         ICurrentUserService currentUser,
+        IEgfrCalculator egfrCalculator,
         TimeProvider timeProvider)
     {
         _patientRepository = patientRepository;
@@ -35,6 +37,7 @@ internal sealed class EvaluateGoalsCommandHandler
         _clinicalGoalRepository = clinicalGoalRepository;
         _goalEvaluationRepository = goalEvaluationRepository;
         _currentUser = currentUser;
+        _egfrCalculator = egfrCalculator;
         _timeProvider = timeProvider;
     }
 
@@ -95,6 +98,11 @@ internal sealed class EvaluateGoalsCommandHandler
         // BuildItem stays parameter-agnostic — it only ever sees the final catalog id.
         var ldlParameterId = patient.HasAscvd ? AdaGoalConstants.LdlSecondary : AdaGoalConstants.LdlPrimary;
 
+        // eGFR is derived, not measured: CKD-EPI 2021 from the latest creatinine + age + sex.
+        // Returns null (→ NoData) when creatinine or gender is missing.
+        var ageYears = AgeInYears(patient.DateOfBirth, DateOnly.FromDateTime(now));
+        decimal? egfr = _egfrCalculator.Calculate(latestLab?.Creatinine, ageYears, patient.Gender);
+
         // Source of truth lives in AdaGoalConstants.EvaluatedParameterIds — the AdaGoalConstantsTests
         // drift guard fails the build if this list and the catalog diverge, so don't edit it without
         // updating the set (and adding a row to the catalog if it's a new parameter).
@@ -111,6 +119,7 @@ internal sealed class EvaluateGoalsCommandHandler
             (AdaGoalConstants.TotalCholesterol, latestLab?.TotalCholesterol),
             (AdaGoalConstants.Triglycerides,    latestLab?.Triglycerides),
             (AdaGoalConstants.Creatinine,       latestLab?.Creatinine),
+            (AdaGoalConstants.Egfr,             egfr),
             (AdaGoalConstants.Bun,              latestLab?.Bun),
             (AdaGoalConstants.WaistCircumference, waist),
         };
@@ -138,6 +147,16 @@ internal sealed class EvaluateGoalsCommandHandler
             now,
             items.Select(i => new GoalEvaluationItemResult(
                 i.ParameterId, i.ValueUsed, i.ThresholdUsed, i.Status, i.Reason)).ToList());
+    }
+
+    // Whole years elapsed from birth to the evaluation date, subtracting one if the birthday
+    // hasn't occurred yet this year.
+    private static int AgeInYears(DateOnly dateOfBirth, DateOnly onDate)
+    {
+        var age = onDate.Year - dateOfBirth.Year;
+        if (dateOfBirth > onDate.AddYears(-age))
+            age--;
+        return age;
     }
 
     // parameterId is always the final catalog id (e.g. "ldl_primary"/"ldl_secondary", already
