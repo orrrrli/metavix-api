@@ -53,7 +53,8 @@ internal sealed class AddDailyRecordCommandHandler
                 ReadingType = g.ReadingType,
                 ValueMgDl = g.ValueMgDl,
                 Time = g.Time,
-                Foods = g.Foods
+                Foods = g.Foods,
+                PostprandialWindow = g.PostprandialWindow
             }).ToList() ?? [];
 
         var record = new Domain.Models.DailyRecord
@@ -87,6 +88,6 @@ internal sealed class AddDailyRecordCommandHandler
             record.Notes,
             record.CreatedAt,
             glucoseReadings.Select(g => new GlucoseReadingResult(
-                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods)).ToList());
+                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods, g.PostprandialWindow)).ToList());
     }
 }

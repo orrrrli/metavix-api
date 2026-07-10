@@ -44,7 +44,7 @@ internal sealed class GetDailyRecordByIdQueryHandler
 
         var glucoseReadings = record.GlucoseReadings
             .Select(g => new GlucoseReadingResult(
-                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods)).ToList();
+                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods, g.PostprandialWindow)).ToList();
 
         return new DailyRecordResult(
             record.Id,

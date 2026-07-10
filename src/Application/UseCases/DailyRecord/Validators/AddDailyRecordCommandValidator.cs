@@ -1,4 +1,5 @@
 using Application.UseCases.DailyRecord.Commands;
+using Domain.Enums;
 using FluentValidation;
 
 namespace Application.UseCases.DailyRecord.Validators;
@@ -21,6 +22,12 @@ internal sealed class AddDailyRecordCommandValidator : AbstractValidator<AddDail
                 g.RuleFor(r => r.ValueMgDl)
                     .InclusiveBetween(20, 600)
                     .WithMessage("El valor de glucosa debe estar entre 20 y 600 mg/dL");
+
+                g.RuleFor(r => r.PostprandialWindow)
+                    .Must((reading, _) => reading.PostprandialWindow is null
+                        || reading.ReadingType is GlucoseReadingType.PostBreakfast
+                            or GlucoseReadingType.PostLunch or GlucoseReadingType.PostDinner)
+                    .WithMessage("El marcador 1h/2h solo aplica a lecturas post-comida");
             });
     }
 }
