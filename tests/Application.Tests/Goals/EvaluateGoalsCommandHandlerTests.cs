@@ -13,12 +13,20 @@ public class EvaluateGoalsCommandHandlerTests
     private readonly IClinicalGoalRepository _clinicalGoalRepository = Substitute.For<IClinicalGoalRepository>();
     private readonly IGoalEvaluationRepository _goalEvaluationRepository = Substitute.For<IGoalEvaluationRepository>();
     private readonly ICurrentUserService _currentUser = Substitute.For<ICurrentUserService>();
+    private readonly IEgfrCalculator _egfrCalculator = Substitute.For<IEgfrCalculator>();
     private readonly FakeTimeProvider _timeProvider = new();
 
     private readonly EvaluateGoalsCommandHandler _handler;
 
     public EvaluateGoalsCommandHandlerTests()
     {
+        // Keep the handler tests focused on wiring/classification, not the CKD-EPI math (covered
+        // in EgfrCalculatorTests): return an in-range eGFR whenever creatinine is present, null
+        // otherwise, mirroring the real calculator's null-on-missing-input contract.
+        _egfrCalculator
+            .Calculate(Arg.Any<decimal?>(), Arg.Any<int>(), Arg.Any<Gender?>())
+            .Returns(ci => ci.ArgAt<decimal?>(0) is null ? (decimal?)null : 95m);
+
         _handler = new EvaluateGoalsCommandHandler(
             _patientRepository,
             _labResultRepository,
@@ -26,6 +34,7 @@ public class EvaluateGoalsCommandHandlerTests
             _clinicalGoalRepository,
             _goalEvaluationRepository,
             _currentUser,
+            _egfrCalculator,
             _timeProvider);
     }
 
@@ -36,20 +45,24 @@ public class EvaluateGoalsCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+        // Female so the gender-specific specs (hdl, creatinine, waist_circumference) resolve.
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, Gender = Gender.Female };
 
-        // Weight 60 kg, height 170 cm → BMI = 60 / 1.7² = 20.76 → InRange (18.5 ≤ 20.76 < 25)
-        // Thresholds now come from AdaGoalConstants.Catalog per patient category (SinDiabetes here).
+        // Weight 60 kg, height 170 cm → BMI = 60 / 1.7² = 20.76 → InRange (18.5 ≤ 20.76 < 25).
+        // Every value below sits inside the SinDiabetes/Universal/Female InRange band for its spec.
         var dailyRecord = new DailyRecord
         {
             Id = Guid.NewGuid(),
             PatientId = patientId,
             RecordDate = new DateOnly(2026, 6, 21),
-            SystolicPressure = 110,   // SinDiabetes spec: < 120 → InRange
-            WeightKg = 60m,            // BMI = 20.76 → InRange
+            SystolicPressure = 110,   // SinDiabetes: < 120 → InRange
+            DiastolicPressure = 70,   // SinDiabetes: < 80 → InRange
+            HeartRate = 70,           // Universal: 60 ≤ 70 < 101 → InRange
+            WeightKg = 60m,           // BMI = 20.76 → InRange
+            WaistCm = 70,             // Female: < 80 → InRange
             GlucoseReadings =
             [
-                new GlucoseReading { ReadingType = GlucoseReadingType.Fasting, ValueMgDl = 90 } // SinDiabetes spec: 60 ≤ 90 < 100 → InRange
+                new GlucoseReading { ReadingType = GlucoseReadingType.Fasting, ValueMgDl = 90 } // SinDiabetes: 60 ≤ 90 < 100 → InRange
             ]
         };
 
@@ -57,8 +70,13 @@ public class EvaluateGoalsCommandHandlerTests
         {
             PatientId = patientId,
             SampleDate = new DateOnly(2026, 6, 21),
-            Hba1c = 5.0m,   // SinDiabetes spec: < 5.7 → InRange
-            Ldl = 80m,       // ldl_primary SinDiabetes spec: < 130 → InRange
+            Hba1c = 5.0m,             // SinDiabetes: < 5.7 → InRange
+            Ldl = 80m,                // ldl_primary SinDiabetes: < 130 → InRange
+            Hdl = 60m,                // Female: ≥ 50 → InRange
+            TotalCholesterol = 180m,  // Universal: < 200 → InRange
+            Triglycerides = 100m,     // Universal: < 150 → InRange
+            Creatinine = 1.0m,        // Female: 0.5 ≤ 1.0 < 1.2 → InRange
+            Bun = 15m,                // Universal: 7 ≤ 15 < 21 → InRange
         };
 
         SetupAuth(userId, patientId, patient);
@@ -72,10 +90,159 @@ public class EvaluateGoalsCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeFalse();
-        // 5 parameters + hdl. hdl is gender-specific and the test patient has no gender, so
-        // the lookup returns null and hdl is omitted from the items list.
-        result.Value.Items.Should().HaveCount(5);
+        // All 13 evaluated parameters (EvaluatedParameterIds) are present and in range. eGFR and
+        // postprandial aren't wired into evaluation yet, so they're not expected here.
+        result.Value.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count);
         result.Value.Items.Should().AllSatisfy(i => i.Status.Should().Be(GoalStatus.InRange));
+    }
+
+    // Locks in the wiring of the newly-evaluated parameters: each is read from the right
+    // record/lab field and classified against its catalog spec, not silently dropped.
+    [Fact]
+    public async Task Handle_WhenNewlyWiredParametersOutOfRange_ClassifiesEachPerCatalog()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m, Gender = Gender.Female };
+
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = new DateOnly(2026, 6, 21),
+            DiastolicPressure = 95,   // SinDiabetes: ≥ 90 → OutOfRange
+            HeartRate = 120,          // Universal: ≥ 110 → OutOfRange
+            WaistCm = 85,             // Female: 80 ≤ 85 < 88 → AtRisk
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            TotalCholesterol = 260m,  // Universal: ≥ 240 → OutOfRange
+            Triglycerides = 200m,     // Universal: 150 ≤ 200 < 500 → AtRisk
+            Creatinine = 1.5m,        // Female: ≥ 1.4 → OutOfRange
+            Bun = 45m,                // Universal: ≥ 40 → OutOfRange
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        GoalStatus StatusOf(string id) => result.Value.Items.First(i => i.ParameterId == id).Status;
+        StatusOf(AdaGoalConstants.DiastolicBp).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.HeartRate).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.WaistCircumference).Should().Be(GoalStatus.AtRisk);
+        StatusOf(AdaGoalConstants.TotalCholesterol).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.Triglycerides).Should().Be(GoalStatus.AtRisk);
+        StatusOf(AdaGoalConstants.Creatinine).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.Bun).Should().Be(GoalStatus.OutOfRange);
+    }
+
+    // eGFR is derived from creatinine via IEgfrCalculator: the handler must feed the latest
+    // creatinine to the calculator and classify its output against the egfr catalog spec
+    // (≥60 InRange, 30–60 AtRisk, <30 OutOfRange).
+    [Fact]
+    public async Task Handle_WhenCreatininePresent_EvaluatesEgfrFromCalculatorOutput()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            Gender = Gender.Male,
+            DateOfBirth = new DateOnly(1956, 1, 1),
+        };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Creatinine = 1.8m,
+        };
+
+        // Override the default fake: this creatinine yields a G3b eGFR → AtRisk band (30–60).
+        _egfrCalculator
+            .Calculate(1.8m, Arg.Any<int>(), Gender.Male)
+            .Returns(42m);
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var egfrItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Egfr);
+        egfrItem.ValueUsed.Should().Be(42m);
+        egfrItem.Status.Should().Be(GoalStatus.AtRisk);
+    }
+
+    // NoDataWindow: a present value measured longer ago than its spec's freshness window is too
+    // stale to classify and surfaces as NoData "no-recent-data" instead of a band status. BP's
+    // window is 7 days; HbA1c's is 90, so the same-dated HbA1c stays evaluable — proving the window
+    // is applied per parameter, not globally.
+    [Fact]
+    public async Task Handle_WhenValueOlderThanNoDataWindow_EmitsNoDataWithNoRecentDataReason()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        // EvaluationNow is 2026-06-22; this reading is 30 days old → outside BP's 7-day window.
+        var staleDate = new DateOnly(2026, 5, 23);
+        var dailyRecord = new DailyRecord
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            RecordDate = staleDate,
+            SystolicPressure = 110,   // in-range value, but stale
+        };
+
+        // HbA1c dated the same day is still inside its 90-day window → evaluated normally.
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = staleDate,
+            Hba1c = 5.0m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([dailyRecord]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+
+        var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
+        sbpItem.Status.Should().Be(GoalStatus.NoData);
+        sbpItem.Reason.Should().Be("no-recent-data");
+
+        var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
+        hba1cItem.Status.Should().Be(GoalStatus.InRange);
     }
 
     // T12: one parameter missing → Status=NoData for that item
@@ -273,12 +440,18 @@ public class EvaluateGoalsCommandHandlerTests
         ldlItem.Status.Should().Be(GoalStatus.InRange); // 180 < custom AtRiskHigh 200
     }
 
+    // Fixtures date their records/labs on 2026-06-21; evaluating one day later keeps every value
+    // comfortably inside its NoDataWindow (shortest is BP/heart-rate at 7 days), so the freshness
+    // guard doesn't turn otherwise-valid fixtures into NoData. A fixed clock also keeps the
+    // date-sensitive assertions deterministic.
+    private static readonly DateTimeOffset EvaluationNow = new(2026, 6, 22, 0, 0, 0, TimeSpan.Zero);
+
     private void SetupAuth(Guid userId, Guid patientId, Patient patient)
     {
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
-        _timeProvider.SetUtcNow(DateTimeOffset.UtcNow);
+        _timeProvider.SetUtcNow(EvaluationNow);
         _goalEvaluationRepository.AddAsync(Arg.Any<GoalEvaluation>()).Returns(Task.CompletedTask);
     }
 

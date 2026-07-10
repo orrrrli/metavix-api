@@ -8,23 +8,37 @@ public static class AdaGoalConstants
     public const string HbA1c = "hba1c";
     public const string FastingGlucose = "fasting_glucose";
     public const string SystolicBp = "systolic_bp";
+    public const string DiastolicBp = "diastolic_bp";
+    public const string HeartRate = "heart_rate";
     public const string LdlPrimary = "ldl_primary";
     public const string LdlSecondary = "ldl_secondary";
     public const string Bmi = "bmi";
     public const string Hdl = "hdl";
+    public const string TotalCholesterol = "total_cholesterol";
+    public const string Triglycerides = "triglycerides";
+    public const string Creatinine = "creatinine";
+    public const string Egfr = "egfr";
+    public const string Bun = "bun";
+    public const string WaistCircumference = "waist_circumference";
 
     // Parameters EvaluateGoalsCommandHandler actually evaluates per evaluation pass. Smaller than
     // KnownParameterIds (which lists every catalog id a doctor may set a custom goal for). The
     // AdaGoalConstantsTests drift guard asserts the two stay in sync with the handler's
     // parameterValues array — adding a parameter to the catalog without wiring it through
-    // evaluation (or vice versa) becomes a build failure.
+    // evaluation (or vice versa) becomes a build failure. postprandial_1h/2h are the remaining
+    // catalog rows deliberately absent here: they need meal-window detection, tracked separately.
     public static readonly IReadOnlySet<string> EvaluatedParameterIds =
-        new HashSet<string> { HbA1c, FastingGlucose, SystolicBp, LdlPrimary, Bmi, Hdl };
+        new HashSet<string>
+        {
+            HbA1c, FastingGlucose, SystolicBp, DiastolicBp, HeartRate, LdlPrimary, Bmi, Hdl,
+            TotalCholesterol, Triglycerides, Creatinine, Egfr, Bun, WaistCircumference,
+        };
 
     // NoDataReason values for GoalEvaluationItem.Reason. Shared as constants so a rename can't
     // silently desync production code from the tests asserting on it.
     public const string NotEvaluatedInPregnancyReason = "not-evaluated-in-pregnancy";
     public const string RequiresSpecialistEvaluationReason = "requires-specialist-evaluation";
+    public const string NoRecentDataReason = "no-recent-data";
 
     public static readonly IReadOnlyList<ParameterSpec> Catalog = new List<ParameterSpec>
     {
@@ -94,13 +108,14 @@ public static class AdaGoalConstants
 
     private static readonly HashSet<string> PostprandialParameterIds = new() { "postprandial_1h", "postprandial_2h" };
 
-    // KNOWN GAP (not yet reachable — postprandial_1h/2h aren't in EvaluateGoalsCommandHandler's
-    // evaluated parameter list yet): a pregnant patient with pre-existing Type1/Type2 diabetes
-    // resolves postprandial glucose to EmbarazadaDM (the `_` arm below), but the catalog only has
-    // postprandial rows for ConDiabetes and EmbarazadaDMG — no EmbarazadaDM row. Whoever wires up
-    // postprandial evaluation needs to either add an EmbarazadaDM row or decide these patients
-    // fall back to a doctor-set custom goal (blood pressure's pattern), and add test coverage —
-    // don't let it ship silently unreachable like blood pressure's low-side band once did.
+    // KNOWN GAP — tracked in issue #235 (postprandial is deferred: GlucoseReading can't yet tell a
+    // 1h from a 2h reading, see #183). postprandial_1h/2h aren't in EvaluatedParameterIds, so this
+    // arm isn't reachable for them today. When postprandial is wired: a pregnant patient with
+    // pre-existing Type1/Type2 diabetes resolves postprandial glucose to EmbarazadaDM (the `_` arm
+    // below), but the catalog only has postprandial rows for ConDiabetes and EmbarazadaDMG — no
+    // EmbarazadaDM row. That wiring must either add an EmbarazadaDM row or fall back to a doctor-set
+    // custom goal (blood pressure's pattern), with test coverage — don't let it ship silently
+    // unreachable like blood pressure's low-side band once did.
     public static PatientCategory ResolveCategory(bool isPregnant, DiabetesType diabetesType, string parameterId)
     {
         if (!isPregnant)
