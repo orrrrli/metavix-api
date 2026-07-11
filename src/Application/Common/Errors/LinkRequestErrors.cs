@@ -29,4 +29,8 @@ public static class LinkRequestErrors
     public static readonly Error MrnFormatInvalid = Error.Validation(
         code: "LinkRequest.MrnFormatInvalid",
         description: "El formato del MRN debe ser MRN-AAAA-NNNNNN.");
+
+    public static readonly Error MrnAutoAssignFailed = Error.Failure(
+        code: "LinkRequest.MrnAutoAssignFailed",
+        description: "No se pudo asignar un número de historia clínica automáticamente. Intente nuevamente.");
 }

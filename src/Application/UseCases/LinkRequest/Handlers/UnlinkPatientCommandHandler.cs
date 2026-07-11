@@ -59,11 +59,14 @@ internal sealed class UnlinkPatientCommandHandler
         linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
-        // 4. Remove the doctor from the patient
+        // 4. Remove the doctor from the patient and clear the MRN.
+        // The MRN belongs to the doctor-patient RELATION, not the patient,
+        // so once the relation ends the value is freed for re-use.
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null && patient.PrimaryDoctorId == linkRequest.DoctorId)
         {
             patient.PrimaryDoctorId = null;
+            patient.MedicalRecordNumber = null;
             patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
             await _patientRepository.UpdateAsync(patient);
         }

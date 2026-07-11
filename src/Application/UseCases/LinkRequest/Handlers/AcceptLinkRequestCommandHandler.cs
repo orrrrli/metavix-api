@@ -1,4 +1,5 @@
 using Application.Common.Errors;
+using Application.Common.Generators;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LinkRequest.Commands;
@@ -10,9 +11,12 @@ namespace Application.UseCases.LinkRequest.Handlers;
 internal sealed class AcceptLinkRequestCommandHandler
     : IRequestHandler<AcceptLinkRequestCommand, ErrorOr<LinkRequestResult>>
 {
+    private const int MaxAutoAssignAttempts = 5;
+
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly IDoctorRepository _doctorRepository;
+    private readonly IMrnCounterRepository _mrnCounterRepository;
     private readonly ICurrentUserService _currentUser;
     private readonly TimeProvider _timeProvider;
 
@@ -20,12 +24,14 @@ internal sealed class AcceptLinkRequestCommandHandler
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
+        IMrnCounterRepository mrnCounterRepository,
         ICurrentUserService currentUser,
         TimeProvider timeProvider)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
+        _mrnCounterRepository = mrnCounterRepository;
         _currentUser = currentUser;
         _timeProvider = timeProvider;
     }
@@ -54,23 +60,41 @@ internal sealed class AcceptLinkRequestCommandHandler
             return LinkRequestErrors.NotPending;
         }
 
-        // 3. Verify the doctor-supplied MRN is not already in use.
-        // The validator already enforced the format, so this is the second
-        // (uniqueness) check. The DB unique index is the third backstop.
-        if (await _patientRepository.ExistsByMedicalRecordNumberAsync(request.MedicalRecordNumber, cancellationToken))
-            return LinkRequestErrors.MrnAlreadyAssigned;
+        // 3. Resolve the MRN to assign:
+        //    - If the doctor provided one, validate uniqueness.
+        //    - Otherwise auto-assign the next available for the current year.
+        string? assignedMrn;
+        if (!string.IsNullOrEmpty(request.MedicalRecordNumber))
+        {
+            if (await _patientRepository.ExistsByMedicalRecordNumberAsync(
+                    request.MedicalRecordNumber, cancellationToken))
+                return LinkRequestErrors.MrnAlreadyAssigned;
+            assignedMrn = request.MedicalRecordNumber;
+        }
+        else
+        {
+            var autoMrn = await TryAutoAssignAsync(cancellationToken);
+            if (autoMrn is null)
+            {
+                // Exhausted retries — surface as a transient error so the
+                // client can retry. The unique index still guarantees no
+                // duplicates are ever persisted.
+                return LinkRequestErrors.MrnAutoAssignFailed;
+            }
+            assignedMrn = autoMrn;
+        }
 
-        // 5. Accept the request
+        // 4. Accept the request
         linkRequest.Status = RequestStatus.Accepted;
         linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
-        // 6. Link the patient to the doctor
+        // 5. Link the patient to the doctor and assign the MRN
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {
             patient.PrimaryDoctorId = linkRequest.DoctorId;
-            patient.MedicalRecordNumber = request.MedicalRecordNumber;
+            patient.MedicalRecordNumber = assignedMrn;
             patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
             await _patientRepository.UpdateAsync(patient);
         }
@@ -81,5 +105,24 @@ internal sealed class AcceptLinkRequestCommandHandler
             linkRequest.DoctorId,
             linkRequest.Status.ToString(),
             linkRequest.CreatedAt);
+    }
+
+    /// <summary>
+    /// Generates the next MRN candidate from the per-year counter and
+    /// re-checks uniqueness. The DB unique index is the ultimate
+    /// backstop — this loop just avoids the noisy 500 in the common case.
+    /// </summary>
+    private async Task<string?> TryAutoAssignAsync(CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        for (int attempt = 0; attempt < MaxAutoAssignAttempts; attempt++)
+        {
+            var max = await _mrnCounterRepository.GetMaxSequenceForYearAsync(now.Year, cancellationToken);
+            var candidate = MrnGenerator.Suggest(max, now);
+            if (!await _patientRepository.ExistsByMedicalRecordNumberAsync(candidate, cancellationToken))
+                return candidate;
+            // Loop — counter will return a higher value next time.
+        }
+        return null;
     }
 }
