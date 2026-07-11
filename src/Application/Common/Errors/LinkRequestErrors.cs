@@ -21,4 +21,12 @@ public static class LinkRequestErrors
     public static readonly Error NotAccepted = Error.Validation(
         code: "LinkRequest.NotAccepted",
         description: "Solo se puede revocar o desvincular una solicitud en estado Aceptada.");
+
+    public static readonly Error MrnAlreadyAssigned = Error.Conflict(
+        code: "LinkRequest.MrnAlreadyAssigned",
+        description: "El número de historia clínica ya está asignado a otro paciente.");
+
+    public static readonly Error MrnFormatInvalid = Error.Validation(
+        code: "LinkRequest.MrnFormatInvalid",
+        description: "El formato del MRN debe ser MRN-AAAA-NNNNNN.");
 }

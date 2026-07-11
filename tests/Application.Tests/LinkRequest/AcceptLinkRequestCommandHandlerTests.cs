@@ -36,6 +36,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
+        var mrn = "MRN-2026-000001";
         var now = DateTime.UtcNow;
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
@@ -47,18 +48,80 @@ public class AcceptLinkRequestCommandHandlerTests
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _doctorRepository.GetByIdAsync(doctorId).Returns(doctor);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
         _timeProvider.SetUtcNow(now);
 
         // Act
         ErrorOr<LinkRequestResult> result =
-            await _handler.Handle(new AcceptLinkRequestCommand(requestId), CancellationToken.None);
+            await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.RequestId.Should().Be(requestId);
         result.Value.Status.Should().Be("Accepted");
+        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
+            p.MedicalRecordNumber == mrn));
         await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
             r.Status == RequestStatus.Accepted));
+    }
+
+    [Fact]
+    public async Task Handle_WhenMrnAlreadyAssigned_ReturnsConflict()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var mrn = "MRN-2026-000042";
+
+        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(true);
+
+        // Act
+        ErrorOr<LinkRequestResult> result =
+            await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("LinkRequest.MrnAlreadyAssigned");
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPendingRequest_AssignsMrnToPatient()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var mrn = "MRN-2026-000123";
+        var now = DateTime.UtcNow;
+
+        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var patient = BuildPatient(patientId);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
+        _timeProvider.SetUtcNow(now);
+
+        // Act
+        ErrorOr<LinkRequestResult> result =
+            await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
+            p.MedicalRecordNumber == mrn && p.PrimaryDoctorId == doctorId));
     }
 
     private static PatientDoctorRequest BuildLinkRequest(Guid requestId, Guid patientId, Guid doctorId) => new()

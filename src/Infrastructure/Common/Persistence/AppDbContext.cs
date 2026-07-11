@@ -52,12 +52,24 @@ public class AppDbContext : DbContext
         });
 
         // User → Patient (one-to-one, required)
-        modelBuilder.Entity<Patient>()
-            .HasOne(p => p.User)
-            .WithOne(u => u.Patient)
-            .HasForeignKey<Patient>(p => p.UserId)
-            .IsRequired()
-            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Patient>(entity =>
+        {
+            entity.HasOne(p => p.User)
+                .WithOne(u => u.Patient)
+                .HasForeignKey<Patient>(p => p.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Patient.MedicalRecordNumber is nullable (empty string
+            // pre-acceptance is allowed) but, once assigned, must be globally
+            // unique. A partial unique index excludes the empty-string
+            // placeholder rows so they don't collide with each other. Column
+            // type stays as `text` (unbounded) to match the pre-existing
+            // schema — no length change in the migration.
+            entity.HasIndex(p => p.MedicalRecordNumber)
+                .IsUnique()
+                .HasFilter("\"MedicalRecordNumber\" <> ''");
+        });
 
         // LogEntry — table managed by Serilog, excluded from migrations
         modelBuilder.Entity<LogEntry>(entity =>

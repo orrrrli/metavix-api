@@ -17,6 +17,7 @@ using Application.UseCases.LabResult.Common;
 using Application.UseCases.ClinicalGoals.Commands;
 using Application.UseCases.ClinicalGoals.Common;
 using Application.UseCases.ClinicalGoals.Queries;
+using Contracts.LinkRequest.Request;
 using Contracts.Patient.Request;
 using Contracts.Patient.Response;
 
@@ -94,7 +95,9 @@ public class DoctorModule : MainModule, ICarterModule
 
         group.MapPost("/requests/{requestId:guid}/accept", AcceptLinkRequest)
             .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status200OK)
+            .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound)
+            .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
             .WithName("AcceptLinkRequest")
             .WithOpenApi();
 
@@ -303,15 +306,17 @@ public class DoctorModule : MainModule, ICarterModule
     private static async Task<IResult> AcceptLinkRequest(
         ISender sender,
         HttpContext httpContext,
-        [FromRoute] Guid requestId)
+        [FromRoute] Guid requestId,
+        [FromBody] AcceptLinkRequestRequest body)
     {
         string fullRoute = $"{httpContext.Request.Path}";
-        string parametros = $"RequestId: {requestId}";
+        string parametros = $"RequestId: {requestId}, MedicalRecordNumber: {body.MedicalRecordNumber}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
         try
         {
-            var result = await sender.Send(new AcceptLinkRequestCommand(requestId));
+            var command = new AcceptLinkRequestCommand(requestId, body.MedicalRecordNumber);
+            var result = await sender.Send(command);
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
