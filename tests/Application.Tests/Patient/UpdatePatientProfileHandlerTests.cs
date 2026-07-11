@@ -173,4 +173,68 @@ public class UpdatePatientProfileHandlerTests
 
         _notificationRepository.DidNotReceive().Stage(Arg.Any<Notification>());
     }
+
+    // Deactivation clears PregnancyStartDate/PregnancyDueDate so the frontend's
+    // "pregnancy deactivated" note doesn't render forever on every future load.
+    [Fact]
+    public async Task Handle_PregnancyDeactivation_ClearsStartAndDueDates()
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        var patient = new Domain.Models.Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            PregnancyStartDate = new DateOnly(2026, 1, 1),
+            PregnancyDueDate = new DateOnly(2026, 10, 1),
+            FirstName = "Sofía",
+            LastName = "Ramírez"
+        };
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+
+        var command = new UpdatePatientProfileCommand(patientId, IsPregnant: false, null, null, null, null);
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.IsPregnant.Should().BeFalse();
+        result.Value.PregnancyStartDate.Should().BeNull();
+        result.Value.PregnancyDueDate.Should().BeNull();
+    }
+
+    // Not pregnant already → no-op deactivation, dates untouched (nothing to clear)
+    [Fact]
+    public async Task Handle_AlreadyNotPregnant_DoesNotTouchDates()
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var existingDate = new DateOnly(2025, 3, 1);
+
+        var patient = new Domain.Models.Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            Gender = Gender.Female,
+            IsPregnant = false,
+            PregnancyStartDate = existingDate,
+            PregnancyDueDate = null,
+            FirstName = "Elena",
+            LastName = "Vargas"
+        };
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+
+        var command = new UpdatePatientProfileCommand(patientId, IsPregnant: false, null, null, null, null);
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        result.Value.PregnancyStartDate.Should().Be(existingDate);
+    }
 }
