@@ -47,6 +47,7 @@ internal sealed class UpdatePatientProfileCommandHandler
             return PatientErrors.PregnancyRequiresFemale;
 
         bool pregnancyActivated = request.IsPregnant == true && !patient.IsPregnant;
+        bool pregnancyDeactivated = request.IsPregnant == false && patient.IsPregnant;
 
         if (request.IsPregnant.HasValue)
             patient.IsPregnant = request.IsPregnant.Value;
@@ -62,6 +63,15 @@ internal sealed class UpdatePatientProfileCommandHandler
 
         if (request.PregnancyDueDate.HasValue)
             patient.PregnancyDueDate = request.PregnancyDueDate.Value;
+
+        // Deactivation clears the dates so the frontend's "pregnancy deactivated"
+        // banner (a one-time transition notice) doesn't render forever on every
+        // future goals-page load — see PatientProfileCard's onConfirmDeactivation.
+        if (pregnancyDeactivated)
+        {
+            patient.PregnancyStartDate = null;
+            patient.PregnancyDueDate = null;
+        }
 
         if (pregnancyActivated)
         {
