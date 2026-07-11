@@ -4,4 +4,4 @@ namespace Application.UseCases.LinkRequest.Commands;
 
 public sealed record AcceptLinkRequestCommand(
     Guid RequestId,
-    string MedicalRecordNumber) : IRequest<ErrorOr<LinkRequestResult>>;
+    string? MedicalRecordNumber) : IRequest<ErrorOr<LinkRequestResult>>;

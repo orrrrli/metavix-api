@@ -12,6 +12,8 @@ using Application.UseCases.Patient.Queries;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Common;
 using Application.UseCases.LinkRequest.Queries;
+using Application.UseCases.MrnSuggestion.Common;
+using Application.UseCases.MrnSuggestion.Queries;
 using Application.UseCases.DailyRecord.Common;
 using Application.UseCases.LabResult.Common;
 using Application.UseCases.ClinicalGoals.Commands;
@@ -91,6 +93,11 @@ public class DoctorModule : MainModule, ICarterModule
         group.MapGet("/requests/pending/{doctorId:guid}", GetPendingRequests)
             .Produces<ApiSuccessResponse<List<PendingRequestResult>>>(StatusCodes.Status200OK)
             .WithName("GetPendingRequests")
+            .WithOpenApi();
+
+        group.MapGet("/mrn-suggestion", GetMrnSuggestion)
+            .Produces<ApiSuccessResponse<MrnSuggestionResult>>(StatusCodes.Status200OK)
+            .WithName("GetMrnSuggestion")
             .WithOpenApi();
 
         group.MapPost("/requests/{requestId:guid}/accept", AcceptLinkRequest)
@@ -279,6 +286,29 @@ public class DoctorModule : MainModule, ICarterModule
     }
 
     // === Link Requests ===
+
+    private static async Task<IResult> GetMrnSuggestion(
+        ISender sender,
+        HttpContext httpContext,
+        [FromQuery] int? year)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = year.HasValue ? $"Year: {year}" : "Year: (current)";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetMrnSuggestionQuery(year ?? 0));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
 
     private static async Task<IResult> GetPendingRequests(
         ISender sender,

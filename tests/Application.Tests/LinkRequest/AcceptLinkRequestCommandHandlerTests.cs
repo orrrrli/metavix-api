@@ -12,6 +12,8 @@ public class AcceptLinkRequestCommandHandlerTests
         Substitute.For<IPatientRepository>();
     private readonly IDoctorRepository _doctorRepository =
         Substitute.For<IDoctorRepository>();
+    private readonly IMrnCounterRepository _mrnCounterRepository =
+        Substitute.For<IMrnCounterRepository>();
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
@@ -24,6 +26,7 @@ public class AcceptLinkRequestCommandHandlerTests
             _requestRepository,
             _patientRepository,
             _doctorRepository,
+            _mrnCounterRepository,
             _currentUser,
             _timeProvider);
     }
@@ -122,6 +125,66 @@ public class AcceptLinkRequestCommandHandlerTests
         result.IsError.Should().BeFalse();
         await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
             p.MedicalRecordNumber == mrn && p.PrimaryDoctorId == doctorId));
+    }
+
+    [Fact]
+    public async Task Handle_WhenMrnNotProvided_AutoAssignsNextAvailable()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
+
+        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var patient = BuildPatient(patientId);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _mrnCounterRepository.GetMaxSequenceForYearAsync(2026, Arg.Any<CancellationToken>()).Returns(5);
+        _patientRepository.ExistsByMedicalRecordNumberAsync("MRN-2026-000006", Arg.Any<CancellationToken>()).Returns(false);
+        _timeProvider.SetUtcNow(now);
+
+        // Act
+        ErrorOr<LinkRequestResult> result =
+            await _handler.Handle(new AcceptLinkRequestCommand(requestId, MedicalRecordNumber: null), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
+            p.MedicalRecordNumber == "MRN-2026-000006" && p.PrimaryDoctorId == doctorId));
+    }
+
+    [Fact]
+    public async Task Handle_WhenAutoAssignExhaustsRetries_ReturnsAutoAssignFailed()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
+
+        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _mrnCounterRepository.GetMaxSequenceForYearAsync(2026, Arg.Any<CancellationToken>()).Returns(0);
+        // Every candidate collides — simulate a pathological counter race.
+        _patientRepository.ExistsByMedicalRecordNumberAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+        _timeProvider.SetUtcNow(now);
+
+        // Act
+        ErrorOr<LinkRequestResult> result =
+            await _handler.Handle(new AcceptLinkRequestCommand(requestId, MedicalRecordNumber: null), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("LinkRequest.MrnAutoAssignFailed");
     }
 
     private static PatientDoctorRequest BuildLinkRequest(Guid requestId, Guid patientId, Guid doctorId) => new()
