@@ -4,4 +4,4 @@ public record PatientResult(
     Guid Id,
     string Name,
     string LastName,
-    string MedicalRecordNumber);
+    string? MedicalRecordNumber);

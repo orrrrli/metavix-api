@@ -56,4 +56,12 @@ public class PatientRepository : IPatientRepository
             .Select(p => (Guid?)p.Id)
             .FirstOrDefaultAsync();
     }
+
+    public async Task<bool> ExistsByMedicalRecordNumberAsync(
+        string medicalRecordNumber,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Patients
+            .AnyAsync(p => p.MedicalRecordNumber == medicalRecordNumber, cancellationToken);
+    }
 }

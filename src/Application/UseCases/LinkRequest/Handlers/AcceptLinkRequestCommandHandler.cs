@@ -54,6 +54,12 @@ internal sealed class AcceptLinkRequestCommandHandler
             return LinkRequestErrors.NotPending;
         }
 
+        // 3. Verify the doctor-supplied MRN is not already in use.
+        // The validator already enforced the format, so this is the second
+        // (uniqueness) check. The DB unique index is the third backstop.
+        if (await _patientRepository.ExistsByMedicalRecordNumberAsync(request.MedicalRecordNumber, cancellationToken))
+            return LinkRequestErrors.MrnAlreadyAssigned;
+
         // 5. Accept the request
         linkRequest.Status = RequestStatus.Accepted;
         linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
@@ -64,6 +70,7 @@ internal sealed class AcceptLinkRequestCommandHandler
         if (patient is not null)
         {
             patient.PrimaryDoctorId = linkRequest.DoctorId;
+            patient.MedicalRecordNumber = request.MedicalRecordNumber;
             patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
             await _patientRepository.UpdateAsync(patient);
         }

@@ -8,7 +8,7 @@ public class Patient
     public Guid? PrimaryDoctorId { get; set; }
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
-    public string MedicalRecordNumber { get; set; } = string.Empty;
+    public string? MedicalRecordNumber { get; set; }
     public DateOnly DateOfBirth { get; set; }
     public decimal? HeightCm { get; set; }
     public Gender? Gender { get; set; }

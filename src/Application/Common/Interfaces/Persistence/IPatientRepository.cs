@@ -10,4 +10,5 @@ public interface IPatientRepository
     Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId);
     Task UpdateAsync(Domain.Models.Patient patient);
     Task<Guid?> GetPatientIdByUserIdAsync(Guid userId);
+    Task<bool> ExistsByMedicalRecordNumberAsync(string medicalRecordNumber, CancellationToken cancellationToken = default);
 }
