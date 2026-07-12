@@ -196,6 +196,78 @@ public class EvaluateGoalsCommandHandlerTests
         egfrItem.Status.Should().Be(GoalStatus.AtRisk);
     }
 
+    // The eGFR item carries a KDIGO 2024 CKD stage alongside the band status. The stage
+    // is derived from the calculator's output (not from the band), so this test pins the
+    // classifier contract at the handler boundary.
+    [Fact]
+    public async Task Handle_WhenEgfrIs45_SetsCkdStageToG3a()
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            Gender = Gender.Male,
+            DateOfBirth = new DateOnly(1956, 1, 1),
+        };
+
+        _egfrCalculator
+            .Calculate(Arg.Any<decimal?>(), Arg.Any<int>(), Gender.Male)
+            .Returns(45m);
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Creatinine = 1.8m,
+        });
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        var egfrItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Egfr);
+        egfrItem.ValueUsed.Should().Be(45m);
+        egfrItem.CkdStage.Should().Be(AdaGoalConstants.CkdStageG3a);
+    }
+
+    // No creatinine → calculator returns null → eGFR is NoData → CkdStage is null.
+    // The classifier leaves the column empty so the UI hides the educational section.
+    [Fact]
+    public async Task Handle_WhenEgfrIsNull_DoesNotSetCkdStage()
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 170m,
+            Gender = Gender.Male,
+            DateOfBirth = new DateOnly(1956, 1, 1),
+        };
+
+        // The constructor's default stub returns null when no creatinine is passed in
+        // (no lab below), so we just don't pass one.
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeFalse();
+        var egfrItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.Egfr);
+        egfrItem.ValueUsed.Should().BeNull();
+        egfrItem.CkdStage.Should().BeNull();
+    }
+
     // NoDataWindow: a present value measured longer ago than its spec's freshness window is too
     // stale to classify and surfaces as NoData "no-recent-data" instead of a band status. BP's
     // window is 7 days; HbA1c's is 90, so the same-dated HbA1c stays evaluable — proving the window

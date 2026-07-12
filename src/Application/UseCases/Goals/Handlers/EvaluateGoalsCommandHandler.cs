@@ -2,6 +2,7 @@ using Application.Common.Constants;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
+using Application.Common.Services;
 using Application.UseCases.Goals.Commands;
 using Application.UseCases.Goals.Common;
 using Domain.Enums;
@@ -153,7 +154,15 @@ internal sealed class EvaluateGoalsCommandHandler
         foreach (var (parameterId, value, measuredOn) in parameterValues)
         {
             var item = BuildItem(evaluationId, parameterId, value, measuredOn, today, patient, customGoalMap);
-            if (item is not null) items.Add(item);
+            if (item is not null)
+            {
+                // KDIGO stage is eGFR-specific clinical context, not a generic per-item property.
+                // Set it here (caller knows the parameterId) rather than threading it through
+                // BuildItem, which stays parameter-agnostic.
+                if (parameterId == AdaGoalConstants.Egfr)
+                    item.CkdStage = CkdStageClassifier.Classify(item.ValueUsed);
+                items.Add(item);
+            }
         }
 
         var evaluation = new GoalEvaluation
@@ -171,7 +180,7 @@ internal sealed class EvaluateGoalsCommandHandler
             evaluationId,
             now,
             items.Select(i => new GoalEvaluationItemResult(
-                i.ParameterId, i.ValueUsed, i.ThresholdUsed, i.Status, i.Reason)).ToList());
+                i.ParameterId, i.ValueUsed, i.ThresholdUsed, i.Status, i.Reason, i.CkdStage)).ToList());
     }
 
     // Whole years elapsed from birth to the evaluation date, subtracting one if the birthday

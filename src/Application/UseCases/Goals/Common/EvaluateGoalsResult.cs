@@ -12,4 +12,5 @@ public sealed record GoalEvaluationItemResult(
     decimal? ValueUsed,
     decimal? ThresholdUsed,
     GoalStatus Status,
-    string? Reason);
+    string? Reason,
+    string? CkdStage);

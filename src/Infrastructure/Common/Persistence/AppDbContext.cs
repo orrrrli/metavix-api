@@ -190,6 +190,7 @@ public class AppDbContext : DbContext
             entity.Property(i => i.ThresholdUsed).HasPrecision(10, 3);
             entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
             entity.Property(i => i.Reason).HasMaxLength(50);
+            entity.Property(i => i.CkdStage).HasMaxLength(8);
         });
 
         // Notification configuration

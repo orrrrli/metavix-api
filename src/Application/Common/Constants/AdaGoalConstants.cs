@@ -42,6 +42,16 @@ public static class AdaGoalConstants
     public const string RequiresSpecialistEvaluationReason = "requires-specialist-evaluation";
     public const string NoRecentDataReason = "no-recent-data";
 
+    // CKD stage labels (KDIGO 2024) emitted on GoalEvaluationItem.CkdStage when the
+    // parameter is eGFR and a numeric value is present. Wire format is the label itself
+    // (e.g. "G3a") — the frontend maps it to a localized description.
+    public const string CkdStageG1 = "G1";
+    public const string CkdStageG2 = "G2";
+    public const string CkdStageG3a = "G3a";
+    public const string CkdStageG3b = "G3b";
+    public const string CkdStageG4 = "G4";
+    public const string CkdStageG5 = "G5";
+
     public static readonly IReadOnlyList<ParameterSpec> Catalog = new List<ParameterSpec>
     {
         new("hba1c", PatientCategory.SinDiabetes, null, null, null, 5.7m, 6.5m, true, TimeSpan.FromDays(90)),
