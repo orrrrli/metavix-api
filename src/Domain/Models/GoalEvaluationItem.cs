@@ -28,5 +28,12 @@ public class GoalEvaluationItem
     // for eGFR items without a numeric value. See CkdStageClassifier.
     public string? CkdStage { get; set; }
 
+    // Derived flag, not persisted independently — set by EvaluateGoalsCommandHandler.BuildItem
+    // when this item's thresholds came from a doctor-set ClinicalGoal (merged onto the catalog
+    // spec via ApplyCustom) rather than the ADA catalog spec alone. Always false on a freshly
+    // loaded GoalEvaluation row; populated only in the request-scoped projection that flows
+    // into GoalEvaluationItemResult. See EvaluateGoalsResult.IsCustomGoal for the FE contract.
+    public bool IsCustomGoal { get; set; }
+
     public GoalEvaluation GoalEvaluation { get; set; } = null!;
 }

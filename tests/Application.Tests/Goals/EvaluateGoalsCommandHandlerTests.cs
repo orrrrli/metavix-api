@@ -1854,4 +1854,131 @@ public class EvaluateGoalsCommandHandlerTests
         result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.WaistCircumference)
             .Status.Should().Be(expected);
     }
+
+    // ====================================================================================
+    // IsCustomGoal flag: surfaced on the GoalEvaluationItemResult so the FE can badge
+    // ParametroMeta cards with "Ajustada por tu doctor" when the doctor has set a custom
+    // ClinicalGoal for that parameter. The flag must follow the same routing as
+    // ThresholdUsed: true when ApplyCustom actually merged a custom band (or SpecFromCustom
+    // built the spec from a custom band in the pregnancy-no-catalog-row branch), false when
+    // only the ADA catalog spec was used.
+    // ====================================================================================
+
+    [Fact]
+    public async Task Handle_WhenClinicalGoalExistsForParameter_ItemHasIsCustomGoalTrue()
+    {
+        // Arrange — same shape as the existing custom-override test (line 367): non-pregnant
+        // patient with an HbA1c custom goal. IsCustomGoal must be true for that item.
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hba1c = 7.5m,
+        };
+
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.HbA1c,
+            CustomAtRiskHigh = 9.0m,
+            CustomOutOfRangeHigh = 9.0m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
+        hba1cItem.IsCustomGoal.Should().BeTrue("the doctor set a custom HbA1c goal, so the item must carry the flag");
+    }
+
+    [Fact]
+    public async Task Handle_WhenNoClinicalGoalForParameter_ItemHasIsCustomGoalFalse()
+    {
+        // Arrange — same patient/lab as the InRange test, but no custom goals at all. The
+        // HbA1c item must surface IsCustomGoal=false so the FE does not show the badge.
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient { Id = patientId, UserId = userId, HeightCm = 170m };
+
+        var labResult = new LabResult
+        {
+            PatientId = patientId,
+            SampleDate = new DateOnly(2026, 6, 21),
+            Hba1c = 5.0m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns(labResult);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        var hba1cItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.HbA1c);
+        hba1cItem.IsCustomGoal.Should().BeFalse("no custom goal exists, the threshold came from the ADA catalog");
+    }
+
+    // Pregnancy + SBP custom + no reading → NoData item. The flag must still be true so the
+    // FE can tell the patient "this parameter was set up for you by your doctor; bring a
+    // reading to your next visit" rather than implying the metric is irrelevant to them.
+    [Fact]
+    public async Task Handle_WhenPregnantAndSbpCustomGoalButNoReading_NoDataItemHasIsCustomGoalTrue()
+    {
+        // Arrange — mirrors Handle_WhenPregnantAndSbpCustomGoalButNoReading_EmitsNoDataWithSpecialistReason
+        // (line 787), but the new assertion is the IsCustomGoal flag on the NoData item.
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            HeightCm = 165m,
+            Gender = Gender.Female,
+            IsPregnant = true,
+            DiabetesType = DiabetesType.Type2,
+        };
+
+        var customGoal = new ClinicalGoal
+        {
+            Id = Guid.NewGuid(),
+            PatientId = patientId,
+            DoctorId = Guid.NewGuid(),
+            ParameterId = AdaGoalConstants.SystolicBp,
+            CustomAtRiskHigh = 135m,
+            CustomOutOfRangeHigh = 150m,
+        };
+
+        SetupAuth(userId, patientId, patient);
+        _labResultRepository.GetLatestByPatientIdAsync(patientId).Returns((LabResult?)null);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
+        _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([customGoal]);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
+        sbpItem.Status.Should().Be(GoalStatus.NoData);
+        sbpItem.IsCustomGoal.Should().BeTrue("a doctor-set SBP goal exists for this pregnant patient even with no reading");
+    }
 }
