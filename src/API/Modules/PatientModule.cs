@@ -47,6 +47,12 @@ public class PatientModule : MainModule, ICarterModule
             .WithOpenApi();
 
         // === Link Requests ===
+        group.MapGet("/{patientId:guid}/get-pending-requests", GetSentPendingRequests)
+            .Produces<ApiSuccessResponse<List<SentPendingRequestResult>>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .WithName("GetSentPendingRequests")
+            .WithOpenApi();
+
         group.MapPost("/requests-link", SendLinkRequest)
             .Produces<ApiSuccessResponse<LinkRequestResult>>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status409Conflict)
@@ -218,6 +224,29 @@ public class PatientModule : MainModule, ICarterModule
     }
 
     // === Link Requests ===
+
+    private static async Task<IResult> GetSentPendingRequests(
+        ISender sender,
+        HttpContext httpContext,
+        [FromRoute] Guid patientId)
+    {
+        string fullRoute = $"{httpContext.Request.Path}";
+        string parametros = $"PatientId: {patientId}";
+        LoggingHelper.LogRequest(fullRoute, parametros);
+
+        try
+        {
+            var result = await sender.Send(new GetSentPendingRequestsQuery(patientId));
+
+            return result.Match(
+                value => ApiResults.Success(value, fullRoute),
+                errors => ApiResults.Problem(errors, fullRoute));
+        }
+        catch (Exception ex)
+        {
+            return ApiResults.Error(ex, fullRoute, parametros);
+        }
+    }
 
     private static async Task<IResult> SendLinkRequest(
         ISender sender,
