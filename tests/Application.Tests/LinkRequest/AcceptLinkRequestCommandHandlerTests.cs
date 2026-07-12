@@ -12,8 +12,6 @@ public class AcceptLinkRequestCommandHandlerTests
         Substitute.For<IPatientRepository>();
     private readonly IDoctorRepository _doctorRepository =
         Substitute.For<IDoctorRepository>();
-    private readonly IMrnCounterRepository _mrnCounterRepository =
-        Substitute.For<IMrnCounterRepository>();
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
@@ -26,7 +24,6 @@ public class AcceptLinkRequestCommandHandlerTests
             _requestRepository,
             _patientRepository,
             _doctorRepository,
-            _mrnCounterRepository,
             _currentUser,
             _timeProvider);
     }
@@ -144,8 +141,7 @@ public class AcceptLinkRequestCommandHandlerTests
         _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
-        _mrnCounterRepository.GetMaxSequenceForYearAsync(2026, Arg.Any<CancellationToken>()).Returns(5);
-        _patientRepository.ExistsByMedicalRecordNumberAsync("MRN-2026-000006", Arg.Any<CancellationToken>()).Returns(false);
+        _patientRepository.ExistsByMedicalRecordNumberAsync("MRN-20260711-120000000", Arg.Any<CancellationToken>()).Returns(false);
         _timeProvider.SetUtcNow(now);
 
         // Act
@@ -155,7 +151,7 @@ public class AcceptLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
         await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.MedicalRecordNumber == "MRN-2026-000006" && p.PrimaryDoctorId == doctorId));
+            p.MedicalRecordNumber == "MRN-20260711-120000000" && p.PrimaryDoctorId == doctorId));
     }
 
     [Fact]
@@ -173,8 +169,7 @@ public class AcceptLinkRequestCommandHandlerTests
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _mrnCounterRepository.GetMaxSequenceForYearAsync(2026, Arg.Any<CancellationToken>()).Returns(0);
-        // Every candidate collides — simulate a pathological counter race.
+        // Every candidate collides — simulate a pathological same-millisecond race.
         _patientRepository.ExistsByMedicalRecordNumberAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
         _timeProvider.SetUtcNow(now);
 

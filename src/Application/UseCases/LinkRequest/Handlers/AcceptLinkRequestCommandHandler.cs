@@ -16,7 +16,6 @@ internal sealed class AcceptLinkRequestCommandHandler
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly IDoctorRepository _doctorRepository;
-    private readonly IMrnCounterRepository _mrnCounterRepository;
     private readonly ICurrentUserService _currentUser;
     private readonly TimeProvider _timeProvider;
 
@@ -24,14 +23,12 @@ internal sealed class AcceptLinkRequestCommandHandler
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
-        IMrnCounterRepository mrnCounterRepository,
         ICurrentUserService currentUser,
         TimeProvider timeProvider)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
-        _mrnCounterRepository = mrnCounterRepository;
         _currentUser = currentUser;
         _timeProvider = timeProvider;
     }
@@ -108,20 +105,19 @@ internal sealed class AcceptLinkRequestCommandHandler
     }
 
     /// <summary>
-    /// Generates the next MRN candidate from the per-year counter and
-    /// re-checks uniqueness. The DB unique index is the ultimate
-    /// backstop — this loop just avoids the noisy 500 in the common case.
+    /// Generates a timestamp-derived MRN candidate and re-checks uniqueness.
+    /// The DB unique index is the ultimate backstop — this loop just avoids
+    /// the noisy 500 in the rare case two candidates land in the same
+    /// millisecond.
     /// </summary>
     private async Task<string?> TryAutoAssignAsync(CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow();
         for (int attempt = 0; attempt < MaxAutoAssignAttempts; attempt++)
         {
-            var max = await _mrnCounterRepository.GetMaxSequenceForYearAsync(now.Year, cancellationToken);
-            var candidate = MrnGenerator.Suggest(max, now);
+            var candidate = MrnGenerator.Suggest(now.AddMilliseconds(attempt));
             if (!await _patientRepository.ExistsByMedicalRecordNumberAsync(candidate, cancellationToken))
                 return candidate;
-            // Loop — counter will return a higher value next time.
         }
         return null;
     }
