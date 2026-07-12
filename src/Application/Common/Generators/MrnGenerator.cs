@@ -1,29 +1,27 @@
 namespace Application.Common.Generators;
 
 /// <summary>
-/// Suggests the next Medical Record Number for a given year.
+/// Suggests a Medical Record Number derived from the current timestamp.
 ///
 /// The doctor is the authoritative source for the MRN — this helper only
 /// produces a *suggested* value. The submitter may keep the suggestion or
-/// type a custom value, as long as it matches <c>^MRN-\d{4}-\d{6}$</c> and
+/// type a custom value, as long as it matches <c>^MRN-\d{8}-\d{9}$</c> and
 /// is unique in the database.
 ///
-/// Because the suggestion is just a hint (not a strict sequence), a small
-/// race-condition window between "max read" and "insert" is acceptable:
-/// the unique index on <c>Patients.MedicalRecordNumber</c> is the actual
-/// enforcement. Cluster-safe enough for the doctor-accept flow.
+/// Timestamp-based (down to the millisecond) instead of a per-year sequence:
+/// a sequence read from "max MRN currently in use" goes stale the moment a
+/// patient is unlinked (its MRN is cleared to null, so the next auto-assign
+/// recomputes the same max and reissues the same number). A wall-clock
+/// value never repeats under normal use, so unlinking a patient can't cause
+/// a collision. The DB unique index on <c>Patients.MedicalRecordNumber</c>
+/// remains the actual enforcement for the rare same-millisecond race.
 /// </summary>
 public static class MrnGenerator
 {
     /// <summary>
-    /// Builds an MRN suggestion in the form <c>MRN-YYYY-NNNNNN</c> by
-    /// appending <c>1</c> to the highest sequence observed for the year.
+    /// Builds an MRN suggestion in the form <c>MRN-yyyyMMdd-HHmmssfff</c>.
     /// </summary>
-    /// <param name="existingMaxForYear">
-    /// Highest 6-digit suffix already in use for the given year, or <c>0</c>
-    /// when no records exist yet.
-    /// </param>
-    /// <param name="now">Timestamp that pins the year component.</param>
-    public static string Suggest(int existingMaxForYear, DateTimeOffset now) =>
-        $"MRN-{now.Year:D4}-{(existingMaxForYear + 1):D6}";
+    /// <param name="now">Timestamp the MRN is derived from.</param>
+    public static string Suggest(DateTimeOffset now) =>
+        $"MRN-{now:yyyyMMdd}-{now:HHmmssfff}";
 }

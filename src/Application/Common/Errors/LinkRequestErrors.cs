@@ -28,7 +28,7 @@ public static class LinkRequestErrors
 
     public static readonly Error MrnFormatInvalid = Error.Validation(
         code: "LinkRequest.MrnFormatInvalid",
-        description: "El formato del MRN debe ser MRN-AAAA-NNNNNN.");
+        description: "El formato del MRN debe ser MRN-AAAAMMDD-HHMMSSmmm.");
 
     public static readonly Error MrnAutoAssignFailed = Error.Failure(
         code: "LinkRequest.MrnAutoAssignFailed",
