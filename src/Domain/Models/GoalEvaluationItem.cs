@@ -23,5 +23,10 @@ public class GoalEvaluationItem
     // (e.g. "not-evaluated-in-pregnancy", "requires-specialist-evaluation").
     public string? Reason { get; set; }
 
+    // KDIGO 2024 chronic kidney disease stage derived from ValueUsed when the
+    // parameter is eGFR (e.g. "G1", "G3a", "G5"). Null for non-eGFR items and
+    // for eGFR items without a numeric value. See CkdStageClassifier.
+    public string? CkdStage { get; set; }
+
     public GoalEvaluation GoalEvaluation { get; set; } = null!;
 }

@@ -63,6 +63,36 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
             item.Status.Should().Be(GoalStatus.InRange));
     }
 
+    // Story AC1.1 (eGFR CkdStage wire format): for the ConDiabetes InRange fixture, creatinine
+    // is 1.0 mg/dL on a female adult, which the calculator maps to an eGFR in the G1-G2 band.
+    // The wire assertion pins that CkdStage flows through the JSON response shape unchanged
+    // (camelCase, nullable string) and is non-null for eGFR items with a value.
+    [Fact]
+    public async Task PostGoalEvaluations_WhenEgfrIsComputed_CkdStageIsPopulatedOnWire()
+    {
+        // Arrange
+        var (userId, patientId) = await PatientFixtureBuilder.SeedConDiabetesInRangePatientAsync(_factory);
+        var client = CreateAuthenticatedClient(userId);
+
+        // Act
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var body = await response.Content.ReadFromJsonAsync<ApiSuccessResponse<EvaluateGoalsResult>>(JsonOptions);
+        body.Should().NotBeNull();
+
+        var egfrItem = body!.Data.Items.First(i => i.ParameterId == AdaGoalConstants.Egfr);
+        egfrItem.ValueUsed.Should().NotBeNull();
+        // Female, ~age 50, creatinine 1.0 → eGFR well above 60 → G2.
+        egfrItem.CkdStage.Should().Be(AdaGoalConstants.CkdStageG2);
+
+        // Other items never carry a CkdStage — it's an eGFR-only field.
+        var nonEgfrItems = body.Data.Items.Where(i => i.ParameterId != AdaGoalConstants.Egfr);
+        nonEgfrItems.Should().AllSatisfy(item => item.CkdStage.Should().BeNull());
+    }
+
     // Story AC2 (high-edge boundary): SinDiabetes patient with every parameter pushed to
     // OutOfRange → 201 + per-parameter OutOfRange. Postprandial 1h/2h are omitted for a
     // non-pregnant patient because the catalog has no SinDiabetes row for them; the
