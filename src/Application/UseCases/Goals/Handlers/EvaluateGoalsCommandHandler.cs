@@ -153,7 +153,7 @@ internal sealed class EvaluateGoalsCommandHandler
         var items = new List<GoalEvaluationItem>();
         foreach (var (parameterId, value, measuredOn) in parameterValues)
         {
-            var item = BuildItem(evaluationId, parameterId, value, measuredOn, today, patient, customGoalMap);
+            var (item, isCustom) = BuildItem(evaluationId, parameterId, value, measuredOn, today, patient, customGoalMap);
             if (item is not null)
             {
                 // KDIGO stage is eGFR-specific clinical context, not a generic per-item property.
@@ -161,6 +161,7 @@ internal sealed class EvaluateGoalsCommandHandler
                 // BuildItem, which stays parameter-agnostic.
                 if (parameterId == AdaGoalConstants.Egfr)
                     item.CkdStage = CkdStageClassifier.Classify(item.ValueUsed);
+                item.IsCustomGoal = isCustom;
                 items.Add(item);
             }
         }
@@ -180,7 +181,7 @@ internal sealed class EvaluateGoalsCommandHandler
             evaluationId,
             now,
             items.Select(i => new GoalEvaluationItemResult(
-                i.ParameterId, i.ValueUsed, i.ThresholdUsed, i.Status, i.Reason, i.CkdStage)).ToList());
+                i.ParameterId, i.ValueUsed, i.ThresholdUsed, i.Status, i.Reason, i.CkdStage, i.IsCustomGoal)).ToList());
     }
 
     // Whole years elapsed from birth to the evaluation date, subtracting one if the birthday
@@ -196,7 +197,13 @@ internal sealed class EvaluateGoalsCommandHandler
     // parameterId is always the final catalog id (e.g. "ldl_primary"/"ldl_secondary", already
     // resolved by the caller based on Patient.HasAscvd) — this method has no per-parameter
     // knowledge and never rewrites the id it was given.
-    private static GoalEvaluationItem? BuildItem(
+    //
+    // Returns (item, isCustom): isCustom is true when the item's effective thresholds came
+    // from a doctor-set ClinicalGoal (merged via ApplyCustom or built from custom alone in
+    // the pregnancy-no-spec branch). False when only the ADA catalog spec was used. Null
+    // item means the parameter is omitted entirely (e.g. non-pregnant patient with no
+    // applicable spec, which excludes both catalog and custom code paths).
+    private static (GoalEvaluationItem? Item, bool IsCustom) BuildItem(
         Guid evaluationId,
         string parameterId,
         decimal? value,
@@ -219,7 +226,7 @@ internal sealed class EvaluateGoalsCommandHandler
             && measuredOn is { } measured
             && today.DayNumber - measured.DayNumber > window.TotalDays)
         {
-            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.NoRecentDataReason);
+            return (BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.NoRecentDataReason, hasCustom), hasCustom);
         }
 
         // Decision 2A (matized): a genuine pregnancy-category spec (e.g. HbA1c or LDL targets in
@@ -229,13 +236,13 @@ internal sealed class EvaluateGoalsCommandHandler
         // pressure is the deliberate exception — it has no pregnancy-category row at all, so it
         // never reaches this branch and falls through to the specialist-custom-goal path below.
         if (spec is { IsPregnancySpecific: true })
-            return BuildEvaluatedItem(evaluationId, parameterId, value, spec);
+            return (BuildEvaluatedItem(evaluationId, parameterId, value, spec, isCustom: false), false);
 
         if (spec is null)
         {
             // A non-pregnant patient simply has no applicable spec for this parameter → omit it.
             if (!patient.IsPregnant)
-                return null;
+                return (null, false);
 
             // Pregnant patient with no pregnancy-category spec and no Universal fallback
             // (currently only blood pressure): the specialist assigns it per patient via a
@@ -249,18 +256,18 @@ internal sealed class EvaluateGoalsCommandHandler
                 // no-custom branch emits, instead of letting BuildEvaluatedItem emit a bare
                 // NoData item that loses the explanation.
                 if (value is null)
-                    return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
+                    return (BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason, isCustom: true), true);
 
-                return BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(parameterId, custom!));
+                return (BuildEvaluatedItem(evaluationId, parameterId, value, SpecFromCustom(parameterId, custom!), isCustom: true), true);
             }
 
-            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
+            return (BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason, isCustom: false), false);
         }
 
         // Spec resolved but not evaluated during pregnancy (e.g. BMI, waist, total cholesterol —
         // Universal-category parameters marked AppliesInPregnancy=false).
         if (patient.IsPregnant && !spec.AppliesInPregnancy)
-            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.NotEvaluatedInPregnancyReason);
+            return (BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.NotEvaluatedInPregnancyReason, isCustom: hasCustom), hasCustom);
 
         // Non-pregnancy-specific spec → apply the doctor's custom override when present.
         var effectiveSpec = hasCustom ? ApplyCustom(spec, custom!) : spec;
@@ -271,9 +278,9 @@ internal sealed class EvaluateGoalsCommandHandler
         // threshold because it was not evaluated. Route through BuildNoDataItem so ThresholdUsed
         // stays null.
         if (value is null)
-            return BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason);
+            return (BuildNoDataItem(evaluationId, parameterId, AdaGoalConstants.RequiresSpecialistEvaluationReason, isCustom: hasCustom), hasCustom);
 
-        return BuildEvaluatedItem(evaluationId, parameterId, value, effectiveSpec);
+        return (BuildEvaluatedItem(evaluationId, parameterId, value, effectiveSpec, isCustom: hasCustom), hasCustom);
     }
 
     // A null custom threshold keeps the catalog default; a set one overrides that band.
@@ -303,7 +310,7 @@ internal sealed class EvaluateGoalsCommandHandler
             AppliesInPregnancy: true, NoDataWindow: null);
 
     private static GoalEvaluationItem BuildEvaluatedItem(
-        Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec)
+        Guid evaluationId, string parameterId, decimal? value, ParameterSpec spec, bool isCustom)
     {
         // ThresholdUsed surfaces the InRange/AtRisk boundary the patient is compared against after
         // ApplyCustom has merged the custom goal onto the catalog spec. Most specs are
@@ -321,10 +328,11 @@ internal sealed class EvaluateGoalsCommandHandler
             ValueUsed = value,
             ThresholdUsed = threshold,
             Status = spec.Classify(value),
+            IsCustomGoal = isCustom,
         };
     }
 
-    private static GoalEvaluationItem BuildNoDataItem(Guid evaluationId, string parameterId, string reason) =>
+    private static GoalEvaluationItem BuildNoDataItem(Guid evaluationId, string parameterId, string reason, bool isCustom) =>
         new()
         {
             Id = Guid.NewGuid(),
@@ -334,5 +342,6 @@ internal sealed class EvaluateGoalsCommandHandler
             ThresholdUsed = null,
             Status = GoalStatus.NoData,
             Reason = reason,
+            IsCustomGoal = isCustom,
         };
 }
