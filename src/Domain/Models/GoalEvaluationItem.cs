@@ -28,11 +28,13 @@ public class GoalEvaluationItem
     // for eGFR items without a numeric value. See CkdStageClassifier.
     public string? CkdStage { get; set; }
 
-    // Derived flag, not persisted independently — set by EvaluateGoalsCommandHandler.BuildItem
-    // when this item's thresholds came from a doctor-set ClinicalGoal (merged onto the catalog
-    // spec via ApplyCustom) rather than the ADA catalog spec alone. Always false on a freshly
-    // loaded GoalEvaluation row; populated only in the request-scoped projection that flows
-    // into GoalEvaluationItemResult. See EvaluateGoalsResult.IsCustomGoal for the FE contract.
+    // Persisted flag indicating the effective spec used to evaluate this item came from a
+    // doctor-set ClinicalGoal (merged onto the catalog spec via ApplyCustom, or built from
+    // custom alone in the pregnancy-no-catalog branch) rather than the ADA catalog spec alone.
+    // Set by EvaluateGoalsCommandHandler.BuildItem in the same write that creates the
+    // GoalEvaluation, so historical evaluations carry the flag too — the FE can render
+    // 'Ajustada por tu doctor' for items evaluated under a custom goal even when reading past
+    // results. See EvaluateGoalsResult.IsCustomGoal for the response contract.
     public bool IsCustomGoal { get; set; }
 
     public GoalEvaluation GoalEvaluation { get; set; } = null!;
