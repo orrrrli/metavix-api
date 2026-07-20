@@ -1,5 +1,6 @@
 namespace Domain.Models;
 
+using Common.Constants;
 using Common.Errors;
 using Enums;
 using ErrorOr;
@@ -30,7 +31,8 @@ public class GlucoseReading
         PostprandialWindow? postprandialWindow,
         DateTime now)
     {
-        if (valueMgDl <= 0 || valueMgDl > 600)
+        if (valueMgDl < GlucoseConstants.MinReadingMgDl
+            || valueMgDl > GlucoseConstants.MaxReadingMgDl)
             return GlucoseReadingErrors.InvalidValue;
 
         // Per product decision (2026-07-20): every reading type requires Time.

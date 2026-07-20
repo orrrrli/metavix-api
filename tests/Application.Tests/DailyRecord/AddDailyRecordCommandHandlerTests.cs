@@ -148,7 +148,7 @@ public class AddDailyRecordCommandHandlerTests
         {
             new(
                 ReadingType: GlucoseReadingType.Fasting,
-                ValueMgDl: 0,
+                ValueMgDl: 19,
                 Time: new TimeOnly(7, 0),
                 Foods: null,
                 PostprandialWindow: null)
@@ -178,7 +178,7 @@ public class AddDailyRecordCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenGlucoseValueExceeds600_ReturnsInvalidValue()
+    public async Task Handle_WhenGlucoseValueExceeds800_ReturnsInvalidValue()
     {
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
@@ -192,7 +192,7 @@ public class AddDailyRecordCommandHandlerTests
         {
             new(
                 ReadingType: GlucoseReadingType.Fasting,
-                ValueMgDl: 601,
+                ValueMgDl: 801,
                 Time: new TimeOnly(7, 0),
                 Foods: null,
                 PostprandialWindow: null)
