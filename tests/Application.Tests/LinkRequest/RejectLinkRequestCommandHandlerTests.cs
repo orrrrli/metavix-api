@@ -3,81 +3,36 @@ using Application.UseCases.LinkRequest.Handlers;
 
 namespace Application.Tests.LinkRequest;
 
-public class UnlinkPatientCommandHandlerTests
+public class RejectLinkRequestCommandHandlerTests
 {
     private readonly IPatientDoctorRequestRepository _requestRepository =
         Substitute.For<IPatientDoctorRequestRepository>();
-    private readonly IPatientRepository _patientRepository =
-        Substitute.For<IPatientRepository>();
     private readonly IDoctorRepository _doctorRepository =
         Substitute.For<IDoctorRepository>();
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
 
-    private readonly UnlinkPatientCommandHandler _handler;
+    private readonly RejectLinkRequestCommandHandler _handler;
 
-    public UnlinkPatientCommandHandlerTests()
+    public RejectLinkRequestCommandHandlerTests()
     {
-        _handler = new UnlinkPatientCommandHandler(
+        _handler = new RejectLinkRequestCommandHandler(
             _requestRepository,
-            _patientRepository,
             _doctorRepository,
             _currentUser,
             _timeProvider);
     }
 
     [Fact]
-    public async Task Handle_WhenPatientHadMrn_ClearsItOnUnlink()
+    public async Task Handle_WhenPending_TransitionsToRejected()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var mrn = "MRN-2026-000042";
-
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
-        var patient = new Patient
-        {
-            Id = patientId,
-            FirstName = "Juan",
-            LastName = "Pérez",
-            Email = "juan@mail.com",
-            PrimaryDoctorId = doctorId,
-            MedicalRecordNumber = mrn,
-        };
-
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
-        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
-
-        // Act
-        var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
-
-        // Assert
-        result.IsError.Should().BeFalse();
-        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.PrimaryDoctorId == null &&
-            p.MedicalRecordNumber == null));
-    }
-
-    [Fact]
-    public async Task Handle_WhenNotAccepted_ReturnsNotAcceptedWithoutMutating()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
 
         var linkRequest = new PatientDoctorRequest
         {
@@ -91,15 +46,47 @@ public class UnlinkPatientCommandHandlerTests
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _timeProvider.SetUtcNow(now);
 
         // Act
-        var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
+        var result = await _handler.Handle(new RejectLinkRequestCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        result.Value.Status.Should().Be("Rejected");
+        await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
+            r.Status == RequestStatus.Rejected && r.ResolvedAt == now));
+    }
+
+    [Fact]
+    public async Task Handle_WhenNotPending_ReturnsNotPendingWithoutMutating()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = new PatientDoctorRequest
+        {
+            Id = requestId,
+            PatientId = patientId,
+            DoctorId = doctorId,
+            Status = RequestStatus.Accepted,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+
+        // Act
+        var result = await _handler.Handle(new RejectLinkRequestCommand(requestId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be("LinkRequest.NotAccepted");
+        result.FirstError.Code.Should().Be("LinkRequest.NotPending");
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
 
     [Fact]
@@ -117,7 +104,7 @@ public class UnlinkPatientCommandHandlerTests
             Id = requestId,
             PatientId = patientId,
             DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
+            Status = RequestStatus.Pending,
             CreatedAt = DateTime.UtcNow,
         };
 
@@ -126,7 +113,7 @@ public class UnlinkPatientCommandHandlerTests
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
 
         // Act
-        var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
+        var result = await _handler.Handle(new RejectLinkRequestCommand(requestId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();

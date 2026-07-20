@@ -182,6 +182,32 @@ public class AcceptLinkRequestCommandHandlerTests
         result.FirstError.Code.Should().Be("LinkRequest.MrnAutoAssignFailed");
     }
 
+    [Fact]
+    public async Task Handle_WhenNotPending_ReturnsNotPendingWithoutMutating()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        linkRequest.Status = RequestStatus.Rejected;
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+
+        // Act
+        var result = await _handler.Handle(new AcceptLinkRequestCommand(requestId, MedicalRecordNumber: null), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("LinkRequest.NotPending");
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+    }
+
     private static PatientDoctorRequest BuildLinkRequest(Guid requestId, Guid patientId, Guid doctorId) => new()
     {
         Id = requestId,

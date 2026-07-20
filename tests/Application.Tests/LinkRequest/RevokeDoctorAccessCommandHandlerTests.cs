@@ -3,32 +3,29 @@ using Application.UseCases.LinkRequest.Handlers;
 
 namespace Application.Tests.LinkRequest;
 
-public class UnlinkPatientCommandHandlerTests
+public class RevokeDoctorAccessCommandHandlerTests
 {
     private readonly IPatientDoctorRequestRepository _requestRepository =
         Substitute.For<IPatientDoctorRequestRepository>();
     private readonly IPatientRepository _patientRepository =
         Substitute.For<IPatientRepository>();
-    private readonly IDoctorRepository _doctorRepository =
-        Substitute.For<IDoctorRepository>();
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
 
-    private readonly UnlinkPatientCommandHandler _handler;
+    private readonly RevokeDoctorAccessCommandHandler _handler;
 
-    public UnlinkPatientCommandHandlerTests()
+    public RevokeDoctorAccessCommandHandlerTests()
     {
-        _handler = new UnlinkPatientCommandHandler(
+        _handler = new RevokeDoctorAccessCommandHandler(
             _requestRepository,
             _patientRepository,
-            _doctorRepository,
             _currentUser,
             _timeProvider);
     }
 
     [Fact]
-    public async Task Handle_WhenPatientHadMrn_ClearsItOnUnlink()
+    public async Task Handle_WhenAccepted_RemovesDoctorButKeepsMrn()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -36,6 +33,7 @@ public class UnlinkPatientCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var mrn = "MRN-2026-000042";
+        var now = DateTime.UtcNow;
 
         var linkRequest = new PatientDoctorRequest
         {
@@ -56,18 +54,21 @@ public class UnlinkPatientCommandHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _timeProvider.SetUtcNow(now);
 
         // Act
-        var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
+        result.Value.Status.Should().Be("Revoked");
+        await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
+            r.Status == RequestStatus.Revoked && r.ResolvedAt == now));
         await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.PrimaryDoctorId == null &&
-            p.MedicalRecordNumber == null));
+            p.PrimaryDoctorId == null && p.MedicalRecordNumber == mrn));
     }
 
     [Fact]
@@ -89,11 +90,11 @@ public class UnlinkPatientCommandHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
 
         // Act
-        var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
@@ -103,13 +104,13 @@ public class UnlinkPatientCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenCallerIsNotTheDoctor_ReturnsForbidden()
+    public async Task Handle_WhenCallerIsNotThePatient_ReturnsForbidden()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
-        var otherDoctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
+        var otherPatientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
         var linkRequest = new PatientDoctorRequest
@@ -122,15 +123,56 @@ public class UnlinkPatientCommandHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(otherDoctorId);
+        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(otherPatientId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
 
         // Act
-        var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("Auth.Forbidden");
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPatientPrimaryDoctorAlreadyChanged_DoesNotOverwriteNewDoctor()
+    {
+        // Arrange: patient already re-linked to a different doctor by the time
+        // this revoke lands (stale-write guard via DetachPrimaryDoctor).
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var newDoctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = new PatientDoctorRequest
+        {
+            Id = requestId,
+            PatientId = patientId,
+            DoctorId = doctorId,
+            Status = RequestStatus.Accepted,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var patient = new Patient
+        {
+            Id = patientId,
+            FirstName = "Juan",
+            LastName = "Pérez",
+            Email = "juan@mail.com",
+            PrimaryDoctorId = newDoctorId,
+        };
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+
+        // Act
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        patient.PrimaryDoctorId.Should().Be(newDoctorId);
     }
 }
