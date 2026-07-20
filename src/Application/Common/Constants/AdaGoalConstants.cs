@@ -23,6 +23,11 @@ public static class AdaGoalConstants
     public const string Postprandial1h = "postprandial_1h";
     public const string Postprandial2h = "postprandial_2h";
 
+    // Valid input range for a raw glucometer reading (mg/dL), enforced at the validator level.
+    // Not a clinical target — see the fasting/postprandial ParameterSpec rows in Catalog for those.
+    public const int MinGlucoseReadingMgDl = 20;
+    public const int MaxGlucoseReadingMgDl = 800;
+
     // Parameters EvaluateGoalsCommandHandler actually evaluates per evaluation pass. Smaller than
     // KnownParameterIds (which lists every catalog id a doctor may set a custom goal for). The
     // AdaGoalConstantsTests drift guard asserts the two stay in sync with the handler's

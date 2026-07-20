@@ -1,3 +1,4 @@
+using Application.Common.Constants;
 using Application.UseCases.InsulinDm1.Commands;
 using FluentValidation;
 
@@ -16,14 +17,14 @@ internal sealed class AddInsulinRecordCommandValidator : AbstractValidator<AddIn
             .WithMessage("La fecha del registro es requerida.");
 
         RuleFor(x => x.GlucoseBefore)
-            .InclusiveBetween(20, 600)
+            .InclusiveBetween(AdaGoalConstants.MinGlucoseReadingMgDl, AdaGoalConstants.MaxGlucoseReadingMgDl)
             .When(x => x.GlucoseBefore.HasValue)
-            .WithMessage("La glucosa preprandial debe estar entre 20 y 600 mg/dL.");
+            .WithMessage($"La glucosa preprandial debe estar entre {AdaGoalConstants.MinGlucoseReadingMgDl} y {AdaGoalConstants.MaxGlucoseReadingMgDl} mg/dL.");
 
         RuleFor(x => x.GlucoseAfter)
-            .InclusiveBetween(20, 600)
+            .InclusiveBetween(AdaGoalConstants.MinGlucoseReadingMgDl, AdaGoalConstants.MaxGlucoseReadingMgDl)
             .When(x => x.GlucoseAfter.HasValue)
-            .WithMessage("La glucosa postprandial debe estar entre 20 y 600 mg/dL.");
+            .WithMessage($"La glucosa postprandial debe estar entre {AdaGoalConstants.MinGlucoseReadingMgDl} y {AdaGoalConstants.MaxGlucoseReadingMgDl} mg/dL.");
 
         RuleFor(x => x.TotalCarbs)
             .GreaterThanOrEqualTo(0)

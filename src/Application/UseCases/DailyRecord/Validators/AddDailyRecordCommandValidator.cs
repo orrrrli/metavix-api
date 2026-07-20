@@ -1,3 +1,4 @@
+using Application.Common.Constants;
 using Application.UseCases.DailyRecord.Commands;
 using Domain.Enums;
 using FluentValidation;
@@ -20,8 +21,8 @@ internal sealed class AddDailyRecordCommandValidator : AbstractValidator<AddDail
             .ChildRules(g =>
             {
                 g.RuleFor(r => r.ValueMgDl)
-                    .InclusiveBetween(20, 600)
-                    .WithMessage("El valor de glucosa debe estar entre 20 y 600 mg/dL");
+                    .InclusiveBetween(AdaGoalConstants.MinGlucoseReadingMgDl, AdaGoalConstants.MaxGlucoseReadingMgDl)
+                    .WithMessage($"El valor de glucosa debe estar entre {AdaGoalConstants.MinGlucoseReadingMgDl} y {AdaGoalConstants.MaxGlucoseReadingMgDl} mg/dL");
 
                 g.RuleFor(r => r.PostprandialWindow)
                     .Must((reading, _) => reading.PostprandialWindow is null
