@@ -63,11 +63,9 @@ internal sealed class UnlinkPatientCommandHandler
         // The MRN belongs to the doctor-patient RELATION, not the patient,
         // so once the relation ends the value is freed for re-use.
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
-        if (patient is not null && patient.PrimaryDoctorId == linkRequest.DoctorId)
+        if (patient is not null)
         {
-            patient.PrimaryDoctorId = null;
-            patient.MedicalRecordNumber = null;
-            patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: true, _timeProvider.GetUtcNow().UtcDateTime);
             await _patientRepository.UpdateAsync(patient);
         }
 

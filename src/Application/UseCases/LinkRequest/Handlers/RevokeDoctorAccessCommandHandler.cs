@@ -58,10 +58,9 @@ internal sealed class RevokeDoctorAccessCommandHandler
 
         // 4. Remove the doctor from the patient
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
-        if (patient is not null && patient.PrimaryDoctorId == linkRequest.DoctorId)
+        if (patient is not null)
         {
-            patient.PrimaryDoctorId = null;
-            patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: false, _timeProvider.GetUtcNow().UtcDateTime);
             await _patientRepository.UpdateAsync(patient);
         }
 

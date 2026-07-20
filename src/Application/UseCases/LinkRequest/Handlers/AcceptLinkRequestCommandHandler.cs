@@ -90,9 +90,7 @@ internal sealed class AcceptLinkRequestCommandHandler
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {
-            patient.PrimaryDoctorId = linkRequest.DoctorId;
-            patient.MedicalRecordNumber = assignedMrn;
-            patient.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, _timeProvider.GetUtcNow().UtcDateTime);
             await _patientRepository.UpdateAsync(patient);
         }
 

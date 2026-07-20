@@ -32,4 +32,27 @@ public class Patient
     public ICollection<PatientDoctorRequest> LinkRequests { get; set; } = [];
     public InsulinDm1Profile? InsulinDm1Profile { get; set; }
     public ICollection<InsulinDm1Record> InsulinDm1Records { get; set; } = [];
+
+    // Assigns the primary doctor and MRN together — the pair produced when a
+    // link request is accepted. See AcceptLinkRequestCommandHandler.
+    public void AssignDoctorAndMrn(Guid doctorId, string medicalRecordNumber, DateTime now)
+    {
+        PrimaryDoctorId = doctorId;
+        MedicalRecordNumber = medicalRecordNumber;
+        UpdatedAt = now;
+    }
+
+    // Ends the doctor-patient relation. The MRN belongs to the RELATION, not
+    // the patient, so it is only freed for re-use when the doctor is the one
+    // being detached from (guards against a stale/replaced doctor id) and the
+    // caller asks for it — Unlink clears it, Revoke does not (kept for the
+    // suggestion history). See UnlinkPatientCommandHandler / RevokeDoctorAccessCommandHandler.
+    public void DetachPrimaryDoctor(Guid doctorId, bool clearMrn, DateTime now)
+    {
+        if (PrimaryDoctorId != doctorId) return;
+
+        PrimaryDoctorId = null;
+        if (clearMrn) MedicalRecordNumber = null;
+        UpdatedAt = now;
+    }
 }
