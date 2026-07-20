@@ -25,8 +25,10 @@ public static class AdaGoalConstants
 
     // Valid input range for a raw glucometer reading (mg/dL), enforced at the validator level.
     // Not a clinical target — see the fasting/postprandial ParameterSpec rows in Catalog for those.
-    public const int MinGlucoseReadingMgDl = 20;
-    public const int MaxGlucoseReadingMgDl = 800;
+    // Source of truth lives in Domain (GlucoseConstants); these delegate so application
+    // validators stay in lockstep with the Domain factory without duplicating the value.
+    public static readonly int MinGlucoseReadingMgDl = Domain.Common.Constants.GlucoseConstants.MinReadingMgDl;
+    public static readonly int MaxGlucoseReadingMgDl = Domain.Common.Constants.GlucoseConstants.MaxReadingMgDl;
 
     // Parameters EvaluateGoalsCommandHandler actually evaluates per evaluation pass. Smaller than
     // KnownParameterIds (which lists every catalog id a doctor may set a custom goal for). The

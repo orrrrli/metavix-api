@@ -2,6 +2,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.DailyRecord.Common;
+using Application.UseCases.DailyRecord.Mappers;
 using Application.UseCases.DailyRecord.Queries;
 using Domain.Enums;
 
@@ -42,22 +43,6 @@ internal sealed class GetDailyRecordByIdQueryHandler
             return RecordErrors.RecordNotFound;
         }
 
-        var glucoseReadings = record.GlucoseReadings
-            .Select(g => new GlucoseReadingResult(
-                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods, g.PostprandialWindow)).ToList();
-
-        return new DailyRecordResult(
-            record.Id,
-            record.PatientId,
-            record.RecordDate,
-            record.RecordTime,
-            record.SystolicPressure,
-            record.DiastolicPressure,
-            record.HeartRate,
-            record.WeightKg,
-            record.WaistCm,
-            record.Notes,
-            record.CreatedAt,
-            glucoseReadings);
+        return DailyRecordMapper.ToResult(record);
     }
 }

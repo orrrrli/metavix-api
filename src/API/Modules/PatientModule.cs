@@ -105,10 +105,10 @@ public class PatientModule : MainModule, ICarterModule
             .WithName("GetPatientDailyRecords")
             .WithOpenApi();
 
-        group.MapGet("/{patientId:guid}/records/daily/snapshot", GetDailyRecordSnapshot)
-            .Produces<ApiSuccessResponse<DailyRecordSnapshotResult>>(StatusCodes.Status200OK)
+        group.MapGet("/{patientId:guid}/records/daily/body-stats", GetBodyStats)
+            .Produces<ApiSuccessResponse<BodyStats>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status403Forbidden)
-            .WithName("GetDailyRecordSnapshot")
+            .WithName("GetBodyStats")
             .WithOpenApi();
 
         group.MapGet("/{patientId:guid}/record/daily/{recordId:guid}", GetDailyRecordById)
@@ -346,7 +346,7 @@ public class PatientModule : MainModule, ICarterModule
         }
     }
 
-    private static async Task<IResult> GetDailyRecordSnapshot(
+    private static async Task<IResult> GetBodyStats(
         ISender sender,
         HttpContext httpContext,
         [FromRoute] Guid patientId,
@@ -358,7 +358,7 @@ public class PatientModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new GetDailyRecordSnapshotQuery(patientId, date));
+            var result = await sender.Send(new GetBodyStatsQuery(patientId, date));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),

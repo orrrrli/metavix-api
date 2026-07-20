@@ -1,6 +1,9 @@
 namespace Domain.Models;
 
+using Common.Constants;
+using Common.Errors;
 using Enums;
+using ErrorOr;
 
 public class GlucoseReading
 {
@@ -13,4 +16,42 @@ public class GlucoseReading
     public PostprandialWindow? PostprandialWindow { get; set; }
 
     public DailyRecord DailyRecord { get; set; } = null!;
+
+    // Factory: enforces clinical invariants for a glucose reading.
+    // Primitives only — keeps Domain free of Application-layer types.
+    // When a clinical concept gains its own rules (e.g. BloodPressure),
+    // extract it into a ValueObject under Domain/ValueObjects/ instead of
+    // widening this signature.
+    public static ErrorOr<GlucoseReading> Create(
+        Guid dailyRecordId,
+        GlucoseReadingType type,
+        int valueMgDl,
+        TimeOnly? time,
+        string? foods,
+        PostprandialWindow? postprandialWindow,
+        DateTime now)
+    {
+        if (valueMgDl < GlucoseConstants.MinReadingMgDl
+            || valueMgDl > GlucoseConstants.MaxReadingMgDl)
+            return GlucoseReadingErrors.InvalidValue;
+
+        // Per product decision (2026-07-20): every reading type requires Time.
+        // The Time property on the entity stays nullable for forward-compat
+        // with historical data, but the factory refuses new readings without it.
+        if (time is null)
+            return GlucoseReadingErrors.TimeRequired;
+
+        var reading = new GlucoseReading
+        {
+            Id = Guid.NewGuid(),
+            DailyRecordId = dailyRecordId,
+            ReadingType = type,
+            ValueMgDl = valueMgDl,
+            Time = time,
+            Foods = foods,
+            PostprandialWindow = postprandialWindow
+        };
+
+        return reading;
+    }
 }

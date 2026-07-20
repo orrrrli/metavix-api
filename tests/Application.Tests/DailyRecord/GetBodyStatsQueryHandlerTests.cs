@@ -4,17 +4,17 @@ using Application.UseCases.DailyRecord.Queries;
 
 namespace Application.Tests.DailyRecords;
 
-public class GetDailyRecordSnapshotQueryHandlerTests
+public class GetBodyStatsQueryHandlerTests
 {
     private readonly IDailyRecordRepository _dailyRecordRepository = Substitute.For<IDailyRecordRepository>();
     private readonly IPatientRepository     _patientRepository     = Substitute.For<IPatientRepository>();
     private readonly ICurrentUserService    _currentUser           = Substitute.For<ICurrentUserService>();
 
-    private readonly GetDailyRecordSnapshotQueryHandler _handler;
+    private readonly GetBodyStatsQueryHandler _handler;
 
-    public GetDailyRecordSnapshotQueryHandlerTests()
+    public GetBodyStatsQueryHandlerTests()
     {
-        _handler = new GetDailyRecordSnapshotQueryHandler(
+        _handler = new GetBodyStatsQueryHandler(
             _dailyRecordRepository,
             _patientRepository,
             _currentUser);
@@ -36,8 +36,8 @@ public class GetDailyRecordSnapshotQueryHandlerTests
             .Returns(record);
 
         // Act
-        ErrorOr<DailyRecordSnapshotResult> result =
-            await _handler.Handle(new GetDailyRecordSnapshotQuery(patientId, date), CancellationToken.None);
+        ErrorOr<BodyStats> result =
+            await _handler.Handle(new GetBodyStatsQuery(patientId, date), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
@@ -60,8 +60,8 @@ public class GetDailyRecordSnapshotQueryHandlerTests
             .Returns((DailyRecord?)null);
 
         // Act
-        ErrorOr<DailyRecordSnapshotResult> result =
-            await _handler.Handle(new GetDailyRecordSnapshotQuery(patientId, date), CancellationToken.None);
+        ErrorOr<BodyStats> result =
+            await _handler.Handle(new GetBodyStatsQuery(patientId, date), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
@@ -85,8 +85,8 @@ public class GetDailyRecordSnapshotQueryHandlerTests
             .Returns(earliest);
 
         // Act
-        ErrorOr<DailyRecordSnapshotResult> result =
-            await _handler.Handle(new GetDailyRecordSnapshotQuery(patientId, date), CancellationToken.None);
+        ErrorOr<BodyStats> result =
+            await _handler.Handle(new GetBodyStatsQuery(patientId, date), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
@@ -107,8 +107,8 @@ public class GetDailyRecordSnapshotQueryHandlerTests
         _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(callerPatientId);
 
         // Act
-        ErrorOr<DailyRecordSnapshotResult> result =
-            await _handler.Handle(new GetDailyRecordSnapshotQuery(otherPatientId, date), CancellationToken.None);
+        ErrorOr<BodyStats> result =
+            await _handler.Handle(new GetBodyStatsQuery(otherPatientId, date), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();

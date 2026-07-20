@@ -12,10 +12,10 @@ public class DailyRecordRepository : IDailyRecordRepository
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     }
 
-    public async Task AddAsync(DailyRecord record)
+    public async Task AddAsync(DailyRecord record, CancellationToken cancellationToken = default)
     {
-        await _dbContext.DailyRecords.AddAsync(record);
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.DailyRecords.AddAsync(record, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<List<DailyRecord>> GetAllByPatientIdAsync(Guid patientId)

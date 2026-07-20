@@ -3,7 +3,7 @@ using Domain.Enums;
 
 namespace Application.UseCases.DailyRecord.Commands;
 
-public sealed record GlucoseReadingDto(
+public sealed record GlucoseReading(
     GlucoseReadingType ReadingType,
     int ValueMgDl,
     TimeOnly? Time,
@@ -20,4 +20,4 @@ public sealed record AddDailyRecordCommand(
     decimal? WeightKg,
     int? WaistCm,
     string? Notes,
-    List<GlucoseReadingDto>? GlucoseReadings) : IRequest<ErrorOr<DailyRecordResult>>;
+    List<GlucoseReading>? GlucoseReadings) : IRequest<ErrorOr<DailyRecordResult>>;

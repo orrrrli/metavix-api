@@ -6,14 +6,14 @@ using Application.UseCases.DailyRecord.Queries;
 
 namespace Application.UseCases.DailyRecord.Handlers;
 
-internal sealed class GetDailyRecordSnapshotQueryHandler
-    : IRequestHandler<GetDailyRecordSnapshotQuery, ErrorOr<DailyRecordSnapshotResult>>
+internal sealed class GetBodyStatsQueryHandler
+    : IRequestHandler<GetBodyStatsQuery, ErrorOr<BodyStats>>
 {
     private readonly IDailyRecordRepository _dailyRecordRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly ICurrentUserService _currentUser;
 
-    public GetDailyRecordSnapshotQueryHandler(
+    public GetBodyStatsQueryHandler(
         IDailyRecordRepository dailyRecordRepository,
         IPatientRepository patientRepository,
         ICurrentUserService currentUser)
@@ -23,8 +23,8 @@ internal sealed class GetDailyRecordSnapshotQueryHandler
         _currentUser           = currentUser;
     }
 
-    public async Task<ErrorOr<DailyRecordSnapshotResult>> Handle(
-        GetDailyRecordSnapshotQuery request,
+    public async Task<ErrorOr<BodyStats>> Handle(
+        GetBodyStatsQuery request,
         CancellationToken cancellationToken)
     {
         if (_currentUser.UserId is null)
@@ -37,6 +37,6 @@ internal sealed class GetDailyRecordSnapshotQueryHandler
         var record = await _dailyRecordRepository
             .GetFirstByPatientIdAndDateAsync(request.PatientId, request.Date, cancellationToken);
 
-        return new DailyRecordSnapshotResult(record?.WeightKg, record?.WaistCm);
+        return new BodyStats(record?.WeightKg, record?.WaistCm);
     }
 }
