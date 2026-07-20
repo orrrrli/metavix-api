@@ -2,6 +2,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.DailyRecord.Common;
+using Application.UseCases.DailyRecord.Mappers;
 using Application.UseCases.DailyRecord.Queries;
 
 namespace Application.UseCases.DailyRecord.Handlers;
@@ -42,6 +43,6 @@ internal sealed class GetBodyStatsQueryHandler
         var record = await _dailyRecordRepository
             .GetFirstByPatientIdAndDateAsync(request.PatientId, request.Date, cancellationToken);
 
-        return new BodyStats(record?.WeightKg, record?.WaistCm);
+        return BodyStatsMapper.ToResult(record);
     }
 }
