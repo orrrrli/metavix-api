@@ -1,6 +1,7 @@
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
+using Application.Common.Mapping;
 using Application.UseCases.DailyRecord.Commands;
 using Application.UseCases.DailyRecord.Common;
 using DomainDailyRecord = Domain.Models.DailyRecord;
@@ -90,23 +91,6 @@ internal sealed class AddDailyRecordCommandHandler
         await _dailyRecordRepository.AddAsync(record, cancellationToken);
 
         // 6. Return result
-        return MapToResult(record);
+        return DailyRecordMapper.ToResult(record);
     }
-
-    private static DailyRecordResult MapToResult(DomainDailyRecord record) => new(
-        record.Id,
-        record.PatientId,
-        record.RecordDate,
-        record.RecordTime,
-        record.SystolicPressure,
-        record.DiastolicPressure,
-        record.HeartRate,
-        record.WeightKg,
-        record.WaistCm,
-        record.Notes,
-        record.CreatedAt,
-        record.GlucoseReadings
-            .Select(g => new GlucoseReadingResult(
-                g.Id, g.ReadingType, g.ValueMgDl, g.Time, g.Foods, g.PostprandialWindow))
-            .ToList());
 }
