@@ -4,4 +4,8 @@
     <Folder Include="Variables\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ErrorOr" />
+  </ItemGroup>
+
 </Project>
