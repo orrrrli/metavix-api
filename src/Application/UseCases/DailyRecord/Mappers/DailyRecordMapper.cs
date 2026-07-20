@@ -1,11 +1,12 @@
 using Application.UseCases.DailyRecord.Common;
 using Domain.Models;
+using DomainDailyRecord = Domain.Models.DailyRecord;
 
-namespace Application.Common.Mapping;
+namespace Application.UseCases.DailyRecord.Mappers;
 
 internal static class DailyRecordMapper
 {
-    public static DailyRecordResult ToResult(DailyRecord record) => new(
+    public static DailyRecordResult ToResult(DomainDailyRecord record) => new(
         record.Id,
         record.PatientId,
         record.RecordDate,

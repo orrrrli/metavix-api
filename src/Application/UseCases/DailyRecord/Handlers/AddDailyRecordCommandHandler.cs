@@ -1,9 +1,9 @@
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
-using Application.Common.Mapping;
 using Application.UseCases.DailyRecord.Commands;
 using Application.UseCases.DailyRecord.Common;
+using Application.UseCases.DailyRecord.Mappers;
 using DomainDailyRecord = Domain.Models.DailyRecord;
 using DomainGlucoseReading = Domain.Models.GlucoseReading;
 
