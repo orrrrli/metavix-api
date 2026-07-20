@@ -106,7 +106,7 @@ public class PatientModule : MainModule, ICarterModule
             .WithOpenApi();
 
         group.MapGet("/{patientId:guid}/records/daily/snapshot", GetDailyRecordSnapshot)
-            .Produces<ApiSuccessResponse<DailyRecordSnapshotResult>>(StatusCodes.Status200OK)
+            .Produces<ApiSuccessResponse<DailyRecordSnapshot>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status403Forbidden)
             .WithName("GetDailyRecordSnapshot")
             .WithOpenApi();
