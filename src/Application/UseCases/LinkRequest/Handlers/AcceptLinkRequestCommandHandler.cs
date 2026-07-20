@@ -82,8 +82,10 @@ internal sealed class AcceptLinkRequestCommandHandler
         }
 
         // 4. Accept the request
-        linkRequest.Status = RequestStatus.Accepted;
-        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!linkRequest.Accept(_timeProvider.GetUtcNow().UtcDateTime))
+        {
+            return LinkRequestErrors.NotPending;
+        }
         await _requestRepository.UpdateAsync(linkRequest);
 
         // 5. Link the patient to the doctor and assign the MRN

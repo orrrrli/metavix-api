@@ -3,7 +3,6 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Common;
-using Domain.Enums;
 
 namespace Application.UseCases.LinkRequest.Handlers;
 
@@ -48,15 +47,11 @@ internal sealed class UnlinkPatientCommandHandler
         if (callerDoctorId != linkRequest.DoctorId)
             return AuthErrors.Forbidden;
 
-        // 2. Verify it is accepted (only accepted links can be unlinked)
-        if (linkRequest.Status != RequestStatus.Accepted)
+        // 2. Unlink the patient (fails if not accepted)
+        if (!linkRequest.Unlink(_timeProvider.GetUtcNow().UtcDateTime))
         {
             return LinkRequestErrors.NotAccepted;
         }
-
-        // 3. Unlink the patient
-        linkRequest.Status = RequestStatus.Unlinked;
-        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
         // 4. Remove the doctor from the patient and clear the MRN.

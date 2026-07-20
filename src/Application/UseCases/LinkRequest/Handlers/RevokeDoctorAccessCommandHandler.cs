@@ -3,7 +3,6 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Common;
-using Domain.Enums;
 
 namespace Application.UseCases.LinkRequest.Handlers;
 
@@ -45,15 +44,11 @@ internal sealed class RevokeDoctorAccessCommandHandler
         if (callerPatientId != linkRequest.PatientId)
             return AuthErrors.Forbidden;
 
-        // 2. Verify it is accepted (only accepted links can be revoked)
-        if (linkRequest.Status != RequestStatus.Accepted)
+        // 2. Revoke the request (fails if not accepted)
+        if (!linkRequest.Revoke(_timeProvider.GetUtcNow().UtcDateTime))
         {
             return LinkRequestErrors.NotAccepted;
         }
-
-        // 3. Revoke the request
-        linkRequest.Status = RequestStatus.Revoked;
-        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
         // 4. Remove the doctor from the patient

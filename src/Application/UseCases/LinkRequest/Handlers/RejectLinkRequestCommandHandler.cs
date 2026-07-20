@@ -3,7 +3,6 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Common;
-using Domain.Enums;
 
 namespace Application.UseCases.LinkRequest.Handlers;
 
@@ -45,15 +44,11 @@ internal sealed class RejectLinkRequestCommandHandler
         if (callerDoctorId != linkRequest.DoctorId)
             return AuthErrors.Forbidden;
 
-        // 2. Verify it is still pending
-        if (linkRequest.Status != RequestStatus.Pending)
+        // 2. Reject the request (fails if not pending)
+        if (!linkRequest.Reject(_timeProvider.GetUtcNow().UtcDateTime))
         {
             return LinkRequestErrors.NotPending;
         }
-
-        // 3. Reject the request
-        linkRequest.Status = RequestStatus.Rejected;
-        linkRequest.ResolvedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _requestRepository.UpdateAsync(linkRequest);
 
         return new LinkRequestResult(
