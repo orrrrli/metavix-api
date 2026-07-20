@@ -27,10 +27,11 @@ public class GetBodyStatsQueryHandlerTests
         var userId    = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var date      = new DateOnly(2026, 6, 21);
+        var patient   = new Patient { Id = patientId, UserId = userId, IsActive = true };
         var record    = BuildRecord(patientId, date, weightKg: 72.5m, waistCm: 88, createdAt: DateTime.UtcNow);
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository
             .GetFirstByPatientIdAndDateAsync(patientId, date, Arg.Any<CancellationToken>())
             .Returns(record);
@@ -52,9 +53,10 @@ public class GetBodyStatsQueryHandlerTests
         var userId    = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var date      = new DateOnly(2026, 6, 21);
+        var patient   = new Patient { Id = patientId, UserId = userId, IsActive = true };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository
             .GetFirstByPatientIdAndDateAsync(patientId, date, Arg.Any<CancellationToken>())
             .Returns((DailyRecord?)null);
@@ -76,10 +78,11 @@ public class GetBodyStatsQueryHandlerTests
         var userId    = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var date      = new DateOnly(2026, 6, 21);
+        var patient   = new Patient { Id = patientId, UserId = userId, IsActive = true };
         var earliest  = BuildRecord(patientId, date, weightKg: 71.0m, waistCm: 85, createdAt: DateTime.UtcNow.AddHours(-3));
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository
             .GetFirstByPatientIdAndDateAsync(patientId, date, Arg.Any<CancellationToken>())
             .Returns(earliest);
@@ -98,13 +101,12 @@ public class GetBodyStatsQueryHandlerTests
     public async Task Handle_WhenCallerPatientIdDoesNotMatchRequest_ReturnsForbidden()
     {
         // Arrange
-        var userId          = Guid.NewGuid();
-        var callerPatientId = Guid.NewGuid();
-        var otherPatientId  = Guid.NewGuid();
-        var date            = new DateOnly(2026, 6, 21);
+        var userId         = Guid.NewGuid();
+        var otherPatientId = Guid.NewGuid();
+        var date           = new DateOnly(2026, 6, 21);
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(callerPatientId);
+        _patientRepository.GetOwnedPatientAsync(otherPatientId, userId, Arg.Any<CancellationToken>()).Returns((Patient?)null);
 
         // Act
         ErrorOr<BodyStats> result =

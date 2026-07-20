@@ -2,6 +2,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.DailyRecord.Common;
+using Application.UseCases.DailyRecord.Mappers;
 using Application.UseCases.DailyRecord.Queries;
 
 namespace Application.UseCases.DailyRecord.Handlers;
@@ -27,16 +28,21 @@ internal sealed class GetBodyStatsQueryHandler
         GetBodyStatsQuery request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerPatientId != request.PatientId)
+        // 2. Load — single query resolves ownership + existence.
+        //    "Not found" and "not yours" are collapsed into Forbidden to
+        //    close the patient-ID enumeration oracle.
+        var patient = await _patientRepository.GetOwnedPatientAsync(
+            request.PatientId, userId, cancellationToken);
+        if (patient is null)
             return AuthErrors.Forbidden;
 
         var record = await _dailyRecordRepository
             .GetFirstByPatientIdAndDateAsync(request.PatientId, request.Date, cancellationToken);
 
-        return new BodyStats(record?.WeightKg, record?.WaistCm);
+        return BodyStatsMapper.ToResult(record);
     }
 }
