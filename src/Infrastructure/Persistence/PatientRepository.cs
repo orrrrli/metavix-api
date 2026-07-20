@@ -57,6 +57,15 @@ public class PatientRepository : IPatientRepository
             .FirstOrDefaultAsync();
     }
 
+    public async Task<Domain.Models.Patient?> GetByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Patients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+    }
+
     // Returns the Patient only if it exists AND belongs to userId.
     // Collapses "not found" and "not yours" into a single null so the
     // handler can't leak which patient IDs exist (enumeration oracle).

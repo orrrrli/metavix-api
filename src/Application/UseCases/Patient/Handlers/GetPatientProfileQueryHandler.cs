@@ -24,16 +24,17 @@ internal sealed class GetPatientProfileQueryHandler
         GetPatientProfileQuery request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerPatientId != request.PatientId)
-            return AuthErrors.Forbidden;
-
-        var patient = await _patientRepository.GetByIdAsync(request.PatientId);
+        // 2. Load — single query resolves ownership + existence.
+        //    "Not found" and "not yours" are collapsed into Forbidden to
+        //    close the patient-ID enumeration oracle.
+        var patient = await _patientRepository.GetOwnedPatientAsync(
+            request.PatientId, userId, cancellationToken);
         if (patient is null)
-            return PatientErrors.PatientNotFound;
+            return AuthErrors.Forbidden;
 
         return new PatientProfileResult(
             patient.Id,
