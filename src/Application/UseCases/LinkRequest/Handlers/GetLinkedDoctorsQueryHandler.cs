@@ -27,12 +27,18 @@ internal sealed class GetLinkedDoctorsQueryHandler
         GetLinkedDoctorsQuery request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerPatientId != request.PatientId)
+        // 2. Load — single query resolves ownership + existence.
+        //    "Not found" and "not yours" are collapsed into Forbidden to
+        //    close the patient-ID enumeration oracle.
+        var patient = await _patientRepository.GetOwnedPatientAsync(
+            request.PatientId, userId, cancellationToken);
+        if (patient is null)
             return AuthErrors.Forbidden;
+
         var acceptedRequests = await _requestRepository.GetAcceptedByPatientIdAsync(request.PatientId);
 
         var results = acceptedRequests.Select(r => new LinkedDoctorResult(

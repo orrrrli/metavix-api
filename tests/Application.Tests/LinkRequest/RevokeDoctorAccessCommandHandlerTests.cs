@@ -54,9 +54,9 @@ public class RevokeDoctorAccessCommandHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
         _timeProvider.SetUtcNow(now);
 
         // Act
@@ -88,10 +88,18 @@ public class RevokeDoctorAccessCommandHandlerTests
             Status = RequestStatus.Pending,
             CreatedAt = DateTime.UtcNow,
         };
+        var patient = new Patient
+        {
+            Id = patientId,
+            FirstName = "Juan",
+            LastName = "Pérez",
+            Email = "juan@mail.com",
+        };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         // Act
         var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
@@ -110,7 +118,6 @@ public class RevokeDoctorAccessCommandHandlerTests
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var otherPatientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
         var linkRequest = new PatientDoctorRequest
@@ -123,8 +130,10 @@ public class RevokeDoctorAccessCommandHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(otherPatientId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        // Caller is not the owner of the patient on the request.
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns((Patient?)null);
 
         // Act
         var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
@@ -164,9 +173,9 @@ public class RevokeDoctorAccessCommandHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         // Act
         var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);

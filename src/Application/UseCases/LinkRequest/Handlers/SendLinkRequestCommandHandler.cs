@@ -34,28 +34,26 @@ internal sealed class SendLinkRequestCommandHandler
         SendLinkRequestCommand request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerPatientId != request.PatientId)
+        // 2. Load — single query resolves ownership + existence.
+        //    "Not found" and "not yours" are collapsed into Forbidden to
+        //    close the patient-ID enumeration oracle.
+        var patient = await _patientRepository.GetOwnedPatientAsync(
+            request.PatientId, userId, cancellationToken);
+        if (patient is null)
             return AuthErrors.Forbidden;
 
-        // 1. Verify doctor exists
+        // 3. Verify doctor exists
         var doctor = await _doctorRepository.GetByIdAsync(request.DoctorId);
         if (doctor is null)
         {
             return DoctorErrors.DoctorNotFound;
         }
 
-        // 2. Verify patient exists
-        var patient = await _patientRepository.GetByIdAsync(request.PatientId);
-        if (patient is null)
-        {
-            return PatientErrors.PatientsNotFound;
-        }
-
-        // 3. Check if patient already has a doctor
+        // 4. Check if patient already has a doctor
         if (patient.PrimaryDoctorId is not null)
         {
             return LinkRequestErrors.AlreadyLinked;
