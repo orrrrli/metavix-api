@@ -25,7 +25,7 @@ public class GlucoseReading
         Guid dailyRecordId,
         GlucoseReadingType type,
         int valueMgDl,
-        TimeOnly time,
+        TimeOnly? time,
         string? foods,
         PostprandialWindow? postprandialWindow,
         DateTime now)
@@ -36,6 +36,9 @@ public class GlucoseReading
         // Per product decision (2026-07-20): every reading type requires Time.
         // The Time property on the entity stays nullable for forward-compat
         // with historical data, but the factory refuses new readings without it.
+        if (time is null)
+            return GlucoseReadingErrors.TimeRequired;
+
         var reading = new GlucoseReading
         {
             Id = Guid.NewGuid(),
