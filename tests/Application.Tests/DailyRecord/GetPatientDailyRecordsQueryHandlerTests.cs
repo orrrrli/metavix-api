@@ -36,8 +36,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns(records);
 
         // Act
@@ -69,8 +68,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository
             .GetByPatientIdInRangeAsync(patientId, dateFrom, dateTo, Arg.Any<CancellationToken>())
             .Returns(recordsInRange);
@@ -83,7 +81,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(3);
         result.Value.Should().OnlyContain(r => r.RecordDate >= dateFrom && r.RecordDate <= dateTo);
-        _dailyRecordRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
+        await _dailyRecordRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -97,8 +95,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         var dateTo = new DateOnly(2026, 6, 5);
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository
             .GetByPatientIdInRangeAsync(patientId, dateFrom, dateTo, Arg.Any<CancellationToken>())
             .Returns(new List<DailyRecord>());
@@ -117,11 +114,10 @@ public class GetPatientDailyRecordsQueryHandlerTests
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var callerPatientId = Guid.NewGuid();
         var otherPatientId = Guid.NewGuid();
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(callerPatientId);
+        _patientRepository.GetOwnedPatientAsync(otherPatientId, userId, Arg.Any<CancellationToken>()).Returns((Patient?)null);
 
         // Act
         ErrorOr<List<DailyRecordResult>> result =
@@ -130,7 +126,6 @@ public class GetPatientDailyRecordsQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
-        await _patientRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
         await _dailyRecordRepository.DidNotReceive()
             .GetAllByPatientIdAsync(Arg.Any<Guid>());
         await _dailyRecordRepository.DidNotReceive()
