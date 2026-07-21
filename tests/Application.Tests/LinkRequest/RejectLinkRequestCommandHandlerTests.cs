@@ -23,6 +23,8 @@ public class RejectLinkRequestCommandHandlerTests
             _doctorRepository,
             _currentUser,
             _timeProvider);
+
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
     }
 
     [Fact]

@@ -22,6 +22,8 @@ public class RevokeDoctorAccessCommandHandlerTests
             _patientRepository,
             _currentUser,
             _timeProvider);
+
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
     }
 
     [Fact]

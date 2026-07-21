@@ -54,7 +54,10 @@ internal sealed class RevokeDoctorAccessCommandHandler
         {
             return LinkRequestErrors.NotAccepted;
         }
-        await _requestRepository.UpdateAsync(linkRequest);
+        if (!await _requestRepository.UpdateAsync(linkRequest))
+        {
+            return LinkRequestErrors.NotAccepted;
+        }
 
         // 5. Remove the doctor from the patient
         patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: false, _timeProvider.GetUtcNow().UtcDateTime);

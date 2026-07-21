@@ -26,6 +26,10 @@ public class AcceptLinkRequestCommandHandlerTests
             _doctorRepository,
             _currentUser,
             _timeProvider);
+
+        // Default: the persist succeeds (no concurrency conflict). Individual
+        // tests override with Returns(false) to exercise the lost-race path.
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
     }
 
     [Fact]
@@ -221,6 +225,38 @@ public class AcceptLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("LinkRequest.MrnAutoAssignFailed");
+    }
+
+    [Fact]
+    public async Task Handle_WhenConcurrentAcceptWinsRace_ReturnsNotPendingWithoutLinkingPatient()
+    {
+        // Arrange — the in-memory state is Pending, but a concurrent acceptance
+        // committed first, so UpdateAsync reports an optimistic-concurrency
+        // conflict (false). The handler must bail out as NotPending and never
+        // apply the patient link twice.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var mrn = "MRN-2026-000123";
+
+        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns(TestEntities.Patient(patientId));
+        _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(false);
+
+        // Act
+        var result = await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("LinkRequest.NotPending");
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
 
     [Fact]

@@ -53,7 +53,10 @@ internal sealed class UnlinkPatientCommandHandler
         {
             return LinkRequestErrors.NotAccepted;
         }
-        await _requestRepository.UpdateAsync(linkRequest);
+        if (!await _requestRepository.UpdateAsync(linkRequest))
+        {
+            return LinkRequestErrors.NotAccepted;
+        }
 
         // 4. Remove the doctor from the patient and clear the MRN.
         // The MRN belongs to the doctor-patient RELATION, not the patient,

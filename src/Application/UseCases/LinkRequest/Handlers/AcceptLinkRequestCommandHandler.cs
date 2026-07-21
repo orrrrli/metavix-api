@@ -98,12 +98,18 @@ internal sealed class AcceptLinkRequestCommandHandler
             assignedMrn = candidate;
         }
 
-        // 5. Accept the request
+        // 5. Accept the request. UpdateAsync returns false when a concurrent
+        //    acceptance won the optimistic-concurrency race — treat it as
+        //    NotPending and skip the patient mutation so the link isn't applied
+        //    twice.
         if (!linkRequest.Accept(now.UtcDateTime))
         {
             return LinkRequestErrors.NotPending;
         }
-        await _requestRepository.UpdateAsync(linkRequest);
+        if (!await _requestRepository.UpdateAsync(linkRequest))
+        {
+            return LinkRequestErrors.NotPending;
+        }
 
         // 6. Link the patient to the doctor and assign the MRN
         patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, now.UtcDateTime);
