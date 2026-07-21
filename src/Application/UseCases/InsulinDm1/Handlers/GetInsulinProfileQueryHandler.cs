@@ -3,6 +3,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.InsulinDm1.Common;
+using Application.UseCases.InsulinDm1.Mappers;
 using Application.UseCases.InsulinDm1.Queries;
 
 namespace Application.UseCases.InsulinDm1.Handlers;
@@ -38,16 +39,6 @@ internal sealed class GetInsulinProfileQueryHandler
         if (profile is null)
             return InsulinDm1Errors.ProfileNotFound;
 
-        return new InsulinDm1ProfileResult(
-            profile.Id,
-            profile.PatientId,
-            profile.InsulinName,
-            profile.Ric,
-            profile.SensitivityFactor,
-            profile.TargetGlucose,
-            profile.DoctorName,
-            profile.DoctorPhone,
-            profile.CreatedAt,
-            profile.UpdatedAt);
+        return InsulinDm1ProfileMapper.ToResult(profile);
     }
 }

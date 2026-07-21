@@ -4,6 +4,7 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.InsulinDm1.Commands;
 using Application.UseCases.InsulinDm1.Common;
+using Application.UseCases.InsulinDm1.Mappers;
 
 namespace Application.UseCases.InsulinDm1.Handlers;
 
@@ -66,16 +67,6 @@ internal sealed class UpsertInsulinProfileCommandHandler
 
         await _insulinRepository.UpsertProfileAsync(existing);
 
-        return new InsulinDm1ProfileResult(
-            existing.Id,
-            existing.PatientId,
-            existing.InsulinName,
-            existing.Ric,
-            existing.SensitivityFactor,
-            existing.TargetGlucose,
-            existing.DoctorName,
-            existing.DoctorPhone,
-            existing.CreatedAt,
-            existing.UpdatedAt);
+        return InsulinDm1ProfileMapper.ToResult(existing);
     }
 }

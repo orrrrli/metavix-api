@@ -3,6 +3,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LabResult.Common;
+using Application.UseCases.LabResult.Mappers;
 using Application.UseCases.LabResult.Queries;
 
 namespace Application.UseCases.LabResult.Handlers;
@@ -39,20 +40,6 @@ internal sealed class GetPatientLabResultsQueryHandler
         // 3. Map — an owned patient with no lab results yet is a valid empty
         //    result, not an error. Returning RecordsNotFound would force callers
         //    to treat "no results yet" as a failure.
-        return records.Select(r => new LabResultResult(
-            r.Id,
-            r.PatientId,
-            r.SampleDate,
-            r.Hba1c,
-            r.TotalCholesterol,
-            r.Ldl,
-            r.Hdl,
-            r.Triglycerides,
-            r.Creatinine,
-            r.Bun,
-            r.EgoProteins,
-            r.EgoGlucose,
-            r.Notes,
-            r.CreatedAt)).ToList();
+        return records.Select(LabResultMapper.ToResult).ToList();
     }
 }

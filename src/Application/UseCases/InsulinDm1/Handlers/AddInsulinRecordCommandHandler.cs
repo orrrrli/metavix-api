@@ -4,6 +4,7 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.InsulinDm1.Commands;
 using Application.UseCases.InsulinDm1.Common;
+using Application.UseCases.InsulinDm1.Mappers;
 
 namespace Application.UseCases.InsulinDm1.Handlers;
 
@@ -59,16 +60,6 @@ internal sealed class AddInsulinRecordCommandHandler
 
         await _insulinRepository.AddRecordAsync(record);
 
-        return new InsulinDm1RecordResult(
-            record.Id,
-            record.PatientId,
-            record.RecordDate,
-            record.GlucoseBefore,
-            record.GlucoseAfter,
-            record.TotalCarbs,
-            record.DoseApplied,
-            record.MealDescription,
-            record.HowIFelt,
-            record.CreatedAt);
+        return InsulinDm1RecordMapper.ToResult(record);
     }
 }

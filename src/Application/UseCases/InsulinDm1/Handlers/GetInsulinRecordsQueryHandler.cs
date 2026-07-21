@@ -3,6 +3,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.InsulinDm1.Common;
+using Application.UseCases.InsulinDm1.Mappers;
 using Application.UseCases.InsulinDm1.Queries;
 
 namespace Application.UseCases.InsulinDm1.Handlers;
@@ -39,16 +40,6 @@ internal sealed class GetInsulinRecordsQueryHandler
         // 3. Map — an owned patient with no insulin records yet is a valid empty
         //    result, not an error. Returning RecordsNotFound would force callers
         //    to treat "no records yet" as a failure.
-        return records.Select(r => new InsulinDm1RecordResult(
-            r.Id,
-            r.PatientId,
-            r.RecordDate,
-            r.GlucoseBefore,
-            r.GlucoseAfter,
-            r.TotalCarbs,
-            r.DoseApplied,
-            r.MealDescription,
-            r.HowIFelt,
-            r.CreatedAt)).ToList();
+        return records.Select(InsulinDm1RecordMapper.ToResult).ToList();
     }
 }
