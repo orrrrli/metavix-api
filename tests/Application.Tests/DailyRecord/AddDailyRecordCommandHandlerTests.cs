@@ -31,7 +31,7 @@ public class AddDailyRecordCommandHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -71,7 +71,7 @@ public class AddDailyRecordCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -106,7 +106,7 @@ public class AddDailyRecordCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -138,7 +138,7 @@ public class AddDailyRecordCommandHandlerTests
     {
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -182,7 +182,7 @@ public class AddDailyRecordCommandHandlerTests
     {
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -224,7 +224,7 @@ public class AddDailyRecordCommandHandlerTests
     {
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -266,7 +266,7 @@ public class AddDailyRecordCommandHandlerTests
     {
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: false);
+        var patient = TestEntities.Patient(patientId, isActive: false);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -363,7 +363,7 @@ public class AddDailyRecordCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -397,7 +397,7 @@ public class AddDailyRecordCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId, isActive: true);
+        var patient = TestEntities.Patient(patientId, isActive: true);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -424,10 +424,4 @@ public class AddDailyRecordCommandHandlerTests
         await _patientRepository.Received(1).GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
-    private static Patient BuildPatient(Guid patientId, bool isActive) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = isActive,
-    };
 }

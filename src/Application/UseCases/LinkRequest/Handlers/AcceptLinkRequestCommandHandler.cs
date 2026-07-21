@@ -11,8 +11,6 @@ namespace Application.UseCases.LinkRequest.Handlers;
 internal sealed class AcceptLinkRequestCommandHandler
     : IRequestHandler<AcceptLinkRequestCommand, ErrorOr<LinkRequestResult>>
 {
-    private const int MaxAutoAssignAttempts = 5;
-
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly IDoctorRepository _doctorRepository;
@@ -58,7 +56,24 @@ internal sealed class AcceptLinkRequestCommandHandler
             return LinkRequestErrors.NotPending;
         }
 
-        // 3. Resolve the MRN to assign:
+        // One timestamp for the whole acceptance: the MRN suggestion, the
+        // request's ResolvedAt and the patient's AssignedAt all describe the
+        // same event and must agree (three separate GetUtcNow() calls could
+        // drift across the millisecond boundary the MRN uniqueness relies on).
+        var now = _timeProvider.GetUtcNow();
+
+        // 3. Load the patient BEFORE validating the MRN or mutating anything.
+        //    If the patient was deleted between sending and accepting the
+        //    request, bail out with the concrete PatientNotFound cause instead
+        //    of a misleading MrnAlreadyAssigned (a duplicate MRN on a patient
+        //    that no longer exists) — and instead of accepting the request and
+        //    then silently skipping the link, which used to leave the request
+        //    Accepted with no doctor ever assigned and still report success.
+        var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
+        if (patient is null)
+            return PatientErrors.PatientNotFound;
+
+        // 4. Resolve the MRN to assign:
         //    - If the doctor provided one, validate uniqueness.
         //    - Otherwise auto-assign the next available for the current year.
         string? assignedMrn;
@@ -71,31 +86,34 @@ internal sealed class AcceptLinkRequestCommandHandler
         }
         else
         {
-            var autoMrn = await TryAutoAssignAsync(cancellationToken);
-            if (autoMrn is null)
-            {
-                // Exhausted retries — surface as a transient error so the
-                // client can retry. The unique index still guarantees no
-                // duplicates are ever persisted.
+            // Auto-assign a timestamp-derived suggestion. A single candidate is
+            // enough: MrnGenerator.Suggest is unique to the millisecond, and the
+            // DB unique index on Patients.MedicalRecordNumber is the actual
+            // backstop for the (vanishingly rare) same-millisecond race. If the
+            // suggestion already exists, surface a transient error so the client
+            // can retry rather than silently colliding.
+            var candidate = MrnGenerator.Suggest(now);
+            if (await _patientRepository.ExistsByMedicalRecordNumberAsync(candidate, cancellationToken))
                 return LinkRequestErrors.MrnAutoAssignFailed;
-            }
-            assignedMrn = autoMrn;
+            assignedMrn = candidate;
         }
 
-        // 4. Accept the request
-        if (!linkRequest.Accept(_timeProvider.GetUtcNow().UtcDateTime))
+        // 5. Accept the request. UpdateAsync returns false when a concurrent
+        //    acceptance won the optimistic-concurrency race — treat it as
+        //    NotPending and skip the patient mutation so the link isn't applied
+        //    twice.
+        if (!linkRequest.Accept(now.UtcDateTime))
         {
             return LinkRequestErrors.NotPending;
         }
-        await _requestRepository.UpdateAsync(linkRequest);
-
-        // 5. Link the patient to the doctor and assign the MRN
-        var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
-        if (patient is not null)
+        if (!await _requestRepository.UpdateAsync(linkRequest))
         {
-            patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, _timeProvider.GetUtcNow().UtcDateTime);
-            await _patientRepository.UpdateAsync(patient);
+            return LinkRequestErrors.NotPending;
         }
+
+        // 6. Link the patient to the doctor and assign the MRN
+        patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, now.UtcDateTime);
+        await _patientRepository.UpdateAsync(patient);
 
         return new LinkRequestResult(
             linkRequest.Id,
@@ -103,23 +121,5 @@ internal sealed class AcceptLinkRequestCommandHandler
             linkRequest.DoctorId,
             linkRequest.Status.ToString(),
             linkRequest.CreatedAt);
-    }
-
-    /// <summary>
-    /// Generates a timestamp-derived MRN candidate and re-checks uniqueness.
-    /// The DB unique index is the ultimate backstop — this loop just avoids
-    /// the noisy 500 in the rare case two candidates land in the same
-    /// millisecond.
-    /// </summary>
-    private async Task<string?> TryAutoAssignAsync(CancellationToken cancellationToken)
-    {
-        var now = _timeProvider.GetUtcNow();
-        for (int attempt = 0; attempt < MaxAutoAssignAttempts; attempt++)
-        {
-            var candidate = MrnGenerator.Suggest(now.AddMilliseconds(attempt));
-            if (!await _patientRepository.ExistsByMedicalRecordNumberAsync(candidate, cancellationToken))
-                return candidate;
-        }
-        return null;
     }
 }

@@ -23,7 +23,7 @@ public class UpdateDoctorProfileCommandHandlerTests
         var userId   = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var command  = new UpdateDoctorProfileCommand("12345678", "Endocrinología");
-        var doctor   = BuildDoctor(doctorId, userId, command.LicenseNumber, command.Speciality);
+        var doctor   = TestEntities.Doctor(doctorId, userId, command.LicenseNumber, command.Speciality);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetByUserIdAsync(userId, Arg.Any<CancellationToken>())
@@ -44,7 +44,32 @@ public class UpdateDoctorProfileCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenCallerHasNoDoctorRecord_ReturnsForbidden()
+    public async Task Handle_ReturnsNewCredentials_NotTheStaleLoadedOnes()
+    {
+        // Arrange — the loaded (AsNoTracking) doctor still holds the OLD license
+        // and speciality; the targeted ExecuteUpdate writes the new ones. The
+        // result must reflect the command's new values, not the stale load.
+        var userId   = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var command  = new UpdateDoctorProfileCommand("99998888", "Cardiología");
+        var staleDoctor = TestEntities.Doctor(
+            doctorId, userId, licenseNumber: "11112222", speciality: "Medicina General");
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetByUserIdAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(staleDoctor);
+
+        // Act
+        ErrorOr<DoctorProfileResult> result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        result.Value.LicenseNumber.Should().Be("99998888");
+        result.Value.Speciality.Should().Be("Cardiología");
+    }
+
+    [Fact]
+    public async Task Handle_WhenCallerHasNoDoctorRecord_ReturnsDoctorNotFound()
     {
         // Arrange
         var userId  = Guid.NewGuid();
@@ -59,7 +84,7 @@ public class UpdateDoctorProfileCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        result.FirstError.Code.Should().Be(DoctorErrors.DoctorNotFound.Code);
         await _doctorRepository.DidNotReceive().UpdateProfileAsync(
             Arg.Any<Guid>(),
             Arg.Any<string>(),
@@ -84,18 +109,4 @@ public class UpdateDoctorProfileCommandHandlerTests
             .GetByUserIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId, string licenseNumber, string speciality) => new()
-    {
-        Id                = doctorId,
-        UserId            = userId,
-        FirstName         = "Ana",
-        PaternalLastName  = "García",
-        MaternalLastName  = "López",
-        LicenseNumber     = licenseNumber,
-        Speciality        = speciality,
-        Email             = "ana@clinic.com",
-        IsVerified        = false,
-        IsActive          = true,
-        CreatedAt         = DateTime.UtcNow,
-    };
 }

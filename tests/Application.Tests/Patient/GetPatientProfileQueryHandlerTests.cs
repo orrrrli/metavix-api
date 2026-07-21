@@ -40,14 +40,17 @@ public class GetPatientProfileQueryHandlerTests
             .Returns(patient);
 
         var query = new GetPatientProfileQuery(patientId);
+        using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(query, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Id.Should().Be(patientId);
         result.Value.FirstName.Should().Be("Juan");
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]
@@ -68,5 +71,20 @@ public class GetPatientProfileQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var query = new GetPatientProfileQuery(Guid.NewGuid());
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

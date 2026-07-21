@@ -1,4 +1,6 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
+using Application.UseCases.Patient.Mappers;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Patient.Commands;
@@ -15,34 +17,33 @@ internal sealed class UpdatePatientProfileCommandHandler
     private readonly IDoctorRepository _doctorRepository;
     private readonly INotificationRepository _notificationRepository;
     private readonly ICurrentUserService _currentUser;
+    private readonly TimeProvider _timeProvider;
 
     public UpdatePatientProfileCommandHandler(
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
         INotificationRepository notificationRepository,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        TimeProvider timeProvider)
     {
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
         _notificationRepository = notificationRepository;
         _currentUser = currentUser;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<PatientProfileResult>> Handle(
         UpdatePatientProfileCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        // 1. Authenticate + load the owned patient (see PatientAccess).
+        var access = await PatientAccess.RequireOwnedPatientAsync(
+            _currentUser, _patientRepository, request.PatientId, cancellationToken);
+        if (access.IsError)
+            return access.Errors;
 
-        // 2. Load — single query resolves ownership + existence.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
-        var patient = await _patientRepository.GetOwnedPatientAsync(
-            request.PatientId, userId, cancellationToken);
-        if (patient is null)
-            return AuthErrors.Forbidden;
+        var patient = access.Value;
 
         if (request.IsPregnant == true && patient.Gender != Gender.Female)
             return PatientErrors.PregnancyRequiresFemale;
@@ -84,7 +85,8 @@ internal sealed class UpdatePatientProfileCommandHandler
                 recipientUserId = doctor?.UserId;
             }
 
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var today = DateOnly.FromDateTime(now);
             _notificationRepository.Stage(new Notification
             {
                 Id = Guid.NewGuid(),
@@ -94,26 +96,12 @@ internal sealed class UpdatePatientProfileCommandHandler
                 Body = $"{patient.FirstName} {patient.LastName} fue marcada como embarazada el {today}. Las metas clínicas de embarazo están activas.",
                 Type = NotificationType.PregnancyActivated,
                 IsRead = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = now
             });
         }
 
         await _patientRepository.UpdateAsync(patient);
 
-        return new PatientProfileResult(
-            patient.Id,
-            patient.FirstName,
-            patient.LastName,
-            patient.Email,
-            patient.Phone,
-            patient.DateOfBirth,
-            patient.HeightCm,
-            patient.Gender?.ToString(),
-            patient.IsPregnant,
-            patient.DiabetesType.ToString(),
-            patient.MedicalRecordNumber,
-            patient.CreatedAt,
-            patient.PregnancyStartDate,
-            patient.PregnancyDueDate);
+        return PatientProfileMapper.ToResult(patient);
     }
 }

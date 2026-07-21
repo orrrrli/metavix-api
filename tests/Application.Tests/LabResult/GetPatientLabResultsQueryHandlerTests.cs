@@ -28,7 +28,7 @@ public class GetPatientLabResultsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var records = new List<LabResult>
         {
             new() { Id = Guid.NewGuid(), PatientId = patientId, SampleDate = new DateOnly(2026, 6, 1) },
@@ -41,13 +41,39 @@ public class GetPatientLabResultsQueryHandlerTests
         _labResultRepository.GetAllByPatientIdAsync(patientId).Returns(records);
 
         var query = new GetPatientLabResultsQuery(patientId);
+        using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(query, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(2);
+        // The caller's token must be propagated to the load, not swallowed (§4.6).
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPatientIsOwnedButHasNoRecords_ReturnsEmptyList()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(TestEntities.Patient(patientId));
+        _labResultRepository.GetAllByPatientIdAsync(patientId).Returns(new List<LabResult>());
+
+        var query = new GetPatientLabResultsQuery(patientId);
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert — no lab results yet is a valid empty result, not an error.
+        result.IsError.Should().BeFalse();
+        result.Value.Should().BeEmpty();
     }
 
     [Fact]
@@ -72,10 +98,19 @@ public class GetPatientLabResultsQueryHandlerTests
         await _labResultRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
     {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var query = new GetPatientLabResultsQuery(Guid.NewGuid());
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
 }

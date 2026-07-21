@@ -23,13 +23,6 @@ public class CreateClinicalGoalCommandHandlerTests
     private CreateClinicalGoalCommand MakeCommand(Guid doctorId, Guid patientId, string parameterId = "systolic_bp") =>
         new(doctorId, patientId, parameterId, null, null, 135m, 150m);
 
-    private void SetupAuth(Guid userId, Guid doctorId, Guid patientId, bool linked = true)
-    {
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildDoctor(doctorId, userId));
-        _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(linked);
-    }
 
     [Fact]
     public async Task Handle_WhenValid_CreatesGoalAndReturnsResult()
@@ -37,7 +30,7 @@ public class CreateClinicalGoalCommandHandlerTests
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
 
         var result = await _handler.Handle(MakeCommand(doctorId, patientId), CancellationToken.None);
@@ -56,7 +49,7 @@ public class CreateClinicalGoalCommandHandlerTests
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId, linked: false);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId, linked: false);
 
         var result = await _handler.Handle(MakeCommand(doctorId, patientId), CancellationToken.None);
 
@@ -71,7 +64,7 @@ public class CreateClinicalGoalCommandHandlerTests
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
 
         var result = await _handler.Handle(
@@ -87,7 +80,7 @@ public class CreateClinicalGoalCommandHandlerTests
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns(
         [
             new ClinicalGoal { Id = Guid.NewGuid(), PatientId = patientId, ParameterId = "systolic_bp" }
@@ -100,15 +93,4 @@ public class CreateClinicalGoalCommandHandlerTests
         await _clinicalGoalRepository.DidNotReceive().AddAsync(Arg.Any<ClinicalGoal>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
-    {
-        Id = doctorId,
-        UserId = userId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        LicenseNumber = "12345678",
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        IsVerified = true,
-    };
 }

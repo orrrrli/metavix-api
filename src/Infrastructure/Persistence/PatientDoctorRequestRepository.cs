@@ -69,17 +69,42 @@ public class PatientDoctorRequestRepository : IPatientDoctorRequestRepository
                         && r.Status == RequestStatus.Pending);
     }
 
-    public async Task<bool> IsAcceptedLinkAsync(Guid doctorId, Guid patientId)
+    public async Task<bool> IsAcceptedLinkAsync(Guid doctorId, Guid patientId, CancellationToken cancellationToken = default)
     {
         return await _dbContext.PatientDoctorRequests
             .AnyAsync(r => r.DoctorId == doctorId
                         && r.PatientId == patientId
-                        && r.Status == RequestStatus.Accepted);
+                        && r.Status == RequestStatus.Accepted, cancellationToken);
     }
 
-    public async Task UpdateAsync(PatientDoctorRequest request)
+    public async Task<bool> UpdateAsync(PatientDoctorRequest request)
     {
-        _dbContext.PatientDoctorRequests.Update(request);
-        await _dbContext.SaveChangesAsync();
+        // GetByIdAsync loads tracked entities (no AsNoTracking), so Accept /
+        // Reject / Revoke mutate 2-3 properties and the change tracker already
+        // knows which columns changed — it will emit a targeted UPDATE. Calling
+        // .Update() here would instead mark every property Modified and rewrite
+        // all columns. Only attach when the instance is detached.
+        var entry = _dbContext.Entry(request);
+        if (entry.State == EntityState.Detached)
+            _dbContext.PatientDoctorRequests.Update(request);
+
+        // Bump the optimistic-concurrency token so the emitted UPDATE both
+        // writes a new Version and carries `WHERE "Version" = @original` (EF
+        // uses the original value it read). A concurrent writer that already
+        // committed leaves @original stale → zero rows updated → conflict.
+        entry.Property<long>("Version").CurrentValue += 1;
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A concurrent caller committed a competing transition first (the
+            // xmin token no longer matches). The handler translates false into
+            // the appropriate not-in-expected-state error.
+            return false;
+        }
     }
 }

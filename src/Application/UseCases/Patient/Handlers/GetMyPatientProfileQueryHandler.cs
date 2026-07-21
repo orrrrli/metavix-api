@@ -1,4 +1,5 @@
 using Application.Common.Errors;
+using Application.UseCases.Patient.Mappers;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Patient.Common;
@@ -30,26 +31,13 @@ internal sealed class GetMyPatientProfileQueryHandler
 
         // 2. Load — caller is fetching their own patient profile, so a single
         //    by-userId lookup is the right granularity (no patientId is supplied
-        //    in this query). Null collapses "user has no patient yet" and any
-        //    other miss into one error path.
+        //    in this query). A null result means the authenticated user simply
+        //    has no patient profile yet — that is a missing resource, not a
+        //    permissions failure, so surface PatientNotFound (not Forbidden).
         var patient = await _patientRepository.GetByUserIdAsync(userId, cancellationToken);
         if (patient is null)
-            return AuthErrors.Forbidden;
+            return PatientErrors.PatientNotFound;
 
-        return new PatientProfileResult(
-            patient.Id,
-            patient.FirstName,
-            patient.LastName,
-            patient.Email,
-            patient.Phone,
-            patient.DateOfBirth,
-            patient.HeightCm,
-            patient.Gender?.ToString(),
-            patient.IsPregnant,
-            patient.DiabetesType.ToString(),
-            patient.MedicalRecordNumber,
-            patient.CreatedAt,
-            patient.PregnancyStartDate,
-            patient.PregnancyDueDate);
+        return PatientProfileMapper.ToResult(patient);
     }
 }

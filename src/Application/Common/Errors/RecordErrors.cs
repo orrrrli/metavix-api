@@ -12,5 +12,5 @@ public static class RecordErrors
 
     public static readonly Error InactivePatient = Error.Validation(
         code: "Record.InactivePatient",
-        description: "El paciente está inactivo y no puede registrar DailyRecords.");
+        description: "El paciente está inactivo y no puede registrar datos.");
 }

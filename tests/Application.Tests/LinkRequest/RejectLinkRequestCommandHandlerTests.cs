@@ -23,6 +23,8 @@ public class RejectLinkRequestCommandHandlerTests
             _doctorRepository,
             _currentUser,
             _timeProvider);
+
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
     }
 
     [Fact]
@@ -35,15 +37,8 @@ public class RejectLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var now = DateTime.UtcNow;
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-        };
-        var doctor = BuildDoctor(doctorId, userId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
+        var doctor = TestEntities.Doctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -69,15 +64,8 @@ public class RejectLinkRequestCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
-        var doctor = BuildDoctor(doctorId, userId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
+        var doctor = TestEntities.Doctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -101,14 +89,7 @@ public class RejectLinkRequestCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
 
         _currentUser.UserId.Returns(userId);
         // No doctor with this id belongs to userId → GetOwnedDoctorAsync returns null.
@@ -124,15 +105,4 @@ public class RejectLinkRequestCommandHandlerTests
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
-    {
-        Id = doctorId,
-        UserId = userId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        LicenseNumber = "12345678",
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        IsVerified = true,
-    };
 }

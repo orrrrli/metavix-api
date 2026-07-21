@@ -19,13 +19,6 @@ public class UpdateClinicalGoalCommandHandlerTests
             _clinicalGoalRepository, _doctorRepository, _requestRepository, _currentUser);
     }
 
-    private void SetupAuth(Guid userId, Guid doctorId, Guid patientId)
-    {
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildDoctor(doctorId, userId));
-        _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(true);
-    }
 
     [Fact]
     public async Task Handle_WhenGoalExists_UpdatesThresholds()
@@ -34,7 +27,7 @@ public class UpdateClinicalGoalCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
 
         var goal = new ClinicalGoal
         {
@@ -63,7 +56,7 @@ public class UpdateClinicalGoalCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
@@ -82,7 +75,7 @@ public class UpdateClinicalGoalCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
@@ -102,7 +95,7 @@ public class UpdateClinicalGoalCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var command = new UpdateClinicalGoalCommand(doctorId, patientId, goalId, null, null, 130m, 145m);
@@ -113,15 +106,4 @@ public class UpdateClinicalGoalCommandHandlerTests
         await _clinicalGoalRepository.DidNotReceive().UpdateAsync(Arg.Any<ClinicalGoal>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
-    {
-        Id = doctorId,
-        UserId = userId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        LicenseNumber = "12345678",
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        IsVerified = true,
-    };
 }

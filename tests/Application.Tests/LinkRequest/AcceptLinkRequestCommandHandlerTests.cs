@@ -26,6 +26,10 @@ public class AcceptLinkRequestCommandHandlerTests
             _doctorRepository,
             _currentUser,
             _timeProvider);
+
+        // Default: the persist succeeds (no concurrency conflict). Individual
+        // tests override with Returns(false) to exercise the lost-race path.
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
     }
 
     [Fact]
@@ -39,9 +43,9 @@ public class AcceptLinkRequestCommandHandlerTests
         var mrn = "MRN-2026-000001";
         var now = DateTime.UtcNow;
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: false);
-        var patient = BuildPatient(patientId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: false);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -75,12 +79,13 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var mrn = "MRN-2026-000042";
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns(TestEntities.Patient(patientId));
         _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(true);
 
         // Act
@@ -105,9 +110,9 @@ public class AcceptLinkRequestCommandHandlerTests
         var mrn = "MRN-2026-000123";
         var now = DateTime.UtcNow;
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
-        var patient = BuildPatient(patientId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -127,6 +132,40 @@ public class AcceptLinkRequestCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenPatientDeletedBeforeAccept_ReturnsPatientNotFoundWithoutMutating()
+    {
+        // Arrange — request + doctor resolve fine, but the patient was deleted
+        // between sending and accepting. The handler must bail out before
+        // accepting the request, so neither the request nor the patient is
+        // mutated and no inconsistent Accepted-but-unlinked state is left.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var mrn = "MRN-2026-000123";
+
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns((Patient?)null);
+        _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
+
+        // Act
+        ErrorOr<LinkRequestResult> result =
+            await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        linkRequest.Status.Should().Be(RequestStatus.Pending);
+    }
+
+    [Fact]
     public async Task Handle_WhenMrnNotProvided_AutoAssignsNextAvailable()
     {
         // Arrange
@@ -136,9 +175,9 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
-        var patient = BuildPatient(patientId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -158,7 +197,7 @@ public class AcceptLinkRequestCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenAutoAssignExhaustsRetries_ReturnsAutoAssignFailed()
+    public async Task Handle_WhenAutoAssignedMrnAlreadyExists_ReturnsAutoAssignFailed()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -167,13 +206,15 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        // Every candidate collides — simulate a pathological same-millisecond race.
+        _patientRepository.GetByIdAsync(patientId).Returns(TestEntities.Patient(patientId));
+        // The single auto-assigned candidate already exists — the same-millisecond
+        // race that the DB unique index guards against.
         _patientRepository.ExistsByMedicalRecordNumberAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
         _timeProvider.SetUtcNow(now);
 
@@ -187,6 +228,38 @@ public class AcceptLinkRequestCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenConcurrentAcceptWinsRace_ReturnsNotPendingWithoutLinkingPatient()
+    {
+        // Arrange — the in-memory state is Pending, but a concurrent acceptance
+        // committed first, so UpdateAsync reports an optimistic-concurrency
+        // conflict (false). The handler must bail out as NotPending and never
+        // apply the patient link twice.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var mrn = "MRN-2026-000123";
+
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns(TestEntities.Patient(patientId));
+        _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(false);
+
+        // Act
+        var result = await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("LinkRequest.NotPending");
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+    }
+
+    [Fact]
     public async Task Handle_WhenNotPending_ReturnsNotPendingWithoutMutating()
     {
         // Arrange
@@ -195,9 +268,9 @@ public class AcceptLinkRequestCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         linkRequest.Status = RequestStatus.Rejected;
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -212,34 +285,4 @@ public class AcceptLinkRequestCommandHandlerTests
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
-
-    private static PatientDoctorRequest BuildLinkRequest(Guid requestId, Guid patientId, Guid doctorId) => new()
-    {
-        Id = requestId,
-        PatientId = patientId,
-        DoctorId = doctorId,
-        Status = RequestStatus.Pending,
-        CreatedAt = DateTime.UtcNow,
-    };
-
-    private static Doctor BuildDoctor(Guid doctorId, string licenseNumber, bool isVerified) => new()
-    {
-        Id = doctorId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        MaternalLastName = "López",
-        LicenseNumber = licenseNumber,
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        UserId = Guid.NewGuid(),
-        IsVerified = isVerified,
-    };
-
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        FirstName = "Juan",
-        LastName = "Pérez",
-        Email = "juan@mail.com",
-    };
 }

@@ -1,8 +1,10 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.InsulinDm1.Commands;
 using Application.UseCases.InsulinDm1.Common;
+using Application.UseCases.InsulinDm1.Mappers;
 
 namespace Application.UseCases.InsulinDm1.Handlers;
 
@@ -30,17 +32,17 @@ internal sealed class AddInsulinRecordCommandHandler
         AddInsulinRecordCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        // 1. Authenticate + load the owned patient (see PatientAccess).
+        var access = await PatientAccess.RequireOwnedPatientAsync(
+            _currentUser, _patientRepository, request.PatientId, cancellationToken);
+        if (access.IsError)
+            return access.Errors;
 
-        // 2. Load — single query resolves ownership + existence.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
-        var patient = await _patientRepository.GetOwnedPatientAsync(
-            request.PatientId, userId, cancellationToken);
-        if (patient is null)
-            return AuthErrors.Forbidden;
+        var patient = access.Value;
+
+        // 2. Guard — an inactive patient cannot record new data.
+        if (!patient.IsActive)
+            return RecordErrors.InactivePatient;
 
         var record = new Domain.Models.InsulinDm1Record
         {
@@ -58,16 +60,6 @@ internal sealed class AddInsulinRecordCommandHandler
 
         await _insulinRepository.AddRecordAsync(record);
 
-        return new InsulinDm1RecordResult(
-            record.Id,
-            record.PatientId,
-            record.RecordDate,
-            record.GlucoseBefore,
-            record.GlucoseAfter,
-            record.TotalCarbs,
-            record.DoseApplied,
-            record.MealDescription,
-            record.HowIFelt,
-            record.CreatedAt);
+        return InsulinDm1RecordMapper.ToResult(record);
     }
 }

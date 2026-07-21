@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -31,17 +32,13 @@ internal sealed class GetPatientResumenQueryHandler
         GetPatientResumenQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        // 1. Authenticate + load the owned patient (see PatientAccess).
+        var access = await PatientAccess.RequireOwnedPatientAsync(
+            _currentUser, _patientRepository, request.PatientId, cancellationToken);
+        if (access.IsError)
+            return access.Errors;
 
-        // 2. Load — single query resolves ownership + existence.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
-        var patient = await _patientRepository.GetOwnedPatientAsync(
-            request.PatientId, userId, cancellationToken);
-        if (patient is null)
-            return AuthErrors.Forbidden;
+        var patient = access.Value;
 
         var latestRecord = await _dailyRecordRepository.GetLatestByPatientIdAsync(request.PatientId);
         var latestLab = await _labResultRepository.GetLatestByPatientIdAsync(request.PatientId);
@@ -114,6 +111,11 @@ internal sealed class GetPatientResumenQueryHandler
         return new PatientResumenResult(perfil, metricas);
     }
 
+    // NOTE: This is a deliberate wire-contract mapping, NOT a substitute for
+    // DiabetesType.ToString(). The resumen endpoint's frontend
+    // (interpretacionADA.ts) matches on these exact snake_case strings
+    // ("tipo_1", "tipo_2", "prediabetes"); swapping in ToString() ("Type1", …)
+    // would silently break the ADA interpretation. Do not "simplify" this away.
     private static string MapDiabetesType(DiabetesType type) => type switch
     {
         DiabetesType.Type1       => "tipo_1",

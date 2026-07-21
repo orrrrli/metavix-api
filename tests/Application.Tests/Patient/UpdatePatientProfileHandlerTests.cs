@@ -14,6 +14,7 @@ public class UpdatePatientProfileHandlerTests
     private readonly IDoctorRepository _doctorRepository = Substitute.For<IDoctorRepository>();
     private readonly INotificationRepository _notificationRepository = Substitute.For<INotificationRepository>();
     private readonly ICurrentUserService _currentUser = Substitute.For<ICurrentUserService>();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     private readonly UpdatePatientProfileCommandHandler _handler;
 
@@ -23,7 +24,8 @@ public class UpdatePatientProfileHandlerTests
             _patientRepository,
             _doctorRepository,
             _notificationRepository,
-            _currentUser);
+            _currentUser,
+            _timeProvider);
     }
 
     // BE-FOUND-2-T3: male patient rejects IsPregnant=true
@@ -100,7 +102,7 @@ public class UpdatePatientProfileHandlerTests
             LastName = "López"
         };
 
-        var doctor = new Doctor { Id = doctorId, UserId = doctorUserId };
+        var doctor = TestEntities.Doctor(doctorId, userId: doctorUserId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -256,5 +258,21 @@ public class UpdatePatientProfileHandlerTests
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
         _notificationRepository.DidNotReceive().Stage(Arg.Any<Notification>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var command = new UpdatePatientProfileCommand(
+            Guid.NewGuid(), IsPregnant: true, null, null, null, null);
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

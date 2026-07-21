@@ -28,7 +28,7 @@ public class GetInsulinProfileQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var profile = new InsulinDm1Profile
         {
             Id = Guid.NewGuid(),
@@ -43,13 +43,16 @@ public class GetInsulinProfileQueryHandlerTests
         _insulinRepository.GetProfileByPatientIdAsync(patientId).Returns(profile);
 
         var query = new GetInsulinProfileQuery(patientId);
+        using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(query, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.InsulinName.Should().Be("Humalog");
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]
@@ -73,10 +76,19 @@ public class GetInsulinProfileQueryHandlerTests
         await _insulinRepository.DidNotReceive().GetProfileByPatientIdAsync(Arg.Any<Guid>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
     {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var query = new GetInsulinProfileQuery(Guid.NewGuid());
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
 }

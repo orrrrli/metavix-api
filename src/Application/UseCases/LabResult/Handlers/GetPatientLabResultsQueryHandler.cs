@@ -1,7 +1,9 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LabResult.Common;
+using Application.UseCases.LabResult.Mappers;
 using Application.UseCases.LabResult.Queries;
 
 namespace Application.UseCases.LabResult.Handlers;
@@ -27,41 +29,17 @@ internal sealed class GetPatientLabResultsQueryHandler
         GetPatientLabResultsQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
-
-        // 2. Load — single query resolves ownership + existence.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
-        var patient = await _patientRepository.GetOwnedPatientAsync(
-            request.PatientId, userId, cancellationToken);
-        if (patient is null)
-            return AuthErrors.Forbidden;
+        // 1. Authenticate + load the owned patient (see PatientAccess).
+        var access = await PatientAccess.RequireOwnedPatientAsync(
+            _currentUser, _patientRepository, request.PatientId, cancellationToken);
+        if (access.IsError)
+            return access.Errors;
 
         var records = await _labResultRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        var results = records.Select(r => new LabResultResult(
-            r.Id,
-            r.PatientId,
-            r.SampleDate,
-            r.Hba1c,
-            r.TotalCholesterol,
-            r.Ldl,
-            r.Hdl,
-            r.Triglycerides,
-            r.Creatinine,
-            r.Bun,
-            r.EgoProteins,
-            r.EgoGlucose,
-            r.Notes,
-            r.CreatedAt)).ToList();
-
-        if (results.Count == 0)
-        {
-            return RecordErrors.RecordsNotFound;
-        }
-
-        return results;
+        // 2. Map — an owned patient with no lab results yet is a valid empty
+        //    result, not an error. Returning RecordsNotFound would force callers
+        //    to treat "no results yet" as a failure.
+        return records.Select(LabResultMapper.ToResult).ToList();
     }
 }

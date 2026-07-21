@@ -136,6 +136,20 @@ public class AppDbContext : DbContext
         {
             entity.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
 
+            // Optimistic concurrency token. Two concurrent Accept/Reject/Revoke
+            // calls both read Status=Pending in memory; without a row version
+            // the second UpdateAsync would overwrite the first and run the
+            // follow-up patient mutation twice. The token is a shadow `Version`
+            // column (keeps the domain model free of persistence concerns).
+            // PatientDoctorRequestRepository.UpdateAsync bumps it on every
+            // write, so EF appends `WHERE "Version" = @original`; the loser of a
+            // race matches zero rows and SaveChanges throws
+            // DbUpdateConcurrencyException (→ repository returns false → handler
+            // returns NotPending/NotAccepted).
+            entity.Property<long>("Version")
+                .IsConcurrencyToken()
+                .HasDefaultValue(0L);
+
             entity.HasOne(r => r.Patient)
                 .WithMany(p => p.LinkRequests)
                 .HasForeignKey(r => r.PatientId)

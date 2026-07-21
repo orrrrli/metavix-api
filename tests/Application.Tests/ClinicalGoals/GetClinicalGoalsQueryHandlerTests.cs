@@ -19,13 +19,6 @@ public class GetClinicalGoalsQueryHandlerTests
             _clinicalGoalRepository, _doctorRepository, _requestRepository, _currentUser);
     }
 
-    private void SetupAuth(Guid userId, Guid doctorId, Guid patientId)
-    {
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildDoctor(doctorId, userId));
-        _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(true);
-    }
 
     [Fact]
     public async Task Handle_WhenNoGoals_ReturnsEmptyList()
@@ -33,7 +26,7 @@ public class GetClinicalGoalsQueryHandlerTests
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns([]);
 
         var result = await _handler.Handle(new GetClinicalGoalsQuery(doctorId, patientId), CancellationToken.None);
@@ -48,7 +41,7 @@ public class GetClinicalGoalsQueryHandlerTests
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetByPatientIdAsync(patientId).Returns(
         [
             new ClinicalGoal
@@ -78,7 +71,7 @@ public class GetClinicalGoalsQueryHandlerTests
         var patientId = Guid.NewGuid();
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildDoctor(doctorId, userId));
+            .Returns(TestEntities.Doctor(doctorId, userId));
         _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(false);
 
         var result = await _handler.Handle(new GetClinicalGoalsQuery(doctorId, patientId), CancellationToken.None);
@@ -87,15 +80,4 @@ public class GetClinicalGoalsQueryHandlerTests
         result.FirstError.Should().Be(AuthErrors.Forbidden);
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
-    {
-        Id = doctorId,
-        UserId = userId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        LicenseNumber = "12345678",
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        IsVerified = true,
-    };
 }

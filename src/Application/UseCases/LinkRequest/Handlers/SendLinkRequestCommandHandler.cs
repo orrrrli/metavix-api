@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -34,38 +35,46 @@ internal sealed class SendLinkRequestCommandHandler
         SendLinkRequestCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        // 1. Authenticate + load the owned patient (see PatientAccess).
+        var access = await PatientAccess.RequireOwnedPatientAsync(
+            _currentUser, _patientRepository, request.PatientId, cancellationToken);
+        if (access.IsError)
+            return access.Errors;
 
-        // 2. Load — single query resolves ownership + existence.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
-        var patient = await _patientRepository.GetOwnedPatientAsync(
-            request.PatientId, userId, cancellationToken);
-        if (patient is null)
-            return AuthErrors.Forbidden;
+        var patient = access.Value;
 
-        // 3. Verify doctor exists
+        // 2. Verify doctor exists. Returning DoctorNotFound here is safe and is
+        //    NOT an enumeration oracle: doctors are publicly discoverable by any
+        //    authenticated patient via /patient/get-all-doctors, which already
+        //    exposes every doctor id. So confirming existence leaks nothing the
+        //    directory does not, and a distinct error gives the patient better
+        //    feedback than a blanket Forbidden. (Contrast with patient ids, which
+        //    are never listable and so are collapsed into Forbidden above.)
         var doctor = await _doctorRepository.GetByIdAsync(request.DoctorId);
         if (doctor is null)
         {
             return DoctorErrors.DoctorNotFound;
         }
 
-        // 4. Check if patient already has a doctor
+        // 3. Enforce link invariants. These live here (after ownership + doctor
+        //    existence are confirmed) because they are guarding against a
+        //    duplicate/conflicting link for a patient we already know the caller
+        //    owns — they are not access-control checks and must not run before
+        //    the ownership check in step 1, or they would leak information about
+        //    patients the caller does not own.
+        // 3a. A patient may only be linked to one primary doctor.
         if (patient.PrimaryDoctorId is not null)
         {
             return LinkRequestErrors.AlreadyLinked;
         }
 
-        // 4. Check if there is already a pending request
+        // 3b. Don't create a second request while one is still pending.
         if (await _requestRepository.HasPendingRequestAsync(request.PatientId, request.DoctorId))
         {
             return LinkRequestErrors.AlreadyPending;
         }
 
-        // 5. Create request
+        // 4. Create request
         var linkRequest = new PatientDoctorRequest
         {
             Id = Guid.NewGuid(),

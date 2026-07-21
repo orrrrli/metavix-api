@@ -31,7 +31,7 @@ public class AddInsulinRecordCommandHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -43,14 +43,18 @@ public class AddInsulinRecordCommandHandlerTests
             new DateOnly(2026, 7, 20),
             120, 150, 45m, 5m, "Lunch", "Stable");
 
+        using var cts = new CancellationTokenSource();
+
         // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
+        var result = await _handler.Handle(command, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.PatientId.Should().Be(patientId);
         await _insulinRepository.Received(1).AddRecordAsync(
             Arg.Is<InsulinDm1Record>(r => r.PatientId == patientId && r.CreatedAt == now));
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]
@@ -77,10 +81,29 @@ public class AddInsulinRecordCommandHandlerTests
         await _insulinRepository.DidNotReceive().AddRecordAsync(Arg.Any<InsulinDm1Record>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
+    [Fact]
+    public async Task Handle_WhenPatientIsInactive_ReturnsInactivePatient()
     {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(TestEntities.Patient(patientId, isActive: false));
+
+        var command = new AddInsulinRecordCommand(
+            patientId,
+            new DateOnly(2026, 7, 20),
+            null, null, null, null, null, null);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(RecordErrors.InactivePatient.Code);
+        await _insulinRepository.DidNotReceive().AddRecordAsync(Arg.Any<InsulinDm1Record>());
+    }
+
 }

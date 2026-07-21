@@ -1,4 +1,6 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
+using Application.UseCases.Patient.Mappers;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Patient.Common;
@@ -24,32 +26,14 @@ internal sealed class GetPatientProfileQueryHandler
         GetPatientProfileQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        // 1. Authenticate + load the owned patient (see PatientAccess).
+        var access = await PatientAccess.RequireOwnedPatientAsync(
+            _currentUser, _patientRepository, request.PatientId, cancellationToken);
+        if (access.IsError)
+            return access.Errors;
 
-        // 2. Load — single query resolves ownership + existence.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
-        var patient = await _patientRepository.GetOwnedPatientAsync(
-            request.PatientId, userId, cancellationToken);
-        if (patient is null)
-            return AuthErrors.Forbidden;
+        var patient = access.Value;
 
-        return new PatientProfileResult(
-            patient.Id,
-            patient.FirstName,
-            patient.LastName,
-            patient.Email,
-            patient.Phone,
-            patient.DateOfBirth,
-            patient.HeightCm,
-            patient.Gender?.ToString(),
-            patient.IsPregnant,
-            patient.DiabetesType.ToString(),
-            patient.MedicalRecordNumber,
-            patient.CreatedAt,
-            patient.PregnancyStartDate,
-            patient.PregnancyDueDate);
+        return PatientProfileMapper.ToResult(patient);
     }
 }

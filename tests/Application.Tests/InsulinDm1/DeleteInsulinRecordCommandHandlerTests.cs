@@ -29,7 +29,7 @@ public class DeleteInsulinRecordCommandHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var recordId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var record = new InsulinDm1Record { Id = recordId, PatientId = patientId };
 
         _currentUser.UserId.Returns(userId);
@@ -69,10 +69,19 @@ public class DeleteInsulinRecordCommandHandlerTests
         await _insulinRepository.DidNotReceive().DeleteRecordAsync(Arg.Any<InsulinDm1Record>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
     {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var command = new DeleteInsulinRecordCommand(Guid.NewGuid(), Guid.NewGuid());
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
 }

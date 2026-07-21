@@ -52,7 +52,7 @@ public class GetMyDoctorProfileQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenCallerHasNoDoctorRecord_ReturnsForbidden()
+    public async Task Handle_WhenCallerHasNoDoctorRecord_ReturnsDoctorNotFound()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -68,7 +68,7 @@ public class GetMyDoctorProfileQueryHandlerTests
 
         // Assert
         result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        result.FirstError.Code.Should().Be(DoctorErrors.DoctorNotFound.Code);
     }
 
     [Fact]

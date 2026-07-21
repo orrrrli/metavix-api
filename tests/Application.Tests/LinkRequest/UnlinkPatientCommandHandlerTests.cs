@@ -26,6 +26,8 @@ public class UnlinkPatientCommandHandlerTests
             _doctorRepository,
             _currentUser,
             _timeProvider);
+
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
     }
 
     [Fact]
@@ -38,14 +40,7 @@ public class UnlinkPatientCommandHandlerTests
         var requestId = Guid.NewGuid();
         var mrn = "MRN-2026-000042";
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var patient = new Patient
         {
             Id = patientId,
@@ -55,7 +50,7 @@ public class UnlinkPatientCommandHandlerTests
             PrimaryDoctorId = doctorId,
             MedicalRecordNumber = mrn,
         };
-        var doctor = BuildDoctor(doctorId, userId);
+        var doctor = TestEntities.Doctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -81,15 +76,8 @@ public class UnlinkPatientCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-        };
-        var doctor = BuildDoctor(doctorId, userId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
+        var doctor = TestEntities.Doctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -114,14 +102,7 @@ public class UnlinkPatientCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
 
         _currentUser.UserId.Returns(userId);
         // No doctor with this id belongs to userId → GetOwnedDoctorAsync returns null.
@@ -137,15 +118,4 @@ public class UnlinkPatientCommandHandlerTests
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
-    {
-        Id = doctorId,
-        UserId = userId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        LicenseNumber = "12345678",
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        IsVerified = true,
-    };
 }

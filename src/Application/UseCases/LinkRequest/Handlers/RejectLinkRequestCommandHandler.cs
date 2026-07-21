@@ -50,7 +50,10 @@ internal sealed class RejectLinkRequestCommandHandler
         {
             return LinkRequestErrors.NotPending;
         }
-        await _requestRepository.UpdateAsync(linkRequest);
+        if (!await _requestRepository.UpdateAsync(linkRequest))
+        {
+            return LinkRequestErrors.NotPending;
+        }
 
         return new LinkRequestResult(
             linkRequest.Id,

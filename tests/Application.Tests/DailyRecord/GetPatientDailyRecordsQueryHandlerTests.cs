@@ -26,7 +26,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId };
+        var patient = TestEntities.Patient(patientId, userId: userId);
 
         var records = new List<DailyRecord>
         {
@@ -39,15 +39,19 @@ public class GetPatientDailyRecordsQueryHandlerTests
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns(records);
 
+        using var cts = new CancellationTokenSource();
+
         // Act
         ErrorOr<List<DailyRecordResult>> result =
-            await _handler.Handle(new GetPatientDailyRecordsQuery(patientId), CancellationToken.None);
+            await _handler.Handle(new GetPatientDailyRecordsQuery(patientId), cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(3);
         result.Value.Select(r => r.RecordDate)
             .Should().BeInDescendingOrder();
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]
@@ -56,7 +60,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId };
+        var patient = TestEntities.Patient(patientId, userId: userId);
         var dateFrom = new DateOnly(2026, 6, 12);
         var dateTo = new DateOnly(2026, 6, 18);
 
@@ -85,12 +89,34 @@ public class GetPatientDailyRecordsQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenNoRangeAndNoRecords_ReturnsEmptyList()
+    {
+        // Arrange — an owned patient with zero records and no date range is a
+        // valid empty result, not RecordsNotFound (matching lab/insulin).
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var patient = TestEntities.Patient(patientId, userId: userId);
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
+        _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns(new List<DailyRecord>());
+
+        // Act
+        ErrorOr<List<DailyRecordResult>> result =
+            await _handler.Handle(new GetPatientDailyRecordsQuery(patientId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        result.Value.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Handle_WhenDateRangeContainsNoRecords_ReturnsEmptyList()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId };
+        var patient = TestEntities.Patient(patientId, userId: userId);
         var dateFrom = new DateOnly(2026, 6, 1);
         var dateTo = new DateOnly(2026, 6, 5);
 
@@ -130,6 +156,20 @@ public class GetPatientDailyRecordsQueryHandlerTests
             .GetAllByPatientIdAsync(Arg.Any<Guid>());
         await _dailyRecordRepository.DidNotReceive()
             .GetByPatientIdInRangeAsync(Arg.Any<Guid>(), Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var result = await _handler.Handle(
+            new GetPatientDailyRecordsQuery(Guid.NewGuid()), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     private static DailyRecord BuildRecord(Guid patientId, DateOnly recordDate) => new()

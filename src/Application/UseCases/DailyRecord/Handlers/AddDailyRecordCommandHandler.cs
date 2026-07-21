@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -33,21 +34,17 @@ internal sealed class AddDailyRecordCommandHandler
         AddDailyRecordCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        // 1. Authenticate + load the owned patient (see PatientAccess).
+        var access = await PatientAccess.RequireOwnedPatientAsync(
+            _currentUser, _patientRepository, request.PatientId, cancellationToken);
+        if (access.IsError)
+            return access.Errors;
 
-        // 2. Load — single query resolves ownership + existence.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
-        var patient = await _patientRepository.GetOwnedPatientAsync(
-            request.PatientId, userId, cancellationToken);
-        if (patient is null)
-            return AuthErrors.Forbidden;
+        var patient = access.Value;
         if (!patient.IsActive)
             return RecordErrors.InactivePatient;
 
-        // 3. Execute domain operation. The factory enforces clinical
+        // 2. Execute domain operation. The factory enforces clinical
         //    invariants (BP pair, glucose range, time required) and
         //    returns ErrorOr — the handler stays free of validation.
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -67,7 +64,7 @@ internal sealed class AddDailyRecordCommandHandler
 
         var record = createResult.Value;
 
-        // 4. Attach glucose readings, if any. The factory on each
+        // 3. Attach glucose readings, if any. The factory on each
         //    GlucoseReading enforces the per-reading invariants.
         if (request.GlucoseReadings is { Count: > 0 })
         {
@@ -87,10 +84,10 @@ internal sealed class AddDailyRecordCommandHandler
             }
         }
 
-        // 5. Persist
+        // 4. Persist
         await _dailyRecordRepository.AddAsync(record, cancellationToken);
 
-        // 6. Return result
+        // 5. Return result
         return DailyRecordMapper.ToResult(record);
     }
 }

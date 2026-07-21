@@ -34,8 +34,8 @@ public class SendLinkRequestCommandHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
-        var doctor = new Doctor { Id = doctorId, FirstName = "Ana", PaternalLastName = "García" };
+        var patient = TestEntities.Patient(patientId);
+        var doctor = TestEntities.Doctor(doctorId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -79,10 +79,19 @@ public class SendLinkRequestCommandHandlerTests
         await _requestRepository.DidNotReceive().AddAsync(Arg.Any<PatientDoctorRequest>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
     {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var command = new SendLinkRequestCommand(Guid.NewGuid(), Guid.NewGuid());
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
 }

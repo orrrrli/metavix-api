@@ -30,7 +30,7 @@ public class UpsertInsulinProfileCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -72,10 +72,43 @@ public class UpsertInsulinProfileCommandHandlerTests
         await _insulinRepository.DidNotReceive().UpsertProfileAsync(Arg.Any<InsulinDm1Profile>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
+    [Fact]
+    public async Task Handle_WhenPatientIsInactive_ReturnsInactivePatient()
     {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(TestEntities.Patient(patientId, isActive: false));
+
+        var command = new UpsertInsulinProfileCommand(
+            patientId, "Humalog", null, null, null, null, null);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(RecordErrors.InactivePatient.Code);
+        await _insulinRepository.DidNotReceive().UpsertProfileAsync(Arg.Any<InsulinDm1Profile>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var command = new UpsertInsulinProfileCommand(
+            Guid.NewGuid(), "Humalog", null, null, null, null, null);
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
 }

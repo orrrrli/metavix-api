@@ -22,6 +22,8 @@ public class RevokeDoctorAccessCommandHandlerTests
             _patientRepository,
             _currentUser,
             _timeProvider);
+
+        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
     }
 
     [Fact]
@@ -35,14 +37,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var mrn = "MRN-2026-000042";
         var now = DateTime.UtcNow;
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var patient = new Patient
         {
             Id = patientId,
@@ -80,14 +75,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
         var patient = new Patient
         {
             Id = patientId,
@@ -112,6 +100,27 @@ public class RevokeDoctorAccessCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenRequestNotFound_ReturnsForbiddenNotRequestNotFound()
+    {
+        // Arrange — an unknown requestId must be indistinguishable from a
+        // request that exists but isn't the caller's patient, so no requestId
+        // enumeration oracle leaks.
+        var userId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _requestRepository.GetByIdAsync(requestId).Returns((PatientDoctorRequest?)null);
+
+        // Act
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+    }
+
+    [Fact]
     public async Task Handle_WhenCallerIsNotThePatient_ReturnsForbidden()
     {
         // Arrange
@@ -120,14 +129,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
 
         _currentUser.UserId.Returns(userId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
@@ -145,6 +147,35 @@ public class RevokeDoctorAccessCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenPatientDeletedAfterRequestLoaded_ReturnsForbiddenWithoutMutating()
+    {
+        // Arrange — the link request still exists, but the patient it points at
+        // has been deleted before the revoke ran, so GetOwnedPatientAsync yields
+        // null. The handler must bail out before touching either the request or
+        // the (now missing) patient.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
+
+        _currentUser.UserId.Returns(userId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns((Patient?)null);
+
+        // Act
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+    }
+
+    [Fact]
     public async Task Handle_WhenPatientPrimaryDoctorAlreadyChanged_DoesNotOverwriteNewDoctor()
     {
         // Arrange: patient already re-linked to a different doctor by the time
@@ -155,14 +186,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var patient = new Patient
         {
             Id = patientId,
@@ -183,5 +207,18 @@ public class RevokeDoctorAccessCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
         patient.PrimaryDoctorId.Should().Be(newDoctorId);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var result = await _handler.Handle(
+            new RevokeDoctorAccessCommand(Guid.NewGuid()), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
     }
 }

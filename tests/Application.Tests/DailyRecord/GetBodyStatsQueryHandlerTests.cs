@@ -27,7 +27,7 @@ public class GetBodyStatsQueryHandlerTests
         var userId    = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var date      = new DateOnly(2026, 6, 21);
-        var patient   = new Patient { Id = patientId, UserId = userId, IsActive = true };
+        var patient   = TestEntities.Patient(patientId, userId: userId);
         var record    = BuildRecord(patientId, date, weightKg: 72.5m, waistCm: 88, createdAt: DateTime.UtcNow);
 
         _currentUser.UserId.Returns(userId);
@@ -53,7 +53,7 @@ public class GetBodyStatsQueryHandlerTests
         var userId    = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var date      = new DateOnly(2026, 6, 21);
-        var patient   = new Patient { Id = patientId, UserId = userId, IsActive = true };
+        var patient   = TestEntities.Patient(patientId, userId: userId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
@@ -78,7 +78,7 @@ public class GetBodyStatsQueryHandlerTests
         var userId    = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var date      = new DateOnly(2026, 6, 21);
-        var patient   = new Patient { Id = patientId, UserId = userId, IsActive = true };
+        var patient   = TestEntities.Patient(patientId, userId: userId);
         var earliest  = BuildRecord(patientId, date, weightKg: 71.0m, waistCm: 85, createdAt: DateTime.UtcNow.AddHours(-3));
 
         _currentUser.UserId.Returns(userId);
@@ -117,6 +117,20 @@ public class GetBodyStatsQueryHandlerTests
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
         await _dailyRecordRepository.DidNotReceive()
             .GetFirstByPatientIdAndDateAsync(Arg.Any<Guid>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        ErrorOr<BodyStats> result = await _handler.Handle(
+            new GetBodyStatsQuery(Guid.NewGuid(), new DateOnly(2026, 6, 21)), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     private static DailyRecord BuildRecord(
