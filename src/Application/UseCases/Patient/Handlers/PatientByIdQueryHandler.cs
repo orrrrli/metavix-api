@@ -27,7 +27,7 @@ public class PatientByIdQueryHandler(
         if (callerDoctorId is null)
             return AuthErrors.Forbidden;
 
-        var isLinked = await requestRepository.IsAcceptedLinkAsync(callerDoctorId.Value, request.patientId);
+        var isLinked = await requestRepository.IsAcceptedLinkAsync(callerDoctorId.Value, request.patientId, cancellationToken);
         if (!isLinked)
             return AuthErrors.Forbidden;
 
