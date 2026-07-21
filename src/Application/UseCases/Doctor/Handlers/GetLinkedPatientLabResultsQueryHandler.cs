@@ -1,9 +1,9 @@
 using Application.Common.Authorization;
-using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Doctor.Queries;
 using Application.UseCases.LabResult.Common;
+using Application.UseCases.LabResult.Mappers;
 
 namespace Application.UseCases.Doctor.Handlers;
 
@@ -38,25 +38,7 @@ internal sealed class GetLinkedPatientLabResultsQueryHandler
 
         var records = await _labResultRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        var results = records.Select(r => new LabResultResult(
-            r.Id,
-            r.PatientId,
-            r.SampleDate,
-            r.Hba1c,
-            r.TotalCholesterol,
-            r.Ldl,
-            r.Hdl,
-            r.Triglycerides,
-            r.Creatinine,
-            r.Bun,
-            r.EgoProteins,
-            r.EgoGlucose,
-            r.Notes,
-            r.CreatedAt)).ToList();
-
-        if (results.Count == 0)
-            return RecordErrors.RecordsNotFound;
-
-        return results;
+        // Mirrors GetPatientLabResultsQueryHandler (empty list is not an error).
+        return records.Select(LabResultMapper.ToResult).ToList();
     }
 }

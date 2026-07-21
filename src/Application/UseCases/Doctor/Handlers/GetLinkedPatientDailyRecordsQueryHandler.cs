@@ -1,5 +1,4 @@
 using Application.Common.Authorization;
-using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.DailyRecord.Common;
@@ -39,11 +38,7 @@ internal sealed class GetLinkedPatientDailyRecordsQueryHandler
 
         var records = await _dailyRecordRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        var results = records.Select(DailyRecordMapper.ToResult).ToList();
-
-        if (results.Count == 0)
-            return RecordErrors.RecordsNotFound;
-
-        return results;
+        // Mirrors GetPatientDailyRecordsQueryHandler (empty list is not an error).
+        return records.Select(DailyRecordMapper.ToResult).ToList();
     }
 }

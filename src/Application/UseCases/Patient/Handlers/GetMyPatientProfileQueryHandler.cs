@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.UseCases.Patient.Mappers;
 using Application.Common.Interfaces.Persistence;
@@ -25,15 +26,11 @@ internal sealed class GetMyPatientProfileQueryHandler
         GetMyPatientProfileQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
+        if (userIdResult.IsError)
+            return userIdResult.FirstError;
+        var userId = userIdResult.Value;
 
-        // 2. Load — caller is fetching their own patient profile, so a single
-        //    by-userId lookup is the right granularity (no patientId is supplied
-        //    in this query). A null result means the authenticated user simply
-        //    has no patient profile yet — that is a missing resource, not a
-        //    permissions failure, so surface PatientNotFound (not Forbidden).
         var patient = await _patientRepository.GetByUserIdAsync(userId, cancellationToken);
         if (patient is null)
             return PatientErrors.PatientNotFound;
