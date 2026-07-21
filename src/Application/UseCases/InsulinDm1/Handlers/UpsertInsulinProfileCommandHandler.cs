@@ -42,6 +42,10 @@ internal sealed class UpsertInsulinProfileCommandHandler
         if (patient is null)
             return AuthErrors.Forbidden;
 
+        // 3. Guard — an inactive patient cannot record new data.
+        if (!patient.IsActive)
+            return RecordErrors.InactivePatient;
+
         var existing = await _insulinRepository.GetProfileByPatientIdAsync(request.PatientId);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 

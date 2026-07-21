@@ -108,10 +108,35 @@ public class AddLabResultCommandHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
+    [Fact]
+    public async Task Handle_WhenPatientIsInactive_ReturnsInactivePatient()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(BuildPatient(patientId, isActive: false));
+
+        var command = new AddLabResultCommand(
+            patientId,
+            new DateOnly(2026, 7, 20),
+            null, null, null, null, null, null, null, null, null, null);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(RecordErrors.InactivePatient.Code);
+        await _labResultRepository.DidNotReceive().AddAsync(Arg.Any<LabResult>());
+    }
+
+    private static Patient BuildPatient(Guid patientId, bool isActive = true) => new()
     {
         Id = patientId,
         UserId = Guid.NewGuid(),
-        IsActive = true,
+        IsActive = isActive,
     };
 }

@@ -42,6 +42,10 @@ internal sealed class AddLabResultCommandHandler
         if (patient is null)
             return AuthErrors.Forbidden;
 
+        // 3. Guard — an inactive patient cannot record new data.
+        if (!patient.IsActive)
+            return RecordErrors.InactivePatient;
+
         var record = new Domain.Models.LabResult
         {
             Id = Guid.NewGuid(),
