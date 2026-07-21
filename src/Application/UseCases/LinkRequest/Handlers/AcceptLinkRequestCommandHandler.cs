@@ -82,20 +82,26 @@ internal sealed class AcceptLinkRequestCommandHandler
             assignedMrn = autoMrn;
         }
 
-        // 4. Accept the request
+        // 4. Load the patient BEFORE mutating anything. If the patient was
+        //    deleted between sending and accepting the request, bail out with a
+        //    concrete error instead of accepting the request and then silently
+        //    skipping the link — that path used to leave the request Accepted
+        //    with no doctor ever assigned to the (missing) patient and still
+        //    reported success.
+        var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
+        if (patient is null)
+            return PatientErrors.PatientNotFound;
+
+        // 5. Accept the request
         if (!linkRequest.Accept(_timeProvider.GetUtcNow().UtcDateTime))
         {
             return LinkRequestErrors.NotPending;
         }
         await _requestRepository.UpdateAsync(linkRequest);
 
-        // 5. Link the patient to the doctor and assign the MRN
-        var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
-        if (patient is not null)
-        {
-            patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, _timeProvider.GetUtcNow().UtcDateTime);
-            await _patientRepository.UpdateAsync(patient);
-        }
+        // 6. Link the patient to the doctor and assign the MRN
+        patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, _timeProvider.GetUtcNow().UtcDateTime);
+        await _patientRepository.UpdateAsync(patient);
 
         return new LinkRequestResult(
             linkRequest.Id,

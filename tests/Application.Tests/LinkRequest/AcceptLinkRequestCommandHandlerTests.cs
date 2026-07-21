@@ -127,6 +127,40 @@ public class AcceptLinkRequestCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenPatientDeletedBeforeAccept_ReturnsPatientNotFoundWithoutMutating()
+    {
+        // Arrange — request + doctor resolve fine, but the patient was deleted
+        // between sending and accepting. The handler must bail out before
+        // accepting the request, so neither the request nor the patient is
+        // mutated and no inconsistent Accepted-but-unlinked state is left.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var mrn = "MRN-2026-000123";
+
+        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns((Patient?)null);
+        _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
+
+        // Act
+        ErrorOr<LinkRequestResult> result =
+            await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        linkRequest.Status.Should().Be(RequestStatus.Pending);
+    }
+
+    [Fact]
     public async Task Handle_WhenMrnNotProvided_AutoAssignsNextAvailable()
     {
         // Arrange
