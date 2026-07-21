@@ -28,7 +28,7 @@ public class GetInsulinRecordsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var records = new List<InsulinDm1Record>
         {
             new() { Id = Guid.NewGuid(), PatientId = patientId, RecordDate = new DateOnly(2026, 7, 1) },
@@ -59,7 +59,7 @@ public class GetInsulinRecordsQueryHandlerTests
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildPatient(patientId));
+            .Returns(TestEntities.Patient(patientId));
         _insulinRepository.GetRecordsByPatientIdAsync(patientId)
             .Returns(new List<InsulinDm1Record>());
 
@@ -109,10 +109,4 @@ public class GetInsulinRecordsQueryHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
 }

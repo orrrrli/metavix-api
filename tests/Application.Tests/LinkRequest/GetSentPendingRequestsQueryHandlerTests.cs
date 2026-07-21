@@ -28,7 +28,7 @@ public class GetSentPendingRequestsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var pending = new List<PatientDoctorRequest>
         {
             new()
@@ -98,10 +98,4 @@ public class GetSentPendingRequestsQueryHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
 }

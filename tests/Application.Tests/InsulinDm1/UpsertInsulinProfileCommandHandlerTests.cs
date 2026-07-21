@@ -30,7 +30,7 @@ public class UpsertInsulinProfileCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -81,7 +81,7 @@ public class UpsertInsulinProfileCommandHandlerTests
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildPatient(patientId, isActive: false));
+            .Returns(TestEntities.Patient(patientId, isActive: false));
 
         var command = new UpsertInsulinProfileCommand(
             patientId, "Humalog", null, null, null, null, null);
@@ -111,10 +111,4 @@ public class UpsertInsulinProfileCommandHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId, bool isActive = true) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = isActive,
-    };
 }

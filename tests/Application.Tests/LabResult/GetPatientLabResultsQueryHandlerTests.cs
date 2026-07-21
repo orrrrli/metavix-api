@@ -28,7 +28,7 @@ public class GetPatientLabResultsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var records = new List<LabResult>
         {
             new() { Id = Guid.NewGuid(), PatientId = patientId, SampleDate = new DateOnly(2026, 6, 1) },
@@ -59,7 +59,7 @@ public class GetPatientLabResultsQueryHandlerTests
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildPatient(patientId));
+            .Returns(TestEntities.Patient(patientId));
         _labResultRepository.GetAllByPatientIdAsync(patientId).Returns(new List<LabResult>());
 
         var query = new GetPatientLabResultsQuery(patientId);
@@ -109,10 +109,4 @@ public class GetPatientLabResultsQueryHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
 }

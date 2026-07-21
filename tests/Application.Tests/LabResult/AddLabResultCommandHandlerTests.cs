@@ -31,7 +31,7 @@ public class AddLabResultCommandHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -117,7 +117,7 @@ public class AddLabResultCommandHandlerTests
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildPatient(patientId, isActive: false));
+            .Returns(TestEntities.Patient(patientId, isActive: false));
 
         var command = new AddLabResultCommand(
             patientId,
@@ -133,10 +133,4 @@ public class AddLabResultCommandHandlerTests
         await _labResultRepository.DidNotReceive().AddAsync(Arg.Any<LabResult>());
     }
 
-    private static Patient BuildPatient(Guid patientId, bool isActive = true) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = isActive,
-    };
 }

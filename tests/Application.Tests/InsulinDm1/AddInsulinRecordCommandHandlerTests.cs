@@ -31,7 +31,7 @@ public class AddInsulinRecordCommandHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
@@ -86,7 +86,7 @@ public class AddInsulinRecordCommandHandlerTests
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildPatient(patientId, isActive: false));
+            .Returns(TestEntities.Patient(patientId, isActive: false));
 
         var command = new AddInsulinRecordCommand(
             patientId,
@@ -102,10 +102,4 @@ public class AddInsulinRecordCommandHandlerTests
         await _insulinRepository.DidNotReceive().AddRecordAsync(Arg.Any<InsulinDm1Record>());
     }
 
-    private static Patient BuildPatient(Guid patientId, bool isActive = true) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = isActive,
-    };
 }

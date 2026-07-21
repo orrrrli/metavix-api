@@ -29,7 +29,7 @@ public class GetLabResultByIdQueryHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var recordId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var record = new LabResult
         {
             Id = recordId,
@@ -90,10 +90,4 @@ public class GetLabResultByIdQueryHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
 }

@@ -23,7 +23,7 @@ public class GetClinicalGoalsQueryHandlerTests
     {
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildDoctor(doctorId, userId));
+            .Returns(TestEntities.Doctor(doctorId, userId));
         _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(true);
     }
 
@@ -78,7 +78,7 @@ public class GetClinicalGoalsQueryHandlerTests
         var patientId = Guid.NewGuid();
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildDoctor(doctorId, userId));
+            .Returns(TestEntities.Doctor(doctorId, userId));
         _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(false);
 
         var result = await _handler.Handle(new GetClinicalGoalsQuery(doctorId, patientId), CancellationToken.None);
@@ -87,15 +87,4 @@ public class GetClinicalGoalsQueryHandlerTests
         result.FirstError.Should().Be(AuthErrors.Forbidden);
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
-    {
-        Id = doctorId,
-        UserId = userId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        LicenseNumber = "12345678",
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        IsVerified = true,
-    };
 }

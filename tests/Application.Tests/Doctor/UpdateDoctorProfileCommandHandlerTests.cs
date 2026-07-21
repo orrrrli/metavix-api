@@ -23,7 +23,7 @@ public class UpdateDoctorProfileCommandHandlerTests
         var userId   = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var command  = new UpdateDoctorProfileCommand("12345678", "Endocrinología");
-        var doctor   = BuildDoctor(doctorId, userId, command.LicenseNumber, command.Speciality);
+        var doctor   = TestEntities.Doctor(doctorId, userId, command.LicenseNumber, command.Speciality);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetByUserIdAsync(userId, Arg.Any<CancellationToken>())
@@ -84,18 +84,4 @@ public class UpdateDoctorProfileCommandHandlerTests
             .GetByUserIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId, string licenseNumber, string speciality) => new()
-    {
-        Id                = doctorId,
-        UserId            = userId,
-        FirstName         = "Ana",
-        PaternalLastName  = "García",
-        MaternalLastName  = "López",
-        LicenseNumber     = licenseNumber,
-        Speciality        = speciality,
-        Email             = "ana@clinic.com",
-        IsVerified        = false,
-        IsActive          = true,
-        CreatedAt         = DateTime.UtcNow,
-    };
 }

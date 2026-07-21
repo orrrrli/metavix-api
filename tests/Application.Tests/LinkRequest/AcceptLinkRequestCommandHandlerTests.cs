@@ -40,8 +40,8 @@ public class AcceptLinkRequestCommandHandlerTests
         var now = DateTime.UtcNow;
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: false);
-        var patient = BuildPatient(patientId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: false);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -76,7 +76,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var mrn = "MRN-2026-000042";
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -106,8 +106,8 @@ public class AcceptLinkRequestCommandHandlerTests
         var now = DateTime.UtcNow;
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
-        var patient = BuildPatient(patientId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -140,7 +140,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var mrn = "MRN-2026-000123";
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -171,8 +171,8 @@ public class AcceptLinkRequestCommandHandlerTests
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
-        var patient = BuildPatient(patientId);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -202,7 +202,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -231,7 +231,7 @@ public class AcceptLinkRequestCommandHandlerTests
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
         linkRequest.Status = RequestStatus.Rejected;
-        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -256,24 +256,5 @@ public class AcceptLinkRequestCommandHandlerTests
         CreatedAt = DateTime.UtcNow,
     };
 
-    private static Doctor BuildDoctor(Guid doctorId, string licenseNumber, bool isVerified) => new()
-    {
-        Id = doctorId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        MaternalLastName = "López",
-        LicenseNumber = licenseNumber,
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        UserId = Guid.NewGuid(),
-        IsVerified = isVerified,
-    };
 
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        FirstName = "Juan",
-        LastName = "Pérez",
-        Email = "juan@mail.com",
-    };
 }

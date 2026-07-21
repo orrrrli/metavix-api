@@ -43,7 +43,7 @@ public class RejectLinkRequestCommandHandlerTests
             Status = RequestStatus.Pending,
             CreatedAt = DateTime.UtcNow,
         };
-        var doctor = BuildDoctor(doctorId, userId);
+        var doctor = TestEntities.Doctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -77,7 +77,7 @@ public class RejectLinkRequestCommandHandlerTests
             Status = RequestStatus.Accepted,
             CreatedAt = DateTime.UtcNow,
         };
-        var doctor = BuildDoctor(doctorId, userId);
+        var doctor = TestEntities.Doctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
@@ -124,15 +124,4 @@ public class RejectLinkRequestCommandHandlerTests
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
-    {
-        Id = doctorId,
-        UserId = userId,
-        FirstName = "Ana",
-        PaternalLastName = "García",
-        LicenseNumber = "12345678",
-        Speciality = "Endocrinología",
-        Email = "ana@clinic.com",
-        IsVerified = true,
-    };
 }

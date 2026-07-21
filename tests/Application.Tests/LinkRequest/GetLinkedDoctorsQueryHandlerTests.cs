@@ -29,7 +29,7 @@ public class GetLinkedDoctorsQueryHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var accepted = new List<PatientDoctorRequest>
         {
             new()
@@ -73,7 +73,7 @@ public class GetLinkedDoctorsQueryHandlerTests
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
-            .Returns(BuildPatient(patientId));
+            .Returns(TestEntities.Patient(patientId));
         _requestRepository.GetAcceptedByPatientIdAsync(patientId)
             .Returns(new List<PatientDoctorRequest>());
 
@@ -123,10 +123,4 @@ public class GetLinkedDoctorsQueryHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
 }

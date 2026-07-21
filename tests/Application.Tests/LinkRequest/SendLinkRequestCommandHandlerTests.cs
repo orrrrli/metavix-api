@@ -34,7 +34,7 @@ public class SendLinkRequestCommandHandlerTests
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
-        var patient = BuildPatient(patientId);
+        var patient = TestEntities.Patient(patientId);
         var doctor = new Doctor { Id = doctorId, FirstName = "Ana", PaternalLastName = "García" };
 
         _currentUser.UserId.Returns(userId);
@@ -94,10 +94,4 @@ public class SendLinkRequestCommandHandlerTests
             .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static Patient BuildPatient(Guid patientId) => new()
-    {
-        Id = patientId,
-        UserId = Guid.NewGuid(),
-        IsActive = true,
-    };
 }
