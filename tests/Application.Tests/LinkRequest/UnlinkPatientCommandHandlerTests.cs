@@ -139,4 +139,35 @@ public class UnlinkPatientCommandHandlerTests
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
 
+    [Fact]
+    public async Task Handle_WhenPatientDeletedAfterRequestLoaded_SucceedsWithoutDetaching()
+    {
+        // Arrange — the link request still exists, but the patient it points
+        // at has been deleted before the unlink ran, so GetByIdAsync (step 4)
+        // yields null. Unlike RevokeDoctorAccessCommandHandler — which loads
+        // the patient during authorization and fails Forbidden if it's
+        // gone — Unlink authorizes against the doctor and only touches the
+        // patient afterwards, so the request transition still succeeds; there
+        // is simply nothing left to detach.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
+        var doctor = TestEntities.Doctor(doctorId, userId);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId).Returns((Patient?)null);
+
+        // Act
+        var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        await _requestRepository.Received(1).UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+    }
 }

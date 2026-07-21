@@ -67,6 +67,14 @@ internal sealed class UnlinkPatientCommandHandler
         // 4. Remove the doctor from the patient and clear the MRN.
         // The MRN belongs to the doctor-patient RELATION, not the patient,
         // so once the relation ends the value is freed for re-use.
+        //
+        // Unlike RevokeDoctorAccessCommandHandler — which loads the patient
+        // during authorization (step 3) and therefore fails the whole
+        // operation with Forbidden if the patient is gone — this handler
+        // authorizes against the doctor and only loads the patient here, after
+        // the request has already been persisted as Unlinked. If the patient
+        // was deleted between steps 1 and 4, there is nothing left to detach:
+        // silently skipping the mutation is correct, not a swallowed error.
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {

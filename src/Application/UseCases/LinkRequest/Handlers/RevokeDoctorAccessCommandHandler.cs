@@ -52,8 +52,10 @@ internal sealed class RevokeDoctorAccessCommandHandler
         if (patient is null)
             return AuthErrors.Forbidden;
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
         // 4. Revoke the request (fails if not accepted)
-        if (!linkRequest.Revoke(_timeProvider.GetUtcNow().UtcDateTime))
+        if (!linkRequest.Revoke(now))
         {
             return LinkRequestErrors.NotAccepted;
         }
@@ -63,7 +65,7 @@ internal sealed class RevokeDoctorAccessCommandHandler
         }
 
         // 5. Remove the doctor from the patient
-        patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: false, _timeProvider.GetUtcNow().UtcDateTime);
+        patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: false, now);
         await _patientRepository.UpdateAsync(patient);
 
         return new LinkRequestResult(
