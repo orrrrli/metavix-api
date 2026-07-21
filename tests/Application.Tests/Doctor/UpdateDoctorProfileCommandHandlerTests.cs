@@ -44,6 +44,31 @@ public class UpdateDoctorProfileCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ReturnsNewCredentials_NotTheStaleLoadedOnes()
+    {
+        // Arrange — the loaded (AsNoTracking) doctor still holds the OLD license
+        // and speciality; the targeted ExecuteUpdate writes the new ones. The
+        // result must reflect the command's new values, not the stale load.
+        var userId   = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var command  = new UpdateDoctorProfileCommand("99998888", "Cardiología");
+        var staleDoctor = TestEntities.Doctor(
+            doctorId, userId, licenseNumber: "11112222", speciality: "Medicina General");
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetByUserIdAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(staleDoctor);
+
+        // Act
+        ErrorOr<DoctorProfileResult> result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeFalse();
+        result.Value.LicenseNumber.Should().Be("99998888");
+        result.Value.Speciality.Should().Be("Cardiología");
+    }
+
+    [Fact]
     public async Task Handle_WhenCallerHasNoDoctorRecord_ReturnsDoctorNotFound()
     {
         // Arrange

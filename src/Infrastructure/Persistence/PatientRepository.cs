@@ -45,7 +45,15 @@ public class PatientRepository : IPatientRepository
 
     public async Task UpdateAsync(Domain.Models.Patient patient)
     {
-        _dbContext.Patients.Update(patient);
+        // If the entity is already tracked (loaded via GetByIdAsync without
+        // AsNoTracking), the change tracker already knows which columns changed
+        // and will emit a targeted UPDATE — calling .Update() here would instead
+        // mark every property Modified and rewrite all columns (§4.4). Only
+        // attach when the instance is detached (e.g. loaded via AsNoTracking).
+        var entry = _dbContext.Entry(patient);
+        if (entry.State == EntityState.Detached)
+            _dbContext.Patients.Update(patient);
+
         await _dbContext.SaveChangesAsync();
     }
 

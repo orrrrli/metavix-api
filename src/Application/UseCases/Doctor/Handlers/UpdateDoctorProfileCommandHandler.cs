@@ -37,6 +37,10 @@ internal sealed class UpdateDoctorProfileCommandHandler
         if (doctor is null)
             return DoctorErrors.DoctorNotFound;
 
+        // UpdateProfileAsync issues a targeted ExecuteUpdate (only LicenseNumber,
+        // Speciality and UpdatedAt), so the AsNoTracking `doctor` we loaded still
+        // holds the OLD LicenseNumber/Speciality. Return the command's new values
+        // for those two fields rather than the stale loaded ones.
         await _doctorRepository.UpdateProfileAsync(
             doctor.Id,
             command.LicenseNumber,
@@ -49,8 +53,8 @@ internal sealed class UpdateDoctorProfileCommandHandler
             doctor.MiddleName,
             doctor.PaternalLastName,
             doctor.MaternalLastName,
-            doctor.LicenseNumber,
-            doctor.Speciality,
+            command.LicenseNumber,
+            command.Speciality,
             doctor.Email,
             doctor.Phone,
             doctor.Curp,
