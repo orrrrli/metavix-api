@@ -44,7 +44,7 @@ internal sealed class AddDailyRecordCommandHandler
         if (!patient.IsActive)
             return RecordErrors.InactivePatient;
 
-        // 3. Execute domain operation. The factory enforces clinical
+        // 2. Execute domain operation. The factory enforces clinical
         //    invariants (BP pair, glucose range, time required) and
         //    returns ErrorOr — the handler stays free of validation.
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -64,7 +64,7 @@ internal sealed class AddDailyRecordCommandHandler
 
         var record = createResult.Value;
 
-        // 4. Attach glucose readings, if any. The factory on each
+        // 3. Attach glucose readings, if any. The factory on each
         //    GlucoseReading enforces the per-reading invariants.
         if (request.GlucoseReadings is { Count: > 0 })
         {
@@ -84,10 +84,10 @@ internal sealed class AddDailyRecordCommandHandler
             }
         }
 
-        // 5. Persist
+        // 4. Persist
         await _dailyRecordRepository.AddAsync(record, cancellationToken);
 
-        // 6. Return result
+        // 5. Return result
         return DailyRecordMapper.ToResult(record);
     }
 }

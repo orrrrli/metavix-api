@@ -37,7 +37,7 @@ internal sealed class GetInsulinRecordsQueryHandler
 
         var records = await _insulinRepository.GetRecordsByPatientIdAsync(request.PatientId);
 
-        // 3. Map — an owned patient with no insulin records yet is a valid empty
+        // 2. Map — an owned patient with no insulin records yet is a valid empty
         //    result, not an error. Returning RecordsNotFound would force callers
         //    to treat "no records yet" as a failure.
         return records.Select(InsulinDm1RecordMapper.ToResult).ToList();

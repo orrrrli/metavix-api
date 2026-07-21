@@ -37,7 +37,7 @@ internal sealed class GetPatientLabResultsQueryHandler
 
         var records = await _labResultRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        // 3. Map — an owned patient with no lab results yet is a valid empty
+        // 2. Map — an owned patient with no lab results yet is a valid empty
         //    result, not an error. Returning RecordsNotFound would force callers
         //    to treat "no results yet" as a failure.
         return records.Select(LabResultMapper.ToResult).ToList();

@@ -40,7 +40,7 @@ internal sealed class AddInsulinRecordCommandHandler
 
         var patient = access.Value;
 
-        // 3. Guard — an inactive patient cannot record new data.
+        // 2. Guard — an inactive patient cannot record new data.
         if (!patient.IsActive)
             return RecordErrors.InactivePatient;
 
