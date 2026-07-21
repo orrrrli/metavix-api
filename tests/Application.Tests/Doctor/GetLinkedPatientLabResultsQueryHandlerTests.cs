@@ -112,7 +112,7 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
     public async Task Handle_PropagatesCancellationTokenToAuthorizationChecks()
     {
         // Arrange — the caller's token must reach the repository calls, not be
-        // swallowed and replaced with CancellationToken.None (§4.6).
+        // swallowed and replaced with CancellationToken.None.
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();

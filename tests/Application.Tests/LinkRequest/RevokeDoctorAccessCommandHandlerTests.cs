@@ -38,15 +38,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var now = DateTime.UtcNow;
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
-        var patient = new Patient
-        {
-            Id = patientId,
-            FirstName = "Juan",
-            LastName = "Pérez",
-            Email = "juan@mail.com",
-            PrimaryDoctorId = doctorId,
-            MedicalRecordNumber = mrn,
-        };
+        var patient = TestEntities.Patient(patientId, primaryDoctorId: doctorId, medicalRecordNumber: mrn);
 
         _currentUser.UserId.Returns(userId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
@@ -76,13 +68,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var requestId = Guid.NewGuid();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
-        var patient = new Patient
-        {
-            Id = patientId,
-            FirstName = "Juan",
-            LastName = "Pérez",
-            Email = "juan@mail.com",
-        };
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
@@ -94,7 +80,7 @@ public class RevokeDoctorAccessCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be("LinkRequest.NotAccepted");
+        result.FirstError.Code.Should().Be(LinkRequestErrors.NotAccepted.Code);
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
@@ -187,14 +173,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var requestId = Guid.NewGuid();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
-        var patient = new Patient
-        {
-            Id = patientId,
-            FirstName = "Juan",
-            LastName = "Pérez",
-            Email = "juan@mail.com",
-            PrimaryDoctorId = newDoctorId,
-        };
+        var patient = TestEntities.Patient(patientId, primaryDoctorId: newDoctorId);
 
         _currentUser.UserId.Returns(userId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);

@@ -2,7 +2,7 @@ namespace Application.Tests.Helpers;
 
 /// <summary>
 /// Shared builders for the domain entities most tests need. Consolidates the
-/// per-file BuildPatient/BuildDoctor copies (§3.2). Every parameter has a
+/// per-file BuildPatient/BuildDoctor copies. Every parameter has a
 /// sensible default so call sites only specify what they assert on.
 /// </summary>
 public static class TestEntities
@@ -13,7 +13,9 @@ public static class TestEntities
         string firstName = "Juan",
         string lastName = "Pérez",
         string email = "juan@mail.com",
-        Guid? userId = null) => new()
+        Guid? userId = null,
+        Guid? primaryDoctorId = null,
+        string? medicalRecordNumber = null) => new()
     {
         Id = id,
         UserId = userId ?? Guid.NewGuid(),
@@ -21,6 +23,8 @@ public static class TestEntities
         FirstName = firstName,
         LastName = lastName,
         Email = email,
+        PrimaryDoctorId = primaryDoctorId,
+        MedicalRecordNumber = medicalRecordNumber,
     };
 
     public static PatientDoctorRequest LinkRequest(

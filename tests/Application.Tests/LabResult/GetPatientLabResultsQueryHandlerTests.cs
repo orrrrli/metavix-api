@@ -49,7 +49,7 @@ public class GetPatientLabResultsQueryHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(2);
-        // The caller's token must be propagated to the load, not swallowed (§4.6).
+        // The caller's token must be propagated to the load, not swallowed.
         await _patientRepository.Received(1)
             .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
