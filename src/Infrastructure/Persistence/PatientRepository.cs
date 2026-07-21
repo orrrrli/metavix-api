@@ -38,12 +38,12 @@ public class PatientRepository : IPatientRepository
             patient.MedicalRecordNumber);
     }
 
-    public async Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId)
+    public async Task<Patient?> GetByIdAsync(Guid patientId)
     {
         return await _dbContext.Patients.FirstOrDefaultAsync(x => x.Id == patientId);
     }
 
-    public async Task UpdateAsync(Domain.Models.Patient patient)
+    public async Task UpdateAsync(Patient patient)
     {
         // If the entity is already tracked (loaded via GetByIdAsync without
         // AsNoTracking), the change tracker already knows which columns changed
@@ -65,7 +65,7 @@ public class PatientRepository : IPatientRepository
             .FirstOrDefaultAsync();
     }
 
-    public async Task<Domain.Models.Patient?> GetByUserIdAsync(
+    public async Task<Patient?> GetByUserIdAsync(
         Guid userId,
         CancellationToken cancellationToken)
     {
@@ -77,7 +77,7 @@ public class PatientRepository : IPatientRepository
     // Returns the Patient only if it exists AND belongs to userId.
     // Collapses "not found" and "not yours" into a single null so the
     // handler can't leak which patient IDs exist (enumeration oracle).
-    public async Task<Domain.Models.Patient?> GetOwnedPatientAsync(
+    public async Task<Patient?> GetOwnedPatientAsync(
         Guid patientId,
         Guid userId,
         CancellationToken cancellationToken)
