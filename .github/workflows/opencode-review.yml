@@ -1,13 +1,17 @@
 name: opencode-review
+
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/**'
+      - 'tests/**'
 
 jobs:
   review:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
-      id-token: write
       contents: read
       pull-requests: write
       issues: write
@@ -15,15 +19,17 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Read review prompt
+        id: prompt
+        run: |
+          {
+            echo 'text<<EOF'
+            cat .github/opencode-review-prompt.md
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
       - uses: anomalyco/opencode/github@latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
           model: opencode-go/minimax-m3
-          prompt: |
-            Revisa este pull request de una API en ASP.NET Core 9 (Clean Architecture / CQRS):
-            - Señala lógica vaga o poco clara
-            - Detecta edge cases que el código no cubre
-            - Marca duplicación de lógica (ej. funciones que reimplementan
-              chequeos que ya cubre una variable/bool existente)
-            - Sugiere simplificaciones, no reescrituras completas
+          prompt: ${{ steps.prompt.outputs.text }}
