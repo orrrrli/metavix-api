@@ -30,11 +30,12 @@ internal sealed class GetMyDoctorProfileQueryHandler
 
         // 2. Load — caller is fetching their own doctor profile, so a single
         //    by-userId lookup is the right granularity (no doctorId is supplied
-        //    in this query). Null collapses "user has no doctor yet" and any
-        //    other miss into one error path.
+        //    in this query). A null result means the authenticated user simply
+        //    has no doctor profile yet — that is a missing resource, not a
+        //    permissions failure, so surface DoctorNotFound (not Forbidden).
         var doctor = await _doctorRepository.GetByUserIdAsync(userId, cancellationToken);
         if (doctor is null)
-            return AuthErrors.Forbidden;
+            return DoctorErrors.DoctorNotFound;
 
         return new DoctorProfileResult(
             doctor.Id,

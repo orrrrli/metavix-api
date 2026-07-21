@@ -30,11 +30,12 @@ internal sealed class UpdateDoctorProfileCommandHandler
 
         // 2. Load — caller is updating their own doctor profile, so a single
         //    by-userId lookup is the right granularity (no doctorId is supplied
-        //    in the command). Null collapses "user has no doctor yet" and any
-        //    other miss into one error path.
+        //    in the command). A null result means the authenticated user simply
+        //    has no doctor profile yet — that is a missing resource, not a
+        //    permissions failure, so surface DoctorNotFound (not Forbidden).
         var doctor = await _doctorRepository.GetByUserIdAsync(userId, cancellationToken);
         if (doctor is null)
-            return AuthErrors.Forbidden;
+            return DoctorErrors.DoctorNotFound;
 
         await _doctorRepository.UpdateProfileAsync(
             doctor.Id,
