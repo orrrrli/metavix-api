@@ -16,14 +16,15 @@ internal static class DoctorPatientLinkAuth
         Guid patientId,
         CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is null)
-            return AuthErrors.Forbidden;
+        var userIdResult = CurrentUserAccess.RequireUserId(currentUser);
+        if (userIdResult.IsError)
+            return userIdResult.FirstError;
 
         // This guard runs two queries, not one. The first resolves "doctor
         // exists" and "doctor is the caller" together in a single round-trip
         // (mirroring the GetOwnedDoctorAsync pattern from PR #255)...
         var doctor = await doctorRepository.GetOwnedDoctorAsync(
-            doctorId, currentUser.UserId.Value, cancellationToken);
+            doctorId, userIdResult.Value, cancellationToken);
         if (doctor is null)
             return AuthErrors.Forbidden;
 

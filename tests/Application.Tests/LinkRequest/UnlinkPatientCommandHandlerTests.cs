@@ -91,6 +91,7 @@ public class UnlinkPatientCommandHandlerTests
         await _doctorRepository.Received(1).GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>());
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        linkRequest.Status.Should().Be(RequestStatus.Pending);
     }
 
     [Fact]
@@ -205,6 +206,34 @@ public class UnlinkPatientCommandHandlerTests
         result.FirstError.Code.Should().Be(LinkRequestErrors.NotAccepted.Code);
         await _patientRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPatientLookupThrowsAfterRequestPersisted_PropagatesException()
+    {
+        // Arrange — the request transition already persisted successfully;
+        // if the subsequent patient lookup throws (e.g. a DB error), the
+        // handler has no null-check to fall back on and the exception must
+        // propagate rather than being silently swallowed as a no-op.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
+        var doctor = TestEntities.Doctor(doctorId, userId);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetByIdAsync(patientId)
+            .Returns(Task.FromException<Patient?>(new InvalidOperationException("db error")));
+
+        // Act
+        var act = () => _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]

@@ -5,6 +5,8 @@ namespace Application.Tests.Helpers;
 /// (DoctorPatientLinkAuth): the caller is the named doctor and holds an accepted
 /// link with the patient.
 /// Pass <paramref name="linked"/> = false to simulate a doctor with no accepted link.
+/// Pass <paramref name="doctorOwned"/> = false to simulate a caller who is not the
+/// named doctor (GetOwnedDoctorAsync returns null).
 /// </summary>
 public static class DoctorLinkSetup
 {
@@ -15,11 +17,12 @@ public static class DoctorLinkSetup
         Guid userId,
         Guid doctorId,
         Guid patientId,
-        bool linked = true)
+        bool linked = true,
+        bool doctorOwned = true)
     {
         currentUser.UserId.Returns(userId);
         doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(TestEntities.Doctor(doctorId, userId));
+            .Returns(doctorOwned ? TestEntities.Doctor(doctorId, userId) : null);
         requestRepository.IsAcceptedLinkAsync(doctorId, patientId, Arg.Any<CancellationToken>())
             .Returns(linked);
     }
