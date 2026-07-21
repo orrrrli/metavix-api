@@ -53,13 +53,19 @@ internal sealed class SendLinkRequestCommandHandler
             return DoctorErrors.DoctorNotFound;
         }
 
-        // 4. Check if patient already has a doctor
+        // 4. Enforce link invariants. These live here (after ownership + doctor
+        //    existence are confirmed) because they are guarding against a
+        //    duplicate/conflicting link for a patient we already know the caller
+        //    owns — they are not access-control checks and must not run before
+        //    step 2, or they would leak information about patients the caller
+        //    does not own.
+        // 4a. A patient may only be linked to one primary doctor.
         if (patient.PrimaryDoctorId is not null)
         {
             return LinkRequestErrors.AlreadyLinked;
         }
 
-        // 4. Check if there is already a pending request
+        // 4b. Don't create a second request while one is still pending.
         if (await _requestRepository.HasPendingRequestAsync(request.PatientId, request.DoctorId))
         {
             return LinkRequestErrors.AlreadyPending;
