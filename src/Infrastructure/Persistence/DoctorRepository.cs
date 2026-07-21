@@ -6,10 +6,12 @@ namespace Infrastructure.Persistence;
 public class DoctorRepository : IDoctorRepository
 {
     private readonly AppDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
 
-    public DoctorRepository(AppDbContext dbContext)
+    public DoctorRepository(AppDbContext dbContext, TimeProvider timeProvider)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task<List<Doctor>> GetAllActiveAsync()
@@ -71,7 +73,7 @@ public class DoctorRepository : IDoctorRepository
                 .SetProperty(d => d.IsVerified, isVerified)
                 .SetProperty(d => d.Curp, curp)
                 .SetProperty(d => d.IneNumber, ineNumber)
-                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(d => d.UpdatedAt, _timeProvider.GetUtcNow().UtcDateTime),
                 cancellationToken);
     }
 
@@ -86,7 +88,7 @@ public class DoctorRepository : IDoctorRepository
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.LicenseNumber, licenseNumber)
                 .SetProperty(d => d.Speciality, speciality)
-                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(d => d.UpdatedAt, _timeProvider.GetUtcNow().UtcDateTime),
                 cancellationToken);
     }
 }
