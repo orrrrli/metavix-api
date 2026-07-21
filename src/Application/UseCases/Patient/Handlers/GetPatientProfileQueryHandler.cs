@@ -1,5 +1,6 @@
 using Application.Common.Authorization;
 using Application.Common.Errors;
+using Application.UseCases.Patient.Mappers;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Patient.Common;
@@ -33,20 +34,6 @@ internal sealed class GetPatientProfileQueryHandler
 
         var patient = access.Value;
 
-        return new PatientProfileResult(
-            patient.Id,
-            patient.FirstName,
-            patient.LastName,
-            patient.Email,
-            patient.Phone,
-            patient.DateOfBirth,
-            patient.HeightCm,
-            patient.Gender?.ToString(),
-            patient.IsPregnant,
-            patient.DiabetesType.ToString(),
-            patient.MedicalRecordNumber,
-            patient.CreatedAt,
-            patient.PregnancyStartDate,
-            patient.PregnancyDueDate);
+        return PatientProfileMapper.ToResult(patient);
     }
 }
