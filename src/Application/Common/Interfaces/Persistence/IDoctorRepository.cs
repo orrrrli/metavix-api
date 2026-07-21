@@ -7,6 +7,14 @@ public interface IDoctorRepository
     Task<List<Doctor>> GetAllActiveAsync();
     Task<Doctor?> GetByIdAsync(Guid doctorId);
     Task<Guid?> GetDoctorIdByUserIdAsync(Guid userId);
+
+    /// <remarks>
+    /// For "my profile" endpoints: the caller acts on their own doctor record,
+    /// so a single by-userId lookup is the right granularity — no doctorId is
+    /// supplied by the request. A null result means the authenticated user has
+    /// no doctor profile yet, which is a missing resource, not a permissions
+    /// failure (callers should surface DoctorNotFound, not Forbidden).
+    /// </remarks>
     Task<Doctor?> GetByUserIdAsync(
         Guid userId,
         CancellationToken cancellationToken);

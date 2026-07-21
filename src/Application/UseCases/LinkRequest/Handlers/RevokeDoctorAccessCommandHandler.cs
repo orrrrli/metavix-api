@@ -31,25 +31,24 @@ internal sealed class RevokeDoctorAccessCommandHandler
         RevokeDoctorAccessCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Authorize
         var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
         if (userIdResult.IsError)
             return userIdResult.FirstError;
         var userId = userIdResult.Value;
 
-        // 2. Find the link request. A missing request returns Forbidden (not
-        //    RequestNotFound) so that "request doesn't exist" and "request
-        //    exists but isn't your patient" (step 3) are indistinguishable —
-        //    otherwise the caller could probe requestIds for existence.
+        // A missing request returns Forbidden (not RequestNotFound) so that
+        // "request doesn't exist" and "request exists but isn't your patient"
+        // (below) are indistinguishable — otherwise the caller could probe
+        // requestIds for existence. UnlinkPatientCommandHandler applies the
+        // same guard against the doctor instead of the patient.
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
         if (linkRequest is null)
         {
             return AuthErrors.Forbidden;
         }
 
-        // 3. Verify the caller owns the patient on the request.
-        //    "Not found" and "not yours" are collapsed into Forbidden to
-        //    close the patient-ID enumeration oracle.
+        // "Not found" and "not yours" are collapsed into Forbidden to close
+        // the patient-ID enumeration oracle.
         var patient = await _patientRepository.GetOwnedPatientAsync(
             linkRequest.PatientId, userId, cancellationToken);
         if (patient is null)
@@ -57,6 +56,9 @@ internal sealed class RevokeDoctorAccessCommandHandler
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
+        // NotAccepted is returned identically whether Revoke() rejected the
+        // state transition or the persisted write lost a concurrency race —
+        // callers don't need to distinguish "wrong state" from "stale write".
         if (!linkRequest.Revoke(now))
         {
             return LinkRequestErrors.NotAccepted;
@@ -66,7 +68,9 @@ internal sealed class RevokeDoctorAccessCommandHandler
             return LinkRequestErrors.NotAccepted;
         }
 
-        // 5. Remove the doctor from the patient
+        // TODO: IPatientRepository.UpdateAsync doesn't accept a
+        // CancellationToken yet; thread it through once the interface is
+        // extended (same gap in UnlinkPatientCommandHandler).
         patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: false, now);
         await _patientRepository.UpdateAsync(patient);
 

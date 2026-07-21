@@ -39,15 +39,13 @@ internal sealed class UnlinkPatientCommandHandler
             return userIdResult.FirstError;
         var userId = userIdResult.Value;
 
-        // 1. Find the link request. Same enumeration-oracle guard as
-        //    RevokeDoctorAccessCommandHandler — see step 2 there.
+        // Same enumeration-oracle guard as RevokeDoctorAccessCommandHandler.
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
         if (linkRequest is null)
         {
             return AuthErrors.Forbidden;
         }
 
-        // 2. Verify the caller owns the doctor on the request.
         var callerDoctor = await _doctorRepository.GetOwnedDoctorAsync(
             linkRequest.DoctorId, userId, cancellationToken);
         if (callerDoctor is null)
@@ -55,6 +53,9 @@ internal sealed class UnlinkPatientCommandHandler
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
+        // NotAccepted is returned identically whether Unlink() rejected the
+        // state transition or the persisted write lost a concurrency race —
+        // callers don't need to distinguish "wrong state" from "stale write".
         if (!linkRequest.Unlink(now))
         {
             return LinkRequestErrors.NotAccepted;
@@ -64,15 +65,11 @@ internal sealed class UnlinkPatientCommandHandler
             return LinkRequestErrors.NotAccepted;
         }
 
-        // 4. Remove the doctor from the patient and clear the MRN.
-        // The MRN belongs to the doctor-patient RELATION, not the patient,
-        // so once the relation ends the value is freed for re-use.
-        //
-        // Unlike Revoke, this handler authorizes against the doctor and only
-        // loads the patient after persisting the Unlinked transition, so a
-        // deleted patient is a no-op rather than Forbidden.
-        // TODO: IPatientRepository.GetByIdAsync doesn't accept a CancellationToken
-        // yet; thread it through here once the interface is extended.
+        // Unlike Revoke, the patient is loaded after persistence, so a missing
+        // patient is a no-op rather than Forbidden.
+        // TODO: neither IPatientRepository.GetByIdAsync nor UpdateAsync accept a
+        // CancellationToken yet; thread it through both once the interface is
+        // extended (same gap in RevokeDoctorAccessCommandHandler).
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {
