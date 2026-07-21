@@ -12,12 +12,14 @@ namespace API.IntegrationTests.GoalEvaluations;
 // accidentally place a value on a band edge. The handler's existing 16-RF catalog-drift
 // grid uses the same convention.
 //
-// Dates are pinned to FixedEvaluationDate so NoDataWindow (7d BP / 14d fasting /
-// 30d BMI / 90d HbA1c / 365d LDL) is comfortably satisfied regardless of when CI runs
-// the test — mirrors the FakeTimeProvider pattern the handler unit tests use.
+// Dates are pinned to "today" so NoDataWindow (7d BP / 14d fasting / 30d BMI /
+// 90d HbA1c / 365d LDL) is satisfied regardless of when CI runs the test.
+// Integration tests can't inject a FakeTimeProvider without a WebApplicationFactory
+// rewrite, so we use the real wall clock and seed records dated the same day as the
+// engine's "now" — every value is fresh by construction.
 internal static class PatientFixtureBuilder
 {
-    internal static readonly DateOnly FixedEvaluationDate = new(2026, 6, 21);
+    internal static readonly DateOnly FixedEvaluationDate = DateOnly.FromDateTime(DateTime.UtcNow);
 
     // Scenario 1 — Type2 (ConDiabetes) patient with all 16 evaluated parameters InRange.
     //
@@ -261,7 +263,7 @@ internal static class PatientFixtureBuilder
             Id            = Guid.NewGuid(),
             DailyRecordId = recordId,
             ReadingType   = GlucoseReadingType.Fasting,
-            ValueMgDl     = 100,                        // ConDiabetes fasting AtRisk band [80, 131)
+            ValueMgDl     = 135,                        // ConDiabetes fasting AtRisk band [131, 180)
         });
 
         await db.SaveChangesAsync();

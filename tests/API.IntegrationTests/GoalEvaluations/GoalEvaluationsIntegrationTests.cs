@@ -17,7 +17,10 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         _factory = factory;
     }
 
-    // T3: seeded patient with full health data → 201 + all InRange statuses
+    // T3: seeded patient with partial health data → 201 + the seeded parameters
+    // evaluate InRange/AtRisk as expected; the unseeded ones come back as NoData
+    // (engine expansion past 5 parameters is covered by the modern fixture tests
+    // like `...ConDiabetesPatientHasAll16InRange_...`).
     [Fact]
     public async Task PostGoalEvaluations_WhenPatientHasFullHealthData_Returns201WithInRangeStatuses()
     {
@@ -35,9 +38,32 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
 
         var body = await response.Content.ReadFromJsonAsync<ApiSuccessResponse<EvaluateGoalsResult>>(JsonOptions);
         body.Should().NotBeNull();
-        body!.Data.Items.Should().HaveCount(5);
-        body.Data.Items.Should().AllSatisfy(item =>
-            item.Status.Should().Be(GoalStatus.InRange));
+
+        // 11 items: 4 InRange + 1 AtRisk + 6 NoData. The 4 omitted items are gender-keyed
+        // (HDL / creatinine / waist need a non-null Gender, which SeedPatientAsync doesn't
+        // set) and postprandial 1h/2h (SinDiabetes has no postprandial catalog row).
+        body!.Data.Items.Should().HaveCount(11);
+
+        GoalStatus StatusOf(string id) => body.Data.Items.First(i => i.ParameterId == id).Status;
+
+        // Seeded values land in their expected band for a non-diabetic (SinDiabetes) patient:
+        //   HbA1c 5.5 → InRange (< 5.7); SBP 110 → InRange (< 120); LDL 80 → InRange (< 130);
+        //   BMI 20.76 → InRange ([18.5, 25)). Fasting 100 falls into the AtRisk band [100, 126).
+        StatusOf(AdaGoalConstants.HbA1c).Should().Be(GoalStatus.InRange);
+        StatusOf(AdaGoalConstants.SystolicBp).Should().Be(GoalStatus.InRange);
+        StatusOf(AdaGoalConstants.LdlPrimary).Should().Be(GoalStatus.InRange);
+        StatusOf(AdaGoalConstants.Bmi).Should().Be(GoalStatus.InRange);
+        StatusOf(AdaGoalConstants.FastingGlucose).Should().Be(GoalStatus.AtRisk);
+
+        // Unseeded values (no lab / vitals) come back as NoData with the
+        // "requires-specialist-evaluation" reason — the same path the handler takes when a
+        // parameter has a spec but no value to classify.
+        StatusOf(AdaGoalConstants.DiastolicBp).Should().Be(GoalStatus.NoData);
+        StatusOf(AdaGoalConstants.HeartRate).Should().Be(GoalStatus.NoData);
+        StatusOf(AdaGoalConstants.TotalCholesterol).Should().Be(GoalStatus.NoData);
+        StatusOf(AdaGoalConstants.Triglycerides).Should().Be(GoalStatus.NoData);
+        StatusOf(AdaGoalConstants.Egfr).Should().Be(GoalStatus.NoData);
+        StatusOf(AdaGoalConstants.Bun).Should().Be(GoalStatus.NoData);
     }
 
     // Story AC1: Type2 patient with all 16 evaluated parameters in their InRange band → 201
@@ -119,6 +145,10 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
 
         // One assertion per parameter the catalog actually evaluates for a SinDiabetes patient,
         // driven by ParameterId so a future reorder / insert can't silently break the test.
+        // eGFR is AtRisk, not OutOfRange: with the fixture's creatinine 1.5 mg/dL on a 36-year-
+        // old female, CKD-EPI 2021 yields eGFR ≈ 47, which lands in the [30, 60) AtRisk band
+        // rather than the < 30 OutOfRange band. Creatinine itself is OutOfRange (Female > 1.4);
+        // the two are independent classifications.
         GoalStatus StatusOf(string id) => body.Data.Items.First(i => i.ParameterId == id).Status;
         StatusOf(AdaGoalConstants.HbA1c).Should().Be(GoalStatus.OutOfRange);
         StatusOf(AdaGoalConstants.SystolicBp).Should().Be(GoalStatus.OutOfRange);
@@ -130,7 +160,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         StatusOf(AdaGoalConstants.TotalCholesterol).Should().Be(GoalStatus.OutOfRange);
         StatusOf(AdaGoalConstants.Triglycerides).Should().Be(GoalStatus.OutOfRange);
         StatusOf(AdaGoalConstants.Creatinine).Should().Be(GoalStatus.OutOfRange);
-        StatusOf(AdaGoalConstants.Egfr).Should().Be(GoalStatus.OutOfRange);
+        StatusOf(AdaGoalConstants.Egfr).Should().Be(GoalStatus.AtRisk);
         StatusOf(AdaGoalConstants.Bun).Should().Be(GoalStatus.OutOfRange);
         StatusOf(AdaGoalConstants.WaistCircumference).Should().Be(GoalStatus.OutOfRange);
         StatusOf(AdaGoalConstants.FastingGlucose).Should().Be(GoalStatus.OutOfRange);
@@ -205,8 +235,11 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var body = await response.Content.ReadFromJsonAsync<ApiSuccessResponse<EvaluateGoalsResult>>(JsonOptions);
         body.Should().NotBeNull();
 
-        // 15 items: every EvaluatedParameterId except ldl_secondary (HasAscvd=false → ldl_primary).
-        body!.Data.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count - 1);
+        // 16 items: every EvaluatedParameterId. HasAscvd=false resolves LDL to ldl_primary
+        // (so ldl_secondary is not in the items), but BuildItem still emits a NoData item
+        // for parameters that resolve to spec=null in pregnancy (postprandial 1h/2h here) —
+        // they're counted, just not omitted. See the per-parameter assertions below.
+        body!.Data.Items.Should().HaveCount(AdaGoalConstants.EvaluatedParameterIds.Count);
 
         GoalEvaluationItemResult ItemOf(string id) => body.Data.Items.First(i => i.ParameterId == id);
 
@@ -244,18 +277,28 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         post2h.Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
 
         // Pregnancy-agnostic parameters still evaluate against the catalog and stay InRange.
-        ItemOf(AdaGoalConstants.DiastolicBp).Status.Should().Be(GoalStatus.InRange);
+        // Diastolic BP is the surprise: the catalog has SinDiabetes/ConDiabetes rows but no
+        // EmbarazadaDM row, so BuildItem's pregnancy branch emits "requires-specialist-evaluation"
+        // even with a value present (same path as SBP). Total cholesterol and waist fall under
+        // "not-evaluated-in-pregnancy" — their Universal specs exist but AppliesInPregnancy=false.
+        ItemOf(AdaGoalConstants.DiastolicBp).Status.Should().Be(GoalStatus.NoData);
+        ItemOf(AdaGoalConstants.DiastolicBp).Reason.Should().Be(AdaGoalConstants.RequiresSpecialistEvaluationReason);
         ItemOf(AdaGoalConstants.HeartRate).Status.Should().Be(GoalStatus.InRange);
         ItemOf(AdaGoalConstants.Hdl).Status.Should().Be(GoalStatus.InRange);
-        ItemOf(AdaGoalConstants.TotalCholesterol).Status.Should().Be(GoalStatus.InRange);
+        ItemOf(AdaGoalConstants.TotalCholesterol).Status.Should().Be(GoalStatus.NoData);
+        ItemOf(AdaGoalConstants.TotalCholesterol).Reason.Should().Be(AdaGoalConstants.NotEvaluatedInPregnancyReason);
         ItemOf(AdaGoalConstants.Triglycerides).Status.Should().Be(GoalStatus.InRange);
         ItemOf(AdaGoalConstants.Creatinine).Status.Should().Be(GoalStatus.InRange);
         ItemOf(AdaGoalConstants.Egfr).Status.Should().Be(GoalStatus.InRange);
         ItemOf(AdaGoalConstants.Bun).Status.Should().Be(GoalStatus.InRange);
-        ItemOf(AdaGoalConstants.WaistCircumference).Status.Should().Be(GoalStatus.InRange);
+        ItemOf(AdaGoalConstants.WaistCircumference).Status.Should().Be(GoalStatus.NoData);
+        ItemOf(AdaGoalConstants.WaistCircumference).Reason.Should().Be(AdaGoalConstants.NotEvaluatedInPregnancyReason);
     }
 
-    // T4: patient with no health records → 201 + all NoData statuses
+    // T4: patient with no health records → 201 + all NoData statuses. 11 items (not 5):
+    // the engine evaluates every parameter with a spec — gender-keyed parameters
+    // (HDL / creatinine / waist) and postprandial 1h/2h are omitted because the
+    // patient has no Gender set and the SinDiabetes catalog has no postprandial rows.
     [Fact]
     public async Task PostGoalEvaluations_WhenPatientHasNoHealthRecords_Returns201WithAllNoData()
     {
@@ -272,7 +315,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
 
         var body = await response.Content.ReadFromJsonAsync<ApiSuccessResponse<EvaluateGoalsResult>>(JsonOptions);
         body.Should().NotBeNull();
-        body!.Data.Items.Should().HaveCount(5);
+        body!.Data.Items.Should().HaveCount(11);
         body.Data.Items.Should().AllSatisfy(item =>
             item.Status.Should().Be(GoalStatus.NoData));
     }
@@ -354,14 +397,15 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
     // SEC-METAS-1-T2: persisted GoalEvaluation.PatientId matches the route, not the JWT.
     // Asserts the data-isolation property directly: after Patient A triggers an evaluation on
     // /api/v1/patient/{A}/goal-evaluations, the row written to the DB must belong to A, and the
-    // items must reflect A's measurements, not any other patient's. Pinned to a fixed evaluation
-    // date (2026-06-21) so NoDataWindow checks are deterministic across CI runs.
+    // items must reflect A's measurements, not any other patient's.
     [Fact]
     public async Task PostGoalEvaluations_PersistsGoalEvaluationWithRoutePatientId()
     {
-        // Arrange — pinned evaluation date (matches the deterministic anchor used in
-        // feat/QA-METAS-1 so NoDataWindow-driven outcomes stay stable).
-        var evaluationDate = new DateOnly(2026, 6, 21);
+        // Arrange — evaluation date is "today" so the seeded vitals are inside every spec's
+        // NoDataWindow (7d BP / 14d fasting / 30d BMI). The integration test host uses
+        // TimeProvider.System, so a fixed past date would age out of the short windows over
+        // time — see the same pattern in PatientFixtureBuilder.FixedEvaluationDate.
+        var evaluationDate = DateOnly.FromDateTime(DateTime.UtcNow);
         var labDate        = evaluationDate;          // sample taken on the evaluation day
         var recordDate     = evaluationDate;
 
