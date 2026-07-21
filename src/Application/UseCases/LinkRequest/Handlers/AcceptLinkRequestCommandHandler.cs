@@ -56,7 +56,24 @@ internal sealed class AcceptLinkRequestCommandHandler
             return LinkRequestErrors.NotPending;
         }
 
-        // 3. Resolve the MRN to assign:
+        // One timestamp for the whole acceptance: the MRN suggestion, the
+        // request's ResolvedAt and the patient's AssignedAt all describe the
+        // same event and must agree (three separate GetUtcNow() calls could
+        // drift across the millisecond boundary the MRN uniqueness relies on).
+        var now = _timeProvider.GetUtcNow();
+
+        // 3. Load the patient BEFORE validating the MRN or mutating anything.
+        //    If the patient was deleted between sending and accepting the
+        //    request, bail out with the concrete PatientNotFound cause instead
+        //    of a misleading MrnAlreadyAssigned (a duplicate MRN on a patient
+        //    that no longer exists) — and instead of accepting the request and
+        //    then silently skipping the link, which used to leave the request
+        //    Accepted with no doctor ever assigned and still report success.
+        var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
+        if (patient is null)
+            return PatientErrors.PatientNotFound;
+
+        // 4. Resolve the MRN to assign:
         //    - If the doctor provided one, validate uniqueness.
         //    - Otherwise auto-assign the next available for the current year.
         string? assignedMrn;
@@ -75,31 +92,21 @@ internal sealed class AcceptLinkRequestCommandHandler
             // backstop for the (vanishingly rare) same-millisecond race. If the
             // suggestion already exists, surface a transient error so the client
             // can retry rather than silently colliding.
-            var candidate = MrnGenerator.Suggest(_timeProvider.GetUtcNow());
+            var candidate = MrnGenerator.Suggest(now);
             if (await _patientRepository.ExistsByMedicalRecordNumberAsync(candidate, cancellationToken))
                 return LinkRequestErrors.MrnAutoAssignFailed;
             assignedMrn = candidate;
         }
 
-        // 4. Load the patient BEFORE mutating anything. If the patient was
-        //    deleted between sending and accepting the request, bail out with a
-        //    concrete error instead of accepting the request and then silently
-        //    skipping the link — that path used to leave the request Accepted
-        //    with no doctor ever assigned to the (missing) patient and still
-        //    reported success.
-        var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
-        if (patient is null)
-            return PatientErrors.PatientNotFound;
-
         // 5. Accept the request
-        if (!linkRequest.Accept(_timeProvider.GetUtcNow().UtcDateTime))
+        if (!linkRequest.Accept(now.UtcDateTime))
         {
             return LinkRequestErrors.NotPending;
         }
         await _requestRepository.UpdateAsync(linkRequest);
 
         // 6. Link the patient to the doctor and assign the MRN
-        patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, _timeProvider.GetUtcNow().UtcDateTime);
+        patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, now.UtcDateTime);
         await _patientRepository.UpdateAsync(patient);
 
         return new LinkRequestResult(
