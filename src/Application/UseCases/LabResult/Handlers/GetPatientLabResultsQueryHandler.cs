@@ -41,7 +41,10 @@ internal sealed class GetPatientLabResultsQueryHandler
 
         var records = await _labResultRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        var results = records.Select(r => new LabResultResult(
+        // 3. Map — an owned patient with no lab results yet is a valid empty
+        //    result, not an error. Returning RecordsNotFound would force callers
+        //    to treat "no results yet" as a failure.
+        return records.Select(r => new LabResultResult(
             r.Id,
             r.PatientId,
             r.SampleDate,
@@ -56,12 +59,5 @@ internal sealed class GetPatientLabResultsQueryHandler
             r.EgoGlucose,
             r.Notes,
             r.CreatedAt)).ToList();
-
-        if (results.Count == 0)
-        {
-            return RecordErrors.RecordsNotFound;
-        }
-
-        return results;
     }
 }

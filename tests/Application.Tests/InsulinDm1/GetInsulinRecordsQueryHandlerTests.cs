@@ -51,6 +51,29 @@ public class GetInsulinRecordsQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenPatientIsOwnedButHasNoRecords_ReturnsEmptyList()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(BuildPatient(patientId));
+        _insulinRepository.GetRecordsByPatientIdAsync(patientId)
+            .Returns(new List<InsulinDm1Record>());
+
+        var query = new GetInsulinRecordsQuery(patientId);
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert — no insulin records yet is a valid empty result, not an error.
+        result.IsError.Should().BeFalse();
+        result.Value.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Handle_WhenPatientIsNotOwned_ReturnsForbidden()
     {
         var userId = Guid.NewGuid();
