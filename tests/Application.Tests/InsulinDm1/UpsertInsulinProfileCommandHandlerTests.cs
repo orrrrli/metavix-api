@@ -95,6 +95,22 @@ public class UpsertInsulinProfileCommandHandlerTests
         await _insulinRepository.DidNotReceive().UpsertProfileAsync(Arg.Any<InsulinDm1Profile>());
     }
 
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var command = new UpsertInsulinProfileCommand(
+            Guid.NewGuid(), "Humalog", null, null, null, null, null);
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
     private static Patient BuildPatient(Guid patientId, bool isActive = true) => new()
     {
         Id = patientId,

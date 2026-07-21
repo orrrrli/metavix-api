@@ -2008,4 +2008,18 @@ public class EvaluateGoalsCommandHandlerTests
         await _clinicalGoalRepository.DidNotReceive().GetByPatientIdAsync(Arg.Any<Guid>());
         await _goalEvaluationRepository.DidNotReceive().AddAsync(Arg.Any<GoalEvaluation>());
     }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var result = await _handler.Handle(
+            new EvaluateGoalsCommand(Guid.NewGuid(), EvaluationTrigger.Patient), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
 }

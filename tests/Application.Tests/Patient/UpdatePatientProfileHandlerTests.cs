@@ -257,4 +257,20 @@ public class UpdatePatientProfileHandlerTests
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
         _notificationRepository.DidNotReceive().Stage(Arg.Any<Notification>());
     }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var command = new UpdatePatientProfileCommand(
+            Guid.NewGuid(), IsPregnant: true, null, null, null, null);
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
 }

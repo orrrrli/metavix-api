@@ -119,6 +119,20 @@ public class GetBodyStatsQueryHandlerTests
             .GetFirstByPatientIdAndDateAsync(Arg.Any<Guid>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        ErrorOr<BodyStats> result = await _handler.Handle(
+            new GetBodyStatsQuery(Guid.NewGuid(), new DateOnly(2026, 6, 21)), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive()
+            .GetOwnedPatientAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
     private static DailyRecord BuildRecord(
         Guid patientId,
         DateOnly date,

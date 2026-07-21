@@ -184,4 +184,17 @@ public class RevokeDoctorAccessCommandHandlerTests
         result.IsError.Should().BeFalse();
         patient.PrimaryDoctorId.Should().Be(newDoctorId);
     }
+
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        _currentUser.UserId.Returns((Guid?)null);
+
+        var result = await _handler.Handle(
+            new RevokeDoctorAccessCommand(Guid.NewGuid()), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
+    }
 }
