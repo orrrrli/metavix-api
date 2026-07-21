@@ -83,9 +83,12 @@ public class UnlinkPatientCommandHandlerTests
         // Act
         var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
 
-        // Assert
+        // Assert — the doctor-ownership check must have run (proving the
+        // failure comes from Unlink()'s state guard, not a reordered auth
+        // check that short-circuited before the request was even inspected).
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(LinkRequestErrors.NotAccepted.Code);
+        await _doctorRepository.Received(1).GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>());
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }

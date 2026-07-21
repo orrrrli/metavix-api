@@ -86,6 +86,7 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _labResultRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -106,13 +107,16 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _labResultRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 
     [Fact]
-    public async Task Handle_PropagatesCancellationTokenToAuthorizationChecks()
+    public async Task Handle_PropagatesCancellationTokenToAuthorizationChecksNotToDataLoad()
     {
-        // Arrange — the caller's token must reach the repository calls, not be
-        // swallowed and replaced with CancellationToken.None.
+        // Arrange — the caller's token must reach the authorization checks, not
+        // be swallowed and replaced with CancellationToken.None. It does NOT
+        // reach GetAllByPatientIdAsync: ILabResultRepository doesn't accept a
+        // token yet (see the TODO on the equivalent Unlink/Revoke call sites).
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();

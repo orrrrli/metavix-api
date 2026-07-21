@@ -100,9 +100,13 @@ public class RevokeDoctorAccessCommandHandlerTests
         // Act
         var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
 
-        // Assert
+        // Assert — a reordered handler that checked patient ownership before
+        // the request even existed would still pass a looser assertion; pin
+        // the short-circuit.
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive().GetOwnedPatientAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
 
