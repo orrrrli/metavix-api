@@ -145,6 +145,42 @@ public class RevokeDoctorAccessCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenPatientDeletedAfterRequestLoaded_ReturnsForbiddenWithoutMutating()
+    {
+        // Arrange — the link request still exists, but the patient it points at
+        // has been deleted before the revoke ran, so GetOwnedPatientAsync yields
+        // null. The handler must bail out before touching either the request or
+        // the (now missing) patient.
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = new PatientDoctorRequest
+        {
+            Id = requestId,
+            PatientId = patientId,
+            DoctorId = doctorId,
+            Status = RequestStatus.Accepted,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        _currentUser.UserId.Returns(userId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns((Patient?)null);
+
+        // Act
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+    }
+
+    [Fact]
     public async Task Handle_WhenPatientPrimaryDoctorAlreadyChanged_DoesNotOverwriteNewDoctor()
     {
         // Arrange: patient already re-linked to a different doctor by the time
