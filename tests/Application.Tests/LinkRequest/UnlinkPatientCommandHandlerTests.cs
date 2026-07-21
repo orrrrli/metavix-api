@@ -114,7 +114,7 @@ public class UnlinkPatientCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be("Auth.Forbidden");
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
 
