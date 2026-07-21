@@ -20,8 +20,9 @@ public class PatientByDoctorIdQueryHandler(
         if (currentUser.UserId is null)
             return AuthErrors.Forbidden;
 
-        var callerDoctorId = await doctorRepository.GetDoctorIdByUserIdAsync(currentUser.UserId.Value);
-        if (callerDoctorId != request.doctorId)
+        var callerDoctor = await doctorRepository.GetOwnedDoctorAsync(
+            request.doctorId, currentUser.UserId.Value, cancellationToken);
+        if (callerDoctor is null)
             return AuthErrors.Forbidden;
 
         var accepted = await requestRepository.GetAcceptedByDoctorIdAsync(request.doctorId);

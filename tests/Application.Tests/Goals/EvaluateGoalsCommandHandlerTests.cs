@@ -522,8 +522,8 @@ public class EvaluateGoalsCommandHandlerTests
     private void SetupAuth(Guid userId, Guid patientId, Patient patient)
     {
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
         _timeProvider.SetUtcNow(EvaluationNow);
         _goalEvaluationRepository.AddAsync(Arg.Any<GoalEvaluation>()).Returns(Task.CompletedTask);
     }
@@ -1980,5 +1980,32 @@ public class EvaluateGoalsCommandHandlerTests
         var sbpItem = result.Value.Items.First(i => i.ParameterId == AdaGoalConstants.SystolicBp);
         sbpItem.Status.Should().Be(GoalStatus.NoData);
         sbpItem.IsCustomGoal.Should().BeTrue("a doctor-set SBP goal exists for this pregnant patient even with no reading");
+    }
+
+    // Patient-ID enumeration oracle guard: the auth step resolves ownership + existence in one
+    // query, so a caller passing another patient's id sees the same Forbidden they'd see for
+    // a non-existent id — the handler never reaches GetByIdAsync or any other patient load.
+    [Fact]
+    public async Task Handle_WhenPatientIsNotOwned_ReturnsForbiddenWithoutLoadingData()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns((Patient?)null);
+
+        // Act
+        ErrorOr<EvaluateGoalsResult> result =
+            await _handler.Handle(new EvaluateGoalsCommand(patientId, EvaluationTrigger.Patient), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _labResultRepository.DidNotReceive().GetLatestByPatientIdAsync(Arg.Any<Guid>());
+        await _dailyRecordRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
+        await _clinicalGoalRepository.DidNotReceive().GetByPatientIdAsync(Arg.Any<Guid>());
+        await _goalEvaluationRepository.DidNotReceive().AddAsync(Arg.Any<GoalEvaluation>());
     }
 }

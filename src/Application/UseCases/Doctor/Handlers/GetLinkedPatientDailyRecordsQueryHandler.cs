@@ -33,7 +33,7 @@ internal sealed class GetLinkedPatientDailyRecordsQueryHandler
         CancellationToken cancellationToken)
     {
         var authError = await DoctorPatientLinkAuth.AuthorizeAsync(
-            _currentUser, _doctorRepository, _requestRepository, request.DoctorId, request.PatientId);
+            _currentUser, _doctorRepository, _requestRepository, request.DoctorId, request.PatientId, cancellationToken);
         if (authError is not null)
             return authError.Value;
 

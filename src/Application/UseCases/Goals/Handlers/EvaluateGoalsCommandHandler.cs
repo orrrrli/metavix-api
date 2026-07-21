@@ -46,16 +46,20 @@ internal sealed class EvaluateGoalsCommandHandler
         EvaluateGoalsCommand request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerPatientId != request.PatientId)
-            return AuthErrors.Forbidden;
-
-        var patient = await _patientRepository.GetByIdAsync(request.PatientId);
+        // 2. Load — single query resolves ownership + existence.
+        //    "Not found" and "not yours" are collapsed into Forbidden to
+        //    close the patient-ID enumeration oracle. The patient is then
+        //    reused below for category resolution, LDL routing (HasAscvd),
+        //    BMI (HeightCm), and eGFR (DateOfBirth + Gender) — its lifetime
+        //    spans the rest of the handler.
+        var patient = await _patientRepository.GetOwnedPatientAsync(
+            request.PatientId, userId, cancellationToken);
         if (patient is null)
-            return PatientErrors.PatientsNotFound;
+            return AuthErrors.Forbidden;
 
         // T3: latest lab result for HbA1c and LDL
         var latestLab = await _labResultRepository.GetLatestByPatientIdAsync(request.PatientId);

@@ -47,8 +47,9 @@ internal sealed class AcceptLinkRequestCommandHandler
             return LinkRequestErrors.RequestNotFound;
         }
 
-        var callerDoctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerDoctorId != linkRequest.DoctorId)
+        var callerDoctor = await _doctorRepository.GetOwnedDoctorAsync(
+            linkRequest.DoctorId, _currentUser.UserId.Value, cancellationToken);
+        if (callerDoctor is null)
             return AuthErrors.Forbidden;
 
         // 2. Verify it is still pending

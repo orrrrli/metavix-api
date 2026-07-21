@@ -43,8 +43,8 @@ public class UpdatePatientProfileHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         var command = new UpdatePatientProfileCommand(patientId, IsPregnant: true, null, null, null, null);
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -70,8 +70,8 @@ public class UpdatePatientProfileHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         var command = new UpdatePatientProfileCommand(patientId, IsPregnant: true, null, null, null, null);
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -103,8 +103,8 @@ public class UpdatePatientProfileHandlerTests
         var doctor = new Doctor { Id = doctorId, UserId = doctorUserId };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
         _doctorRepository.GetByIdAsync(doctorId).Returns(doctor);
 
         var command = new UpdatePatientProfileCommand(patientId, IsPregnant: true, null, null, null, null);
@@ -135,8 +135,8 @@ public class UpdatePatientProfileHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         var command = new UpdatePatientProfileCommand(patientId, IsPregnant: true, null, null, null, null);
         await _handler.Handle(command, CancellationToken.None);
@@ -165,8 +165,8 @@ public class UpdatePatientProfileHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         var command = new UpdatePatientProfileCommand(patientId, IsPregnant: true, null, null, null, null);
         await _handler.Handle(command, CancellationToken.None);
@@ -195,8 +195,8 @@ public class UpdatePatientProfileHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         var command = new UpdatePatientProfileCommand(patientId, IsPregnant: false, null, null, null, null);
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -228,13 +228,33 @@ public class UpdatePatientProfileHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _patientRepository.GetPatientIdByUserIdAsync(userId).Returns(patientId);
-        _patientRepository.GetByIdAsync(patientId).Returns(patient);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
 
         var command = new UpdatePatientProfileCommand(patientId, IsPregnant: false, null, null, null, null);
         var result = await _handler.Handle(command, CancellationToken.None);
 
         result.IsError.Should().BeFalse();
         result.Value.PregnancyStartDate.Should().Be(existingDate);
+    }
+
+    // Caller is not the owner of the patient → Forbidden, no mutation, no notification.
+    [Fact]
+    public async Task Handle_WhenPatientIsNotOwned_ReturnsForbiddenWithoutMutating()
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns((Patient?)null);
+
+        var command = new UpdatePatientProfileCommand(patientId, IsPregnant: true, null, null, null, null);
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        _notificationRepository.DidNotReceive().Stage(Arg.Any<Notification>());
     }
 }

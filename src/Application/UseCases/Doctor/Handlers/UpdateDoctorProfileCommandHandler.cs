@@ -24,22 +24,23 @@ internal sealed class UpdateDoctorProfileCommandHandler
         UpdateDoctorProfileCommand command,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        var doctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
-        if (doctorId is null)
+        // 2. Load — caller is updating their own doctor profile, so a single
+        //    by-userId lookup is the right granularity (no doctorId is supplied
+        //    in the command). Null collapses "user has no doctor yet" and any
+        //    other miss into one error path.
+        var doctor = await _doctorRepository.GetByUserIdAsync(userId, cancellationToken);
+        if (doctor is null)
             return AuthErrors.Forbidden;
 
         await _doctorRepository.UpdateProfileAsync(
-            doctorId.Value,
+            doctor.Id,
             command.LicenseNumber,
             command.Speciality,
             cancellationToken);
-
-        var doctor = await _doctorRepository.GetByIdAsync(doctorId.Value);
-        if (doctor is null)
-            return DoctorErrors.DoctorNotFound;
 
         return new DoctorProfileResult(
             doctor.Id,

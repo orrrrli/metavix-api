@@ -30,9 +30,11 @@ internal sealed class GetPendingRequestsQueryHandler
         if (_currentUser.UserId is null)
             return AuthErrors.Forbidden;
 
-        var callerDoctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerDoctorId != request.DoctorId)
+        var callerDoctor = await _doctorRepository.GetOwnedDoctorAsync(
+            request.DoctorId, _currentUser.UserId.Value, cancellationToken);
+        if (callerDoctor is null)
             return AuthErrors.Forbidden;
+
         var pendingRequests = await _requestRepository.GetPendingByDoctorIdAsync(request.DoctorId);
 
         var results = pendingRequests.Select(r => new PendingRequestResult(

@@ -34,6 +34,30 @@ public class DoctorRepository : IDoctorRepository
             .FirstOrDefaultAsync();
     }
 
+    public async Task<Doctor?> GetByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Doctors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.UserId == userId, cancellationToken);
+    }
+
+    // Returns the Doctor only if it exists AND belongs to userId.
+    // Collapses "not found" and "not yours" into a single null so the
+    // handler can't leak which doctor IDs exist (enumeration oracle).
+    public async Task<Doctor?> GetOwnedDoctorAsync(
+        Guid doctorId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Doctors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                d => d.Id == doctorId && d.UserId == userId,
+                cancellationToken);
+    }
+
     public async Task UpdateVerificationAsync(
         Guid doctorId,
         bool isVerified,

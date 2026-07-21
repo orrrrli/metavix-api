@@ -23,11 +23,11 @@ public class UpdateDoctorProfileCommandHandlerTests
         var userId   = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var command  = new UpdateDoctorProfileCommand("12345678", "Endocrinología");
-        var doctor   = BuildDoctor(doctorId, command.LicenseNumber, command.Speciality);
+        var doctor   = BuildDoctor(doctorId, userId, command.LicenseNumber, command.Speciality);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
-        _doctorRepository.GetByIdAsync(doctorId).Returns(doctor);
+        _doctorRepository.GetByUserIdAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(doctor);
 
         // Act
         ErrorOr<DoctorProfileResult> result = await _handler.Handle(command, CancellationToken.None);
@@ -51,7 +51,8 @@ public class UpdateDoctorProfileCommandHandlerTests
         var command = new UpdateDoctorProfileCommand("12345678", "Endocrinología");
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns((Guid?)null);
+        _doctorRepository.GetByUserIdAsync(userId, Arg.Any<CancellationToken>())
+            .Returns((Doctor?)null);
 
         // Act
         ErrorOr<DoctorProfileResult> result = await _handler.Handle(command, CancellationToken.None);
@@ -66,16 +67,33 @@ public class UpdateDoctorProfileCommandHandlerTests
             Arg.Any<CancellationToken>());
     }
 
-    private static Doctor BuildDoctor(Guid doctorId, string licenseNumber, string speciality) => new()
+    [Fact]
+    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
+    {
+        // Arrange
+        _currentUser.UserId.Returns((Guid?)null);
+        var command = new UpdateDoctorProfileCommand("12345678", "Endocrinología");
+
+        // Act
+        ErrorOr<DoctorProfileResult> result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _doctorRepository.DidNotReceive()
+            .GetByUserIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    private static Doctor BuildDoctor(Guid doctorId, Guid userId, string licenseNumber, string speciality) => new()
     {
         Id                = doctorId,
+        UserId            = userId,
         FirstName         = "Ana",
         PaternalLastName  = "García",
         MaternalLastName  = "López",
         LicenseNumber     = licenseNumber,
         Speciality        = speciality,
         Email             = "ana@clinic.com",
-        UserId            = Guid.NewGuid(),
         IsVerified        = false,
         IsActive          = true,
         CreatedAt         = DateTime.UtcNow,

@@ -30,34 +30,35 @@ internal sealed class RevokeDoctorAccessCommandHandler
         RevokeDoctorAccessCommand request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        // 1. Find the link request
+        // 2. Find the link request
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
         if (linkRequest is null)
         {
             return LinkRequestErrors.RequestNotFound;
         }
 
-        var callerPatientId = await _patientRepository.GetPatientIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerPatientId != linkRequest.PatientId)
+        // 3. Verify the caller owns the patient on the request.
+        //    "Not found" and "not yours" are collapsed into Forbidden to
+        //    close the patient-ID enumeration oracle.
+        var patient = await _patientRepository.GetOwnedPatientAsync(
+            linkRequest.PatientId, userId, cancellationToken);
+        if (patient is null)
             return AuthErrors.Forbidden;
 
-        // 2. Revoke the request (fails if not accepted)
+        // 4. Revoke the request (fails if not accepted)
         if (!linkRequest.Revoke(_timeProvider.GetUtcNow().UtcDateTime))
         {
             return LinkRequestErrors.NotAccepted;
         }
         await _requestRepository.UpdateAsync(linkRequest);
 
-        // 4. Remove the doctor from the patient
-        var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
-        if (patient is not null)
-        {
-            patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: false, _timeProvider.GetUtcNow().UtcDateTime);
-            await _patientRepository.UpdateAsync(patient);
-        }
+        // 5. Remove the doctor from the patient
+        patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: false, _timeProvider.GetUtcNow().UtcDateTime);
+        await _patientRepository.UpdateAsync(patient);
 
         return new LinkRequestResult(
             linkRequest.Id,

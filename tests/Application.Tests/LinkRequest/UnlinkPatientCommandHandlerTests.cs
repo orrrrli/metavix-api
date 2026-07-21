@@ -1,5 +1,6 @@
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Handlers;
+using Domain.Models;
 
 namespace Application.Tests.LinkRequest;
 
@@ -54,9 +55,10 @@ public class UnlinkPatientCommandHandlerTests
             PrimaryDoctorId = doctorId,
             MedicalRecordNumber = mrn,
         };
+        var doctor = BuildDoctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
 
@@ -87,9 +89,10 @@ public class UnlinkPatientCommandHandlerTests
             Status = RequestStatus.Pending,
             CreatedAt = DateTime.UtcNow,
         };
+        var doctor = BuildDoctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
 
         // Act
@@ -108,7 +111,6 @@ public class UnlinkPatientCommandHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
-        var otherDoctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
@@ -122,7 +124,8 @@ public class UnlinkPatientCommandHandlerTests
         };
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(otherDoctorId);
+        // No doctor with this id belongs to userId → GetOwnedDoctorAsync returns null.
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns((Doctor?)null);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
 
         // Act
@@ -133,4 +136,16 @@ public class UnlinkPatientCommandHandlerTests
         result.FirstError.Code.Should().Be("Auth.Forbidden");
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
     }
+
+    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
+    {
+        Id = doctorId,
+        UserId = userId,
+        FirstName = "Ana",
+        PaternalLastName = "García",
+        LicenseNumber = "12345678",
+        Speciality = "Endocrinología",
+        Email = "ana@clinic.com",
+        IsVerified = true,
+    };
 }
