@@ -11,8 +11,6 @@ namespace Application.UseCases.LinkRequest.Handlers;
 internal sealed class AcceptLinkRequestCommandHandler
     : IRequestHandler<AcceptLinkRequestCommand, ErrorOr<LinkRequestResult>>
 {
-    private const int MaxAutoAssignAttempts = 5;
-
     private readonly IPatientDoctorRequestRepository _requestRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly IDoctorRepository _doctorRepository;
@@ -71,15 +69,16 @@ internal sealed class AcceptLinkRequestCommandHandler
         }
         else
         {
-            var autoMrn = await TryAutoAssignAsync(cancellationToken);
-            if (autoMrn is null)
-            {
-                // Exhausted retries — surface as a transient error so the
-                // client can retry. The unique index still guarantees no
-                // duplicates are ever persisted.
+            // Auto-assign a timestamp-derived suggestion. A single candidate is
+            // enough: MrnGenerator.Suggest is unique to the millisecond, and the
+            // DB unique index on Patients.MedicalRecordNumber is the actual
+            // backstop for the (vanishingly rare) same-millisecond race. If the
+            // suggestion already exists, surface a transient error so the client
+            // can retry rather than silently colliding.
+            var candidate = MrnGenerator.Suggest(_timeProvider.GetUtcNow());
+            if (await _patientRepository.ExistsByMedicalRecordNumberAsync(candidate, cancellationToken))
                 return LinkRequestErrors.MrnAutoAssignFailed;
-            }
-            assignedMrn = autoMrn;
+            assignedMrn = candidate;
         }
 
         // 4. Load the patient BEFORE mutating anything. If the patient was
@@ -109,23 +108,5 @@ internal sealed class AcceptLinkRequestCommandHandler
             linkRequest.DoctorId,
             linkRequest.Status.ToString(),
             linkRequest.CreatedAt);
-    }
-
-    /// <summary>
-    /// Generates a timestamp-derived MRN candidate and re-checks uniqueness.
-    /// The DB unique index is the ultimate backstop — this loop just avoids
-    /// the noisy 500 in the rare case two candidates land in the same
-    /// millisecond.
-    /// </summary>
-    private async Task<string?> TryAutoAssignAsync(CancellationToken cancellationToken)
-    {
-        var now = _timeProvider.GetUtcNow();
-        for (int attempt = 0; attempt < MaxAutoAssignAttempts; attempt++)
-        {
-            var candidate = MrnGenerator.Suggest(now.AddMilliseconds(attempt));
-            if (!await _patientRepository.ExistsByMedicalRecordNumberAsync(candidate, cancellationToken))
-                return candidate;
-        }
-        return null;
     }
 }

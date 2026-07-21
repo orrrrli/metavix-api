@@ -192,7 +192,7 @@ public class AcceptLinkRequestCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenAutoAssignExhaustsRetries_ReturnsAutoAssignFailed()
+    public async Task Handle_WhenAutoAssignedMrnAlreadyExists_ReturnsAutoAssignFailed()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -207,7 +207,8 @@ public class AcceptLinkRequestCommandHandlerTests
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        // Every candidate collides — simulate a pathological same-millisecond race.
+        // The single auto-assigned candidate already exists — the same-millisecond
+        // race that the DB unique index guards against.
         _patientRepository.ExistsByMedicalRecordNumberAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
         _timeProvider.SetUtcNow(now);
 
