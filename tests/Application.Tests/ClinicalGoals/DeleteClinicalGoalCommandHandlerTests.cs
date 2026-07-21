@@ -19,13 +19,6 @@ public class DeleteClinicalGoalCommandHandlerTests
             _clinicalGoalRepository, _doctorRepository, _requestRepository, _currentUser);
     }
 
-    private void SetupAuth(Guid userId, Guid doctorId, Guid patientId)
-    {
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(TestEntities.Doctor(doctorId, userId));
-        _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(true);
-    }
 
     [Fact]
     public async Task Handle_WhenGoalExists_DeletesGoal()
@@ -34,7 +27,7 @@ public class DeleteClinicalGoalCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
 
         var goal = new ClinicalGoal { Id = goalId, PatientId = patientId, DoctorId = doctorId, ParameterId = "systolic_bp" };
         _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns(goal);
@@ -53,7 +46,7 @@ public class DeleteClinicalGoalCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var result = await _handler.Handle(
@@ -73,7 +66,7 @@ public class DeleteClinicalGoalCommandHandlerTests
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
         var goalId = Guid.NewGuid();
-        SetupAuth(userId, doctorId, patientId);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _clinicalGoalRepository.GetOwnedAsync(goalId, patientId, doctorId).Returns((ClinicalGoal?)null);
 
         var result = await _handler.Handle(
