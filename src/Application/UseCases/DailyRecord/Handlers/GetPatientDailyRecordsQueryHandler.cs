@@ -1,5 +1,4 @@
 using Application.Common.Authorization;
-using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.DailyRecord.Common;
@@ -43,13 +42,10 @@ internal sealed class GetPatientDailyRecordsQueryHandler
                 request.PatientId, request.DateFrom!.Value, request.DateTo!.Value, cancellationToken)
             : await _dailyRecordRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        var results = records.Select(DailyRecordMapper.ToResult).ToList();
-
-        if (!hasRange && results.Count == 0)
-        {
-            return RecordErrors.RecordsNotFound;
-        }
-
-        return results;
+        // An owned patient with no daily records yet is a valid empty result,
+        // not an error — matching the lab-result / insulin query handlers.
+        // Returning RecordsNotFound would force callers to treat "no records
+        // yet" as a failure.
+        return records.Select(DailyRecordMapper.ToResult).ToList();
     }
 }
