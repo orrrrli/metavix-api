@@ -20,6 +20,9 @@ public class PatientByIdQueryHandler(
         if (currentUser.UserId is null)
             return AuthErrors.Forbidden;
 
+        // The caller is identified by UserId; we don't have the route doctorId
+        // in the query. Translate the caller to their doctorId and assert the
+        // link exists with the requested patient.
         var callerDoctorId = await doctorRepository.GetDoctorIdByUserIdAsync(currentUser.UserId.Value);
         if (callerDoctorId is null)
             return AuthErrors.Forbidden;

@@ -44,7 +44,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var patient = BuildPatient(patientId);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _doctorRepository.GetByIdAsync(doctorId).Returns(doctor);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
@@ -76,9 +76,10 @@ public class AcceptLinkRequestCommandHandlerTests
         var mrn = "MRN-2026-000042";
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(true);
 
@@ -105,10 +106,11 @@ public class AcceptLinkRequestCommandHandlerTests
         var now = DateTime.UtcNow;
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
         var patient = BuildPatient(patientId);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
         _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
@@ -135,10 +137,11 @@ public class AcceptLinkRequestCommandHandlerTests
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
         var patient = BuildPatient(patientId);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _patientRepository.GetByIdAsync(patientId).Returns(patient);
         _patientRepository.ExistsByMedicalRecordNumberAsync("MRN-20260711-120000000", Arg.Any<CancellationToken>()).Returns(false);
@@ -165,9 +168,10 @@ public class AcceptLinkRequestCommandHandlerTests
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         // Every candidate collides — simulate a pathological same-millisecond race.
         _patientRepository.ExistsByMedicalRecordNumberAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
@@ -193,9 +197,10 @@ public class AcceptLinkRequestCommandHandlerTests
 
         var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
         linkRequest.Status = RequestStatus.Rejected;
+        var doctor = BuildDoctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
 
         // Act

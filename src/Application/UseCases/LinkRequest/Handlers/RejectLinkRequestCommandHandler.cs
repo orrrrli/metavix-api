@@ -40,8 +40,9 @@ internal sealed class RejectLinkRequestCommandHandler
             return LinkRequestErrors.RequestNotFound;
         }
 
-        var callerDoctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
-        if (callerDoctorId != linkRequest.DoctorId)
+        var callerDoctor = await _doctorRepository.GetOwnedDoctorAsync(
+            linkRequest.DoctorId, _currentUser.UserId.Value, cancellationToken);
+        if (callerDoctor is null)
             return AuthErrors.Forbidden;
 
         // 2. Reject the request (fails if not pending)

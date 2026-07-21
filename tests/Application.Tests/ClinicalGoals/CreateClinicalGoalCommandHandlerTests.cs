@@ -1,6 +1,7 @@
 using Application.Common.Constants;
 using Application.UseCases.ClinicalGoals.Commands;
 using Application.UseCases.ClinicalGoals.Handlers;
+using Domain.Models;
 
 namespace Application.Tests.ClinicalGoals;
 
@@ -25,7 +26,8 @@ public class CreateClinicalGoalCommandHandlerTests
     private void SetupAuth(Guid userId, Guid doctorId, Guid patientId, bool linked = true)
     {
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
+            .Returns(BuildDoctor(doctorId, userId));
         _requestRepository.IsAcceptedLinkAsync(doctorId, patientId).Returns(linked);
     }
 
@@ -97,4 +99,16 @@ public class CreateClinicalGoalCommandHandlerTests
         result.FirstError.Should().Be(ClinicalGoalErrors.AlreadyExists);
         await _clinicalGoalRepository.DidNotReceive().AddAsync(Arg.Any<ClinicalGoal>());
     }
+
+    private static Doctor BuildDoctor(Guid doctorId, Guid userId) => new()
+    {
+        Id = doctorId,
+        UserId = userId,
+        FirstName = "Ana",
+        PaternalLastName = "García",
+        LicenseNumber = "12345678",
+        Speciality = "Endocrinología",
+        Email = "ana@clinic.com",
+        IsVerified = true,
+    };
 }

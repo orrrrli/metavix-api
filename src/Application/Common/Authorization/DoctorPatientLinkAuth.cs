@@ -13,13 +13,18 @@ internal static class DoctorPatientLinkAuth
         IDoctorRepository doctorRepository,
         IPatientDoctorRequestRepository requestRepository,
         Guid doctorId,
-        Guid patientId)
+        Guid patientId,
+        CancellationToken cancellationToken)
     {
         if (currentUser.UserId is null)
             return AuthErrors.Forbidden;
 
-        var callerDoctorId = await doctorRepository.GetDoctorIdByUserIdAsync(currentUser.UserId.Value);
-        if (callerDoctorId != doctorId)
+        // Single query resolves "doctor exists" and "doctor is the caller" together.
+        // Mirrors the GetOwnedPatientAsync / GetOwnedDoctorAsync pattern used in
+        // patient-loading and doctor-loading handlers (PR #255).
+        var doctor = await doctorRepository.GetOwnedDoctorAsync(
+            doctorId, currentUser.UserId.Value, cancellationToken);
+        if (doctor is null)
             return AuthErrors.Forbidden;
 
         var isLinked = await requestRepository.IsAcceptedLinkAsync(doctorId, patientId);
