@@ -36,6 +36,11 @@ internal sealed class GetDailyRecordByIdQueryHandler
         if (access.IsError)
             return access.Errors;
 
+        // The two reads are NOT redundant: step 1 is the auth gate (the caller
+        // owns request.PatientId), this one fetches the record. Collapsing them
+        // into a single `WHERE Id = @recordId AND PatientId = @patientId` would
+        // drop the ownership check — the record row carries no UserId — and let
+        // any authenticated user read another patient's record by guessing ids.
         var record = await _dailyRecordRepository.GetByIdAsync(request.RecordId);
 
         if (record is null || record.PatientId != request.PatientId)
