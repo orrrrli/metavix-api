@@ -17,17 +17,20 @@ internal sealed class UpdatePatientProfileCommandHandler
     private readonly IDoctorRepository _doctorRepository;
     private readonly INotificationRepository _notificationRepository;
     private readonly ICurrentUserService _currentUser;
+    private readonly TimeProvider _timeProvider;
 
     public UpdatePatientProfileCommandHandler(
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
         INotificationRepository notificationRepository,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        TimeProvider timeProvider)
     {
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
         _notificationRepository = notificationRepository;
         _currentUser = currentUser;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ErrorOr<PatientProfileResult>> Handle(
@@ -82,7 +85,8 @@ internal sealed class UpdatePatientProfileCommandHandler
                 recipientUserId = doctor?.UserId;
             }
 
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var today = DateOnly.FromDateTime(now);
             _notificationRepository.Stage(new Notification
             {
                 Id = Guid.NewGuid(),
@@ -92,7 +96,7 @@ internal sealed class UpdatePatientProfileCommandHandler
                 Body = $"{patient.FirstName} {patient.LastName} fue marcada como embarazada el {today}. Las metas clínicas de embarazo están activas.",
                 Type = NotificationType.PregnancyActivated,
                 IsRead = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = now
             });
         }
 

@@ -14,6 +14,7 @@ public class UpdatePatientProfileHandlerTests
     private readonly IDoctorRepository _doctorRepository = Substitute.For<IDoctorRepository>();
     private readonly INotificationRepository _notificationRepository = Substitute.For<INotificationRepository>();
     private readonly ICurrentUserService _currentUser = Substitute.For<ICurrentUserService>();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     private readonly UpdatePatientProfileCommandHandler _handler;
 
@@ -23,7 +24,8 @@ public class UpdatePatientProfileHandlerTests
             _patientRepository,
             _doctorRepository,
             _notificationRepository,
-            _currentUser);
+            _currentUser,
+            _timeProvider);
     }
 
     // BE-FOUND-2-T3: male patient rejects IsPregnant=true
