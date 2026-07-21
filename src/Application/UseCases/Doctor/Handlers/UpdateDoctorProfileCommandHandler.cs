@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -25,8 +26,10 @@ internal sealed class UpdateDoctorProfileCommandHandler
         CancellationToken cancellationToken)
     {
         // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
+        if (userIdResult.IsError)
+            return userIdResult.FirstError;
+        var userId = userIdResult.Value;
 
         // 2. Load — caller is updating their own doctor profile, so a single
         //    by-userId lookup is the right granularity (no doctorId is supplied

@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -33,8 +34,10 @@ internal sealed class UnlinkPatientCommandHandler
         UnlinkPatientCommand request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
+        if (userIdResult.IsError)
+            return userIdResult.FirstError;
+        var userId = userIdResult.Value;
 
         // 1. Find the link request. Same enumeration-oracle guard as
         //    RevokeDoctorAccessCommandHandler — see step 2 there.
@@ -52,7 +55,6 @@ internal sealed class UnlinkPatientCommandHandler
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        // 3. Unlink the patient (fails if not accepted)
         if (!linkRequest.Unlink(now))
         {
             return LinkRequestErrors.NotAccepted;
@@ -69,6 +71,8 @@ internal sealed class UnlinkPatientCommandHandler
         // Unlike Revoke, this handler authorizes against the doctor and only
         // loads the patient after persisting the Unlinked transition, so a
         // deleted patient is a no-op rather than Forbidden.
+        // TODO: IPatientRepository.GetByIdAsync doesn't accept a CancellationToken
+        // yet; thread it through here once the interface is extended.
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {

@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -31,8 +32,10 @@ internal sealed class RevokeDoctorAccessCommandHandler
         CancellationToken cancellationToken)
     {
         // 1. Authorize
-        if (_currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
+        if (userIdResult.IsError)
+            return userIdResult.FirstError;
+        var userId = userIdResult.Value;
 
         // 2. Find the link request. A missing request returns Forbidden (not
         //    RequestNotFound) so that "request doesn't exist" and "request
@@ -54,7 +57,6 @@ internal sealed class RevokeDoctorAccessCommandHandler
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        // 4. Revoke the request (fails if not accepted)
         if (!linkRequest.Revoke(now))
         {
             return LinkRequestErrors.NotAccepted;

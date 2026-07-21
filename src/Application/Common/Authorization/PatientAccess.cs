@@ -10,9 +10,9 @@ namespace Application.Common.Authorization;
 /// the caller must be authenticated and must own the requested patient.
 ///
 /// Collapses the six-line "authenticate + load-owned-patient" preamble that was
-/// repeated across ~18 handlers (§3.1/§4.7). A single GetOwnedPatientAsync query
-/// resolves ownership and existence together; both "not found" and "not yours"
-/// return Forbidden to close the patient-id enumeration oracle.
+/// repeated across ~18 handlers. A single GetOwnedPatientAsync query resolves
+/// ownership and existence together; both "not found" and "not yours" return
+/// Forbidden to close the patient-id enumeration oracle.
 /// </summary>
 internal static class PatientAccess
 {
@@ -22,10 +22,11 @@ internal static class PatientAccess
         Guid patientId,
         CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } userId)
-            return AuthErrors.Forbidden;
+        var userIdResult = CurrentUserAccess.RequireUserId(currentUser);
+        if (userIdResult.IsError)
+            return userIdResult.FirstError;
 
-        var patient = await patientRepository.GetOwnedPatientAsync(patientId, userId, cancellationToken);
+        var patient = await patientRepository.GetOwnedPatientAsync(patientId, userIdResult.Value, cancellationToken);
         return patient is null ? AuthErrors.Forbidden : patient;
     }
 }
