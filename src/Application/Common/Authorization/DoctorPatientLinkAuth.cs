@@ -19,14 +19,18 @@ internal static class DoctorPatientLinkAuth
         if (currentUser.UserId is null)
             return AuthErrors.Forbidden;
 
-        // Single query resolves "doctor exists" and "doctor is the caller" together.
-        // Mirrors the GetOwnedPatientAsync / GetOwnedDoctorAsync pattern used in
-        // patient-loading and doctor-loading handlers (PR #255).
+        // This guard runs two queries, not one. The first resolves "doctor
+        // exists" and "doctor is the caller" together in a single round-trip
+        // (mirroring the GetOwnedDoctorAsync pattern from PR #255)...
         var doctor = await doctorRepository.GetOwnedDoctorAsync(
             doctorId, currentUser.UserId.Value, cancellationToken);
         if (doctor is null)
             return AuthErrors.Forbidden;
 
+        // ...the second checks the accepted link. Kept as a separate query
+        // because collapsing both into one join would couple the Doctors and
+        // PatientDoctorRequests repositories; the extra round-trip is cheap and
+        // only runs on the doctor-scoped patient endpoints.
         var isLinked = await requestRepository.IsAcceptedLinkAsync(doctorId, patientId, cancellationToken);
         if (!isLinked)
             return AuthErrors.Forbidden;
