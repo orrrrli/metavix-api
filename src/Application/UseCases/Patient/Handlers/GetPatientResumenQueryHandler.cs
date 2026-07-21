@@ -114,6 +114,11 @@ internal sealed class GetPatientResumenQueryHandler
         return new PatientResumenResult(perfil, metricas);
     }
 
+    // NOTE: This is a deliberate wire-contract mapping, NOT a substitute for
+    // DiabetesType.ToString(). The resumen endpoint's frontend
+    // (interpretacionADA.ts) matches on these exact snake_case strings
+    // ("tipo_1", "tipo_2", "prediabetes"); swapping in ToString() ("Type1", …)
+    // would silently break the ADA interpretation. Do not "simplify" this away.
     private static string MapDiabetesType(DiabetesType type) => type switch
     {
         DiabetesType.Type1       => "tipo_1",
