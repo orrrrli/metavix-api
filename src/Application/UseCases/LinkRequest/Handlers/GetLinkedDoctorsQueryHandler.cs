@@ -41,7 +41,10 @@ internal sealed class GetLinkedDoctorsQueryHandler
 
         var acceptedRequests = await _requestRepository.GetAcceptedByPatientIdAsync(request.PatientId);
 
-        var results = acceptedRequests.Select(r => new LinkedDoctorResult(
+        // 3. Map — a patient with no accepted links is a valid empty result,
+        //    not an error. Returning RequestNotFound here would force callers
+        //    to treat "no doctors yet" as a failure.
+        return acceptedRequests.Select(r => new LinkedDoctorResult(
             r.Id,
             r.DoctorId,
             r.Doctor.FirstName,
@@ -49,12 +52,5 @@ internal sealed class GetLinkedDoctorsQueryHandler
             r.Doctor.Speciality,
             r.Doctor.Email,
             r.ResolvedAt ?? r.CreatedAt)).ToList();
-
-        if (results.Count == 0)
-        {
-            return LinkRequestErrors.RequestNotFound;
-        }
-
-        return results;
     }
 }

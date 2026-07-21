@@ -65,6 +65,29 @@ public class GetLinkedDoctorsQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenPatientIsOwnedButHasNoAcceptedRequests_ReturnsEmptyList()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(BuildPatient(patientId));
+        _requestRepository.GetAcceptedByPatientIdAsync(patientId)
+            .Returns(new List<PatientDoctorRequest>());
+
+        var query = new GetLinkedDoctorsQuery(patientId);
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert — no linked doctors is a valid empty result, not an error.
+        result.IsError.Should().BeFalse();
+        result.Value.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Handle_WhenPatientIsNotOwned_ReturnsForbidden()
     {
         var userId = Guid.NewGuid();
