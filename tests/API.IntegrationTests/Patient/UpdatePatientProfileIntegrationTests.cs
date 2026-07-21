@@ -56,7 +56,7 @@ public class UpdatePatientProfileIntegrationTests : IClassFixture<CustomWebAppli
 
         // Act
         var response = await client.PatchAsync(
-            $"/api/patient/{patientId}/profile",
+            $"/api/v1/patient/{patientId}/profile",
             JsonContent.Create(body, options: JsonOptions));
 
         // Assert — HTTP layer
@@ -107,7 +107,7 @@ public class UpdatePatientProfileIntegrationTests : IClassFixture<CustomWebAppli
 
         // Act
         var response = await client.PatchAsync(
-            $"/api/patient/{patientId}/profile",
+            $"/api/v1/patient/{patientId}/profile",
             JsonContent.Create(body, options: JsonOptions));
 
         // Assert

@@ -28,7 +28,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(userId);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -51,7 +51,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(userId);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -105,7 +105,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(userId);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -147,7 +147,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(userId);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -197,7 +197,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(userId);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -265,7 +265,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(userId);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -288,7 +288,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(otherUserId);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{targetPatientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{targetPatientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -305,7 +305,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = _factory.CreateClient(); // No Authorization header
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -324,7 +324,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(doctorUserId, role: "Doctor");
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -345,7 +345,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(doctorUserId, role: "Doctor");
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientId}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientId}/goal-evaluations", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -353,7 +353,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
 
     // SEC-METAS-1-T2: persisted GoalEvaluation.PatientId matches the route, not the JWT.
     // Asserts the data-isolation property directly: after Patient A triggers an evaluation on
-    // /api/patient/{A}/goal-evaluations, the row written to the DB must belong to A, and the
+    // /api/v1/patient/{A}/goal-evaluations, the row written to the DB must belong to A, and the
     // items must reflect A's measurements, not any other patient's. Pinned to a fixed evaluation
     // date (2026-06-21) so NoDataWindow checks are deterministic across CI runs.
     [Fact]
@@ -381,7 +381,7 @@ public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicatio
         var client = CreateAuthenticatedClient(userIdA);
 
         // Act
-        var response = await client.PostAsync($"/api/patient/{patientIdA}/goal-evaluations", null);
+        var response = await client.PostAsync($"/api/v1/patient/{patientIdA}/goal-evaluations", null);
 
         // Assert — HTTP layer
         response.StatusCode.Should().Be(HttpStatusCode.Created);
