@@ -79,7 +79,15 @@ public class PatientDoctorRequestRepository : IPatientDoctorRequestRepository
 
     public async Task UpdateAsync(PatientDoctorRequest request)
     {
-        _dbContext.PatientDoctorRequests.Update(request);
+        // GetByIdAsync loads tracked entities (no AsNoTracking), so Accept /
+        // Reject / Revoke mutate 2-3 properties and the change tracker already
+        // knows which columns changed — it will emit a targeted UPDATE. Calling
+        // .Update() here would instead mark every property Modified and rewrite
+        // all columns. Only attach when the instance is detached.
+        var entry = _dbContext.Entry(request);
+        if (entry.State == EntityState.Detached)
+            _dbContext.PatientDoctorRequests.Update(request);
+
         await _dbContext.SaveChangesAsync();
     }
 }
