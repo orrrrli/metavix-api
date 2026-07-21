@@ -39,15 +39,19 @@ public class GetPatientDailyRecordsQueryHandlerTests
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
         _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns(records);
 
+        using var cts = new CancellationTokenSource();
+
         // Act
         ErrorOr<List<DailyRecordResult>> result =
-            await _handler.Handle(new GetPatientDailyRecordsQuery(patientId), CancellationToken.None);
+            await _handler.Handle(new GetPatientDailyRecordsQuery(patientId), cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(3);
         result.Value.Select(r => r.RecordDate)
             .Should().BeInDescendingOrder();
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]

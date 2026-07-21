@@ -43,14 +43,18 @@ public class AddInsulinRecordCommandHandlerTests
             new DateOnly(2026, 7, 20),
             120, 150, 45m, 5m, "Lunch", "Stable");
 
+        using var cts = new CancellationTokenSource();
+
         // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
+        var result = await _handler.Handle(command, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.PatientId.Should().Be(patientId);
         await _insulinRepository.Received(1).AddRecordAsync(
             Arg.Is<InsulinDm1Record>(r => r.PatientId == patientId && r.CreatedAt == now));
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]

@@ -41,13 +41,16 @@ public class GetInsulinRecordsQueryHandlerTests
         _insulinRepository.GetRecordsByPatientIdAsync(patientId).Returns(records);
 
         var query = new GetInsulinRecordsQuery(patientId);
+        using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(query, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(2);
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]

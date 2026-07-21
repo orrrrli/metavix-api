@@ -41,13 +41,17 @@ public class GetPatientLabResultsQueryHandlerTests
         _labResultRepository.GetAllByPatientIdAsync(patientId).Returns(records);
 
         var query = new GetPatientLabResultsQuery(patientId);
+        using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(query, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(2);
+        // The caller's token must be propagated to the load, not swallowed (§4.6).
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]

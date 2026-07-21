@@ -43,13 +43,16 @@ public class GetInsulinProfileQueryHandlerTests
         _insulinRepository.GetProfileByPatientIdAsync(patientId).Returns(profile);
 
         var query = new GetInsulinProfileQuery(patientId);
+        using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(query, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.InsulinName.Should().Be("Humalog");
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]

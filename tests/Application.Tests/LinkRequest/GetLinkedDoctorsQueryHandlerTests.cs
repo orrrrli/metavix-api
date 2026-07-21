@@ -55,13 +55,16 @@ public class GetLinkedDoctorsQueryHandlerTests
         _requestRepository.GetAcceptedByPatientIdAsync(patientId).Returns(accepted);
 
         var query = new GetLinkedDoctorsQuery(patientId);
+        using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(query, cts.Token);
 
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Should().HaveCount(1);
+        await _patientRepository.Received(1)
+            .GetOwnedPatientAsync(patientId, userId, cts.Token);
     }
 
     [Fact]
