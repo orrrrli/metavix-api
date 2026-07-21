@@ -24,16 +24,17 @@ internal sealed class GetMyDoctorProfileQueryHandler
         GetMyDoctorProfileQuery request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
+        // 1. Authorize
+        if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        Guid? doctorId = await _doctorRepository.GetDoctorIdByUserIdAsync(_currentUser.UserId.Value);
-        if (doctorId is null)
-            return DoctorErrors.DoctorNotFound;
-
-        var doctor = await _doctorRepository.GetByIdAsync(doctorId.Value);
+        // 2. Load — caller is fetching their own doctor profile, so a single
+        //    by-userId lookup is the right granularity (no doctorId is supplied
+        //    in this query). Null collapses "user has no doctor yet" and any
+        //    other miss into one error path.
+        var doctor = await _doctorRepository.GetByUserIdAsync(userId, cancellationToken);
         if (doctor is null)
-            return DoctorErrors.DoctorNotFound;
+            return AuthErrors.Forbidden;
 
         return new DoctorProfileResult(
             doctor.Id,
