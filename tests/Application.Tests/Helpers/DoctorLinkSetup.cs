@@ -3,7 +3,7 @@ namespace Application.Tests.Helpers;
 /// <summary>
 /// Wires up the NSubstitute mocks for the doctor→patient link authorization path
 /// (DoctorPatientLinkAuth): the caller is the named doctor and holds an accepted
-/// link with the patient. Consolidates the per-file SetupAuth copies (§3.4).
+/// link with the patient.
 /// Pass <paramref name="linked"/> = false to simulate a doctor with no accepted link.
 /// </summary>
 public static class DoctorLinkSetup

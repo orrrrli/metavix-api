@@ -38,8 +38,7 @@ internal sealed class GetLinkedPatientDailyRecordsQueryHandler
 
         var records = await _dailyRecordRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        // A linked patient with no daily records yet is a valid empty result,
-        // not an error — mirrors GetPatientDailyRecordsQueryHandler.
+        // Mirrors GetPatientDailyRecordsQueryHandler (empty list is not an error).
         return records.Select(DailyRecordMapper.ToResult).ToList();
     }
 }

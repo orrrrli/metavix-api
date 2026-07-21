@@ -38,8 +38,7 @@ internal sealed class GetLinkedPatientLabResultsQueryHandler
 
         var records = await _labResultRepository.GetAllByPatientIdAsync(request.PatientId);
 
-        // A linked patient with no lab results yet is a valid empty result,
-        // not an error — mirrors GetPatientLabResultsQueryHandler.
+        // Mirrors GetPatientLabResultsQueryHandler (empty list is not an error).
         return records.Select(LabResultMapper.ToResult).ToList();
     }
 }

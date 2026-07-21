@@ -36,10 +36,8 @@ internal sealed class UnlinkPatientCommandHandler
         if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        // 1. Find the link request. A missing request returns Forbidden (not
-        //    RequestNotFound) so that "request doesn't exist" and "request
-        //    exists but isn't your patient" (step 2) are indistinguishable —
-        //    otherwise the caller could probe requestIds for existence.
+        // 1. Find the link request. Same enumeration-oracle guard as
+        //    RevokeDoctorAccessCommandHandler — see step 2 there.
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
         if (linkRequest is null)
         {
@@ -68,13 +66,9 @@ internal sealed class UnlinkPatientCommandHandler
         // The MRN belongs to the doctor-patient RELATION, not the patient,
         // so once the relation ends the value is freed for re-use.
         //
-        // Unlike RevokeDoctorAccessCommandHandler — which loads the patient
-        // during authorization (step 3) and therefore fails the whole
-        // operation with Forbidden if the patient is gone — this handler
-        // authorizes against the doctor and only loads the patient here, after
-        // the request has already been persisted as Unlinked. If the patient
-        // was deleted between steps 1 and 4, there is nothing left to detach:
-        // silently skipping the mutation is correct, not a swallowed error.
+        // Unlike Revoke, this handler authorizes against the doctor and only
+        // loads the patient after persisting the Unlinked transition, so a
+        // deleted patient is a no-op rather than Forbidden.
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {
