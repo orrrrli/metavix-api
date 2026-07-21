@@ -114,6 +114,27 @@ public class RevokeDoctorAccessCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenRequestNotFound_ReturnsForbiddenNotRequestNotFound()
+    {
+        // Arrange — an unknown requestId must be indistinguishable from a
+        // request that exists but isn't the caller's patient, so no requestId
+        // enumeration oracle leaks.
+        var userId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        _currentUser.UserId.Returns(userId);
+        _requestRepository.GetByIdAsync(requestId).Returns((PatientDoctorRequest?)null);
+
+        // Act
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+    }
+
+    [Fact]
     public async Task Handle_WhenCallerIsNotThePatient_ReturnsForbidden()
     {
         // Arrange

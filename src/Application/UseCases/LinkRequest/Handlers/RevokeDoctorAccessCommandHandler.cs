@@ -34,11 +34,14 @@ internal sealed class RevokeDoctorAccessCommandHandler
         if (_currentUser.UserId is not { } userId)
             return AuthErrors.Forbidden;
 
-        // 2. Find the link request
+        // 2. Find the link request. A missing request returns Forbidden (not
+        //    RequestNotFound) so that "request doesn't exist" and "request
+        //    exists but isn't your patient" (step 3) are indistinguishable —
+        //    otherwise the caller could probe requestIds for existence.
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
         if (linkRequest is null)
         {
-            return LinkRequestErrors.RequestNotFound;
+            return AuthErrors.Forbidden;
         }
 
         // 3. Verify the caller owns the patient on the request.
