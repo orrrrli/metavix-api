@@ -37,14 +37,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var mrn = "MRN-2026-000042";
         var now = DateTime.UtcNow;
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var patient = new Patient
         {
             Id = patientId,
@@ -82,14 +75,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
         var patient = new Patient
         {
             Id = patientId,
@@ -143,14 +129,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
 
         _currentUser.UserId.Returns(userId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
@@ -179,14 +158,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
 
         _currentUser.UserId.Returns(userId);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
@@ -214,14 +186,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var patient = new Patient
         {
             Id = patientId,

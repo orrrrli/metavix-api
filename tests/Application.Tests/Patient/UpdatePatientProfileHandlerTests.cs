@@ -100,7 +100,7 @@ public class UpdatePatientProfileHandlerTests
             LastName = "López"
         };
 
-        var doctor = new Doctor { Id = doctorId, UserId = doctorUserId };
+        var doctor = TestEntities.Doctor(doctorId, userId: doctorUserId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())

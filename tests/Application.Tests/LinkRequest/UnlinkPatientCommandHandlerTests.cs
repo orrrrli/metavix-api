@@ -40,14 +40,7 @@ public class UnlinkPatientCommandHandlerTests
         var requestId = Guid.NewGuid();
         var mrn = "MRN-2026-000042";
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var patient = new Patient
         {
             Id = patientId,
@@ -83,14 +76,7 @@ public class UnlinkPatientCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
         var doctor = TestEntities.Doctor(doctorId, userId);
 
         _currentUser.UserId.Returns(userId);
@@ -116,14 +102,7 @@ public class UnlinkPatientCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = new PatientDoctorRequest
-        {
-            Id = requestId,
-            PatientId = patientId,
-            DoctorId = doctorId,
-            Status = RequestStatus.Accepted,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
 
         _currentUser.UserId.Returns(userId);
         // No doctor with this id belongs to userId → GetOwnedDoctorAsync returns null.

@@ -26,7 +26,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId };
+        var patient = TestEntities.Patient(patientId, userId: userId);
 
         var records = new List<DailyRecord>
         {
@@ -60,7 +60,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId };
+        var patient = TestEntities.Patient(patientId, userId: userId);
         var dateFrom = new DateOnly(2026, 6, 12);
         var dateTo = new DateOnly(2026, 6, 18);
 
@@ -95,7 +95,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         // valid empty result, not RecordsNotFound (matching lab/insulin).
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId };
+        var patient = TestEntities.Patient(patientId, userId: userId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>()).Returns(patient);
@@ -116,7 +116,7 @@ public class GetPatientDailyRecordsQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
-        var patient = new Patient { Id = patientId, UserId = userId };
+        var patient = TestEntities.Patient(patientId, userId: userId);
         var dateFrom = new DateOnly(2026, 6, 1);
         var dateTo = new DateOnly(2026, 6, 5);
 

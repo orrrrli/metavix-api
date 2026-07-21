@@ -23,6 +23,19 @@ public static class TestEntities
         Email = email,
     };
 
+    public static PatientDoctorRequest LinkRequest(
+        Guid requestId,
+        Guid patientId,
+        Guid doctorId,
+        RequestStatus status = RequestStatus.Pending) => new()
+    {
+        Id = requestId,
+        PatientId = patientId,
+        DoctorId = doctorId,
+        Status = status,
+        CreatedAt = DateTime.UtcNow,
+    };
+
     public static Doctor Doctor(
         Guid id,
         Guid? userId = null,

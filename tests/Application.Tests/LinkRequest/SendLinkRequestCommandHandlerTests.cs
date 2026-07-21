@@ -35,7 +35,7 @@ public class SendLinkRequestCommandHandlerTests
         var patientId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patient = TestEntities.Patient(patientId);
-        var doctor = new Doctor { Id = doctorId, FirstName = "Ana", PaternalLastName = "García" };
+        var doctor = TestEntities.Doctor(doctorId);
 
         _currentUser.UserId.Returns(userId);
         _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())

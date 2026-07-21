@@ -43,7 +43,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var mrn = "MRN-2026-000001";
         var now = DateTime.UtcNow;
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: false);
         var patient = TestEntities.Patient(patientId);
 
@@ -79,7 +79,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var mrn = "MRN-2026-000042";
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
@@ -110,7 +110,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var mrn = "MRN-2026-000123";
         var now = DateTime.UtcNow;
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
         var patient = TestEntities.Patient(patientId);
 
@@ -144,7 +144,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var mrn = "MRN-2026-000123";
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
@@ -175,7 +175,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
         var patient = TestEntities.Patient(patientId);
 
@@ -206,7 +206,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var now = new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
@@ -240,7 +240,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var requestId = Guid.NewGuid();
         var mrn = "MRN-2026-000123";
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
         _currentUser.UserId.Returns(userId);
@@ -268,7 +268,7 @@ public class AcceptLinkRequestCommandHandlerTests
         var patientId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        var linkRequest = BuildLinkRequest(requestId, patientId, doctorId);
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         linkRequest.Status = RequestStatus.Rejected;
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
 
@@ -285,15 +285,4 @@ public class AcceptLinkRequestCommandHandlerTests
         await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
         await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
-
-    private static PatientDoctorRequest BuildLinkRequest(Guid requestId, Guid patientId, Guid doctorId) => new()
-    {
-        Id = requestId,
-        PatientId = patientId,
-        DoctorId = doctorId,
-        Status = RequestStatus.Pending,
-        CreatedAt = DateTime.UtcNow,
-    };
-
-
 }
