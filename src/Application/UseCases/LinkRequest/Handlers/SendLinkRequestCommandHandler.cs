@@ -46,7 +46,13 @@ internal sealed class SendLinkRequestCommandHandler
         if (patient is null)
             return AuthErrors.Forbidden;
 
-        // 3. Verify doctor exists
+        // 3. Verify doctor exists. Returning DoctorNotFound here is safe and is
+        //    NOT an enumeration oracle: doctors are publicly discoverable by any
+        //    authenticated patient via /patient/get-all-doctors, which already
+        //    exposes every doctor id. So confirming existence leaks nothing the
+        //    directory does not, and a distinct error gives the patient better
+        //    feedback than a blanket Forbidden. (Contrast with patient ids, which
+        //    are never listable and so are collapsed into Forbidden above.)
         var doctor = await _doctorRepository.GetByIdAsync(request.DoctorId);
         if (doctor is null)
         {
