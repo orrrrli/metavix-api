@@ -63,6 +63,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         group.MapGet("/{doctorId:guid}/get-patient/{patientId:guid}", GetPatient)
             .Produces<ApiSuccessResponse<PatientResponse>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("GetPatientById")
             .WithOpenApi();
@@ -266,7 +267,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         try
         {
-            PatientByIdQuery query = new(patientId);
+            PatientByIdQuery query = new(doctorId, patientId);
             ErrorOr<PatientResult> result = await sender.Send(query);
 
             return result.Match(

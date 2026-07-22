@@ -31,12 +31,13 @@ public class PatientByIdQueryHandlerTests
         var patient = new PatientResult(patientId, "Jane", "Doe", "MRN-1");
 
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
+            .Returns(new Doctor { Id = doctorId });
         _requestRepository.IsAcceptedLinkAsync(doctorId, patientId, Arg.Any<CancellationToken>()).Returns(true);
         _patientRepository.GetPatientByPatientId(patientId).Returns(patient);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
@@ -47,27 +48,32 @@ public class PatientByIdQueryHandlerTests
     public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
     {
         // Arrange
+        var (_, doctorId, patientId) = TestIds.DoctorLink();
         _currentUser.UserId.Returns((Guid?)null);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(Guid.NewGuid()), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
-        await _doctorRepository.DidNotReceive().GetDoctorIdByUserIdAsync(Arg.Any<Guid>());
+        await _doctorRepository.DidNotReceive().GetOwnedDoctorAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_WhenCallerHasNoDoctorProfile_ReturnsForbidden()
+    public async Task Handle_WhenRouteDoctorIdIsNotOwnedByCaller_ReturnsForbidden()
     {
-        // Arrange
+        // Arrange — the route doctorId is not owned by the caller, so
+        // DoctorPatientLinkAuth returns Forbidden before any link check.
         var (userId, _, patientId) = TestIds.DoctorLink();
+        var otherDoctorId = Guid.NewGuid();
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns((Guid?)null);
+        _doctorRepository.GetOwnedDoctorAsync(otherDoctorId, userId, Arg.Any<CancellationToken>())
+            .Returns((Doctor?)null);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(otherDoctorId, patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
@@ -79,14 +85,16 @@ public class PatientByIdQueryHandlerTests
     [Fact]
     public async Task Handle_WhenNoAcceptedLink_ReturnsForbidden()
     {
-        // Arrange
+        // Arrange — route doctorId is owned by the caller, but no link
+        // exists with this patient, so DoctorPatientLinkAuth returns Forbidden.
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
+            .Returns(new Doctor { Id = doctorId });
         _requestRepository.IsAcceptedLinkAsync(doctorId, patientId, Arg.Any<CancellationToken>()).Returns(false);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
@@ -95,23 +103,26 @@ public class PatientByIdQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenLinkedButPatientRecordMissing_ReturnsForbiddenNotNotFound()
+    public async Task Handle_WhenLinkedButPatientRecordMissing_ReturnsPatientNotFound()
     {
-        // Arrange — an accepted link whose patient record has since disappeared
-        // must be indistinguishable from "not linked": both return Forbidden.
-        // Returning PatientNotFound here would let an authenticated doctor probe
-        // arbitrary patientIds and learn which ones exist in the system.
+        // Arrange — DoctorPatientLinkAuth has already closed the enumeration
+        // oracle (the caller is the route doctor and holds an accepted link),
+        // so reaching this branch means the link points at a patient record
+        // that has since been deleted. That is an inconsistent state, not an
+        // enumeration probe — surface PatientNotFound honestly, matching
+        // GetLinkedPatientProfileQueryHandler.
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetDoctorIdByUserIdAsync(userId).Returns(doctorId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
+            .Returns(new Doctor { Id = doctorId });
         _requestRepository.IsAcceptedLinkAsync(doctorId, patientId, Arg.Any<CancellationToken>()).Returns(true);
         _patientRepository.GetPatientByPatientId(patientId).Returns((PatientResult?)null);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
     }
 }
