@@ -65,10 +65,9 @@ public class PatientByIdQueryHandlerTests
         // DoctorPatientLinkAuth returns Forbidden before any link check.
         var (userId, _, patientId) = TestIds.DoctorLink();
         var otherDoctorId = Guid.NewGuid();
-        _currentUser.UserId.Returns(userId);
         DoctorLinkSetup.Authorize(
             _currentUser, _doctorRepository, _requestRepository,
-            userId, otherDoctorId, patientId, doctorOwned: false);
+            userId: userId, doctorId: otherDoctorId, patientId: patientId, doctorOwned: false);
 
         // Act
         var result = await _handler.Handle(new PatientByIdQuery(otherDoctorId, patientId), CancellationToken.None);

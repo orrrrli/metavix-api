@@ -34,8 +34,6 @@ internal sealed class PatientByIdQueryHandler(
         //    by name. A null here is an inconsistent state (a link pointing
         //    at a missing patient), not an enumeration probe — surface
         //    PatientNotFound honestly rather than masking it as Forbidden.
-        // TODO: see IPatientRepository.GetPatientByPatientId — cancellationToken
-        // dropped on this last round-trip; propagate once the method takes a CT.
         PatientResult? result = await patientRepository.GetPatientByPatientId(request.PatientId);
         if (result is null)
             return PatientErrors.PatientNotFound;

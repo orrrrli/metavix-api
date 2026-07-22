@@ -267,7 +267,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         try
         {
-            PatientByIdQuery query = new(doctorId, patientId);
+            PatientByIdQuery query = new(DoctorId: doctorId, PatientId: patientId);
             ErrorOr<PatientResult> result = await sender.Send(query);
 
             return result.Match(
@@ -419,7 +419,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new GetLinkedPatientProfileQuery(doctorId, patientId));
+            var result = await sender.Send(new GetLinkedPatientProfileQuery(DoctorId: doctorId, PatientId: patientId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
@@ -443,7 +443,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new GetLinkedPatientDailyRecordsQuery(doctorId, patientId));
+            var result = await sender.Send(new GetLinkedPatientDailyRecordsQuery(DoctorId: doctorId, PatientId: patientId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
@@ -467,7 +467,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new GetLinkedPatientLabResultsQuery(doctorId, patientId));
+            var result = await sender.Send(new GetLinkedPatientLabResultsQuery(DoctorId: doctorId, PatientId: patientId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
