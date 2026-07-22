@@ -16,21 +16,19 @@ internal static class DoctorPatientLinkAuth
         Guid patientId,
         CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is null)
-            return AuthErrors.Forbidden;
+        var userIdResult = CurrentUserAccess.RequireUserId(currentUser);
+        if (userIdResult.IsError)
+            return userIdResult.FirstError;
 
-        // This guard runs two queries, not one. The first resolves "doctor
-        // exists" and "doctor is the caller" together in a single round-trip
-        // (mirroring the GetOwnedDoctorAsync pattern from PR #255)...
+        // Two round-trips: ownership first, then accepted link. Collapsing them
+        // would couple the Doctors and PatientDoctorRequests repositories; the
+        // extra call is cheap and only runs on doctor-scoped patient endpoints.
         var doctor = await doctorRepository.GetOwnedDoctorAsync(
-            doctorId, currentUser.UserId.Value, cancellationToken);
+            doctorId, userIdResult.Value, cancellationToken);
         if (doctor is null)
             return AuthErrors.Forbidden;
 
-        // ...the second checks the accepted link. Kept as a separate query
-        // because collapsing both into one join would couple the Doctors and
-        // PatientDoctorRequests repositories; the extra round-trip is cheap and
-        // only runs on the doctor-scoped patient endpoints.
+
         var isLinked = await requestRepository.IsAcceptedLinkAsync(doctorId, patientId, cancellationToken);
         if (!isLinked)
             return AuthErrors.Forbidden;

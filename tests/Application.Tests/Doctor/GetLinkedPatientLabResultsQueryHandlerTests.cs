@@ -22,19 +22,18 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
             _labResultRepository, _doctorRepository, _requestRepository, _currentUser);
     }
 
+    private static (Guid UserId, Guid DoctorId, Guid PatientId) Ids() => TestIds.DoctorLink();
+
     [Fact]
     public async Task Handle_WhenLinkedAndHasResults_ReturnsMappedResults()
     {
         // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
+        var (userId, doctorId, patientId) = Ids();
         var records = new List<LabResult>
         {
             new() { Id = Guid.NewGuid(), PatientId = patientId, SampleDate = new DateOnly(2026, 6, 1) },
             new() { Id = Guid.NewGuid(), PatientId = patientId, SampleDate = new DateOnly(2026, 7, 1) },
         };
-
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _labResultRepository.GetAllByPatientIdAsync(patientId).Returns(records);
 
@@ -52,10 +51,7 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
     {
         // Arrange — a newly linked patient with no lab results yet is a
         // valid empty result, not RecordsNotFound.
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-
+        var (userId, doctorId, patientId) = Ids();
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _labResultRepository.GetAllByPatientIdAsync(patientId).Returns([]);
 
@@ -72,12 +68,9 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
     public async Task Handle_WhenCallerIsNotTheDoctor_ReturnsForbidden()
     {
         // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns((Doctor?)null);
+        var (userId, doctorId, patientId) = Ids();
+        DoctorLinkSetup.Authorize(
+            _currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId, doctorOwned: false);
 
         // Act
         var result = await _handler.Handle(
@@ -86,6 +79,8 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.DidNotReceive().IsAcceptedLinkAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await _labResultRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 
@@ -93,10 +88,7 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
     public async Task Handle_WhenNoAcceptedLink_ReturnsForbidden()
     {
         // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-
+        var (userId, doctorId, patientId) = Ids();
         DoctorLinkSetup.Authorize(
             _currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId, linked: false);
 
@@ -107,20 +99,19 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.Received(1).IsAcceptedLinkAsync(
+            doctorId, patientId, Arg.Any<CancellationToken>());
         await _labResultRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 
     [Fact]
-    public async Task Handle_PropagatesCancellationTokenToAuthorizationChecksNotToDataLoad()
+    public async Task Handle_PropagatesCancellationTokenToAuthorizationChecks()
     {
         // Arrange — the caller's token must reach the authorization checks, not
-        // be swallowed and replaced with CancellationToken.None. It does NOT
-        // reach GetAllByPatientIdAsync: ILabResultRepository doesn't accept a
-        // token yet (see the TODO on the equivalent Unlink/Revoke call sites).
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-
+        // be swallowed and replaced with CancellationToken.None. GetAllByPatientIdAsync
+        // is untested here for token propagation: ILabResultRepository's signature
+        // doesn't accept one yet (see the TODO on the equivalent Unlink/Revoke call sites).
+        var (userId, doctorId, patientId) = Ids();
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _labResultRepository.GetAllByPatientIdAsync(patientId).Returns([]);
         using var cts = new CancellationTokenSource();
