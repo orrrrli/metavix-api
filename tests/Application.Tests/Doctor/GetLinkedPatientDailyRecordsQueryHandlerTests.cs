@@ -22,8 +22,7 @@ public class GetLinkedPatientDailyRecordsQueryHandlerTests
             _dailyRecordRepository, _doctorRepository, _requestRepository, _currentUser);
     }
 
-    private static (Guid UserId, Guid DoctorId, Guid PatientId) Ids() =>
-        (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+    private static (Guid UserId, Guid DoctorId, Guid PatientId) Ids() => TestIds.DoctorLink();
 
     [Fact]
     public async Task Handle_WhenLinkedAndHasRecords_ReturnsMappedRecords()
@@ -100,6 +99,8 @@ public class GetLinkedPatientDailyRecordsQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.Received(1).IsAcceptedLinkAsync(
+            doctorId, patientId, Arg.Any<CancellationToken>());
         await _dailyRecordRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 

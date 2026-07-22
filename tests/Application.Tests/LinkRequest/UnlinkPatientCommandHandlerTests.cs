@@ -215,10 +215,7 @@ public class UnlinkPatientCommandHandlerTests
         // if the subsequent patient lookup throws (e.g. a DB error), the
         // handler has no null-check to fall back on and the exception must
         // propagate rather than being silently swallowed as a no-op.
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var (userId, doctorId, patientId, requestId) = TestIds.LinkRequest();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var doctor = TestEntities.Doctor(doctorId, userId);
@@ -234,6 +231,8 @@ public class UnlinkPatientCommandHandlerTests
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
+        await _requestRepository.Received(1).UpdateAsync(
+            Arg.Is<PatientDoctorRequest>(r => r.Status == RequestStatus.Unlinked));
     }
 
     [Fact]

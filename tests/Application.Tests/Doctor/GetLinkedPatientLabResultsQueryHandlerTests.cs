@@ -22,8 +22,7 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
             _labResultRepository, _doctorRepository, _requestRepository, _currentUser);
     }
 
-    private static (Guid UserId, Guid DoctorId, Guid PatientId) Ids() =>
-        (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+    private static (Guid UserId, Guid DoctorId, Guid PatientId) Ids() => TestIds.DoctorLink();
 
     [Fact]
     public async Task Handle_WhenLinkedAndHasResults_ReturnsMappedResults()
@@ -100,6 +99,8 @@ public class GetLinkedPatientLabResultsQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.Received(1).IsAcceptedLinkAsync(
+            doctorId, patientId, Arg.Any<CancellationToken>());
         await _labResultRepository.DidNotReceive().GetAllByPatientIdAsync(Arg.Any<Guid>());
     }
 
