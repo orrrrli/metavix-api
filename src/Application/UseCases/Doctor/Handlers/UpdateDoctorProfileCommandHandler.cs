@@ -4,6 +4,7 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Doctor.Commands;
 using Application.UseCases.Doctor.Common;
+using Application.UseCases.Doctor.Mappers;
 
 namespace Application.UseCases.Doctor.Handlers;
 
@@ -32,30 +33,12 @@ internal sealed class UpdateDoctorProfileCommandHandler
         if (doctor is null)
             return DoctorErrors.DoctorNotFound;
 
-        // UpdateProfileAsync issues a targeted ExecuteUpdate (only LicenseNumber,
-        // Speciality and UpdatedAt), so the AsNoTracking `doctor` we loaded still
-        // holds the OLD LicenseNumber/Speciality. Return the command's new values
-        // for those two fields rather than the stale loaded ones.
         await _doctorRepository.UpdateProfileAsync(
             doctor.Id,
             command.LicenseNumber,
             command.Speciality,
             cancellationToken);
 
-        return new DoctorProfileResult(
-            doctor.Id,
-            doctor.FirstName,
-            doctor.MiddleName,
-            doctor.PaternalLastName,
-            doctor.MaternalLastName,
-            command.LicenseNumber,
-            command.Speciality,
-            doctor.Email,
-            doctor.Phone,
-            doctor.Curp,
-            doctor.IneNumber,
-            doctor.IsVerified,
-            doctor.IsActive,
-            doctor.CreatedAt);
+        return DoctorProfileMapper.ToResult(doctor, command.LicenseNumber, command.Speciality);
     }
 }

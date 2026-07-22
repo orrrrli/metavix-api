@@ -7,7 +7,7 @@ using Application.UseCases.Patient.Queries;
 
 namespace Application.UseCases.Patient.Handlers;
 
-public class PatientByIdQueryHandler(
+internal sealed class PatientByIdQueryHandler(
     IPatientRepository patientRepository,
     IDoctorRepository doctorRepository,
     IPatientDoctorRequestRepository requestRepository,
@@ -18,21 +18,26 @@ public class PatientByIdQueryHandler(
         PatientByIdQuery request,
         CancellationToken cancellationToken)
     {
-        if (CurrentUserAccess.RequireUserId(currentUser, out var userId) is { } userIdError)
-            return userIdError;
+        // 1. Authorize — the route doctorId must be the caller's doctor AND
+        //    an accepted link must exist with this patient. This closes the
+        //    enumeration oracle: a doctor probing arbitrary patientIds gets
+        //    Forbidden for every id they are not linked to, so they never
+        //    reach the load step below.
+        var authError = await DoctorPatientLinkAuth.AuthorizeAsync(
+            currentUser, doctorRepository, requestRepository,
+            request.DoctorId, request.patientId, cancellationToken);
+        if (authError is not null)
+            return authError.Value;
 
-        // The caller is identified by UserId; we don't have the route doctorId
-        // in the query. Translate the caller to their doctorId and assert the
-        // link exists with the requested patient.
-        var callerDoctorId = await doctorRepository.GetDoctorIdByUserIdAsync(userId);
-        if (callerDoctorId is null)
-            return AuthErrors.Forbidden;
-
-        var isLinked = await requestRepository.IsAcceptedLinkAsync(callerDoctorId.Value, request.patientId, cancellationToken);
-        if (!isLinked)
-            return AuthErrors.Forbidden;
-
+        // 2. Load — reaching here means an accepted link to this patient
+        //    already exists, so the caller is authorized to know the patient
+        //    by name. A null here is an inconsistent state (a link pointing
+        //    at a missing patient), not an enumeration probe — surface
+        //    PatientNotFound honestly rather than masking it as Forbidden.
         PatientResult? result = await patientRepository.GetPatientByPatientId(request.patientId);
-        return result == null ? (ErrorOr<PatientResult>)PatientErrors.PatientNotFound : (ErrorOr<PatientResult>)result;
+        if (result is null)
+            return PatientErrors.PatientNotFound;
+
+        return result;
     }
 }
