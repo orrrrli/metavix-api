@@ -26,10 +26,8 @@ internal sealed class GetMyPatientProfileQueryHandler
         GetMyPatientProfileQuery request,
         CancellationToken cancellationToken)
     {
-        var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
-        if (userIdResult.IsError)
-            return userIdResult.FirstError;
-        var userId = userIdResult.Value;
+        if (CurrentUserAccess.RequireUserId(_currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
         var patient = await _patientRepository.GetByUserIdAsync(userId, cancellationToken);
         if (patient is null)

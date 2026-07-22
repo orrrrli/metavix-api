@@ -34,10 +34,7 @@ public class UnlinkPatientCommandHandlerTests
     public async Task Handle_WhenPatientHadMrn_ClearsItOnUnlink()
     {
         // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var (userId, doctorId, patientId, requestId) = TestIds.LinkRequest();
         var mrn = "MRN-2026-000042";
         var now = DateTime.UtcNow;
 
@@ -68,10 +65,7 @@ public class UnlinkPatientCommandHandlerTests
     public async Task Handle_WhenNotAccepted_ReturnsNotAcceptedWithoutMutating()
     {
         // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var (userId, doctorId, patientId, requestId) = TestIds.LinkRequest();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
         var doctor = TestEntities.Doctor(doctorId, userId);
@@ -98,10 +92,7 @@ public class UnlinkPatientCommandHandlerTests
     public async Task Handle_WhenCallerIsNotTheDoctor_ReturnsForbidden()
     {
         // Arrange
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var (userId, doctorId, patientId, requestId) = TestIds.LinkRequest();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
 
@@ -125,8 +116,7 @@ public class UnlinkPatientCommandHandlerTests
         // Arrange — an unknown requestId must be indistinguishable from a
         // request that exists but isn't the caller's doctor, so no requestId
         // enumeration oracle leaks.
-        var userId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var (userId, _, _, requestId) = TestIds.LinkRequest();
 
         _currentUser.UserId.Returns(userId);
         _requestRepository.GetByIdAsync(requestId).Returns((PatientDoctorRequest?)null);
@@ -154,10 +144,7 @@ public class UnlinkPatientCommandHandlerTests
         // gone — Unlink authorizes against the doctor and only touches the
         // patient afterwards, so the request transition still succeeds; there
         // is simply nothing left to detach.
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var (userId, doctorId, patientId, requestId) = TestIds.LinkRequest();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var doctor = TestEntities.Doctor(doctorId, userId);
@@ -185,10 +172,7 @@ public class UnlinkPatientCommandHandlerTests
         // persistence loses a concurrency race, so UpdateAsync returns false.
         // The patient must not be touched: only a persisted transition should
         // trigger the doctor detach.
-        var userId = Guid.NewGuid();
-        var doctorId = Guid.NewGuid();
-        var patientId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
+        var (userId, doctorId, patientId, requestId) = TestIds.LinkRequest();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
         var doctor = TestEntities.Doctor(doctorId, userId);
@@ -224,7 +208,7 @@ public class UnlinkPatientCommandHandlerTests
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
         _patientRepository.GetByIdAsync(patientId)
-            .Returns(Task.FromException<Patient?>(new InvalidOperationException("db error")));
+            .ThrowsAsync(new InvalidOperationException("db error"));
 
         // Act
         var act = () => _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
@@ -245,6 +229,11 @@ public class UnlinkPatientCommandHandlerTests
 
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        // Pins the short-circuit at RequireUserId: a reordered guard that moved
+        // past it would still pass a looser DidNotReceive(GetByIdAsync)-only assert.
         await _requestRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
+        await _doctorRepository.DidNotReceive().GetOwnedDoctorAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
 }

@@ -16,15 +16,14 @@ internal static class DoctorPatientLinkAuth
         Guid patientId,
         CancellationToken cancellationToken)
     {
-        var userIdResult = CurrentUserAccess.RequireUserId(currentUser);
-        if (userIdResult.IsError)
-            return userIdResult.FirstError;
+        if (CurrentUserAccess.RequireUserId(currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
         // Two round-trips: ownership first, then accepted link. Collapsing them
         // would couple the Doctors and PatientDoctorRequests repositories; the
         // extra call is cheap and only runs on doctor-scoped patient endpoints.
         var doctor = await doctorRepository.GetOwnedDoctorAsync(
-            doctorId, userIdResult.Value, cancellationToken);
+            doctorId, userId, cancellationToken);
         if (doctor is null)
             return AuthErrors.Forbidden;
 

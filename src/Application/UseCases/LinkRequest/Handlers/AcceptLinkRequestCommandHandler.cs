@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Generators;
 using Application.Common.Interfaces.Persistence;
@@ -35,8 +36,8 @@ internal sealed class AcceptLinkRequestCommandHandler
         AcceptLinkRequestCommand request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
-            return AuthErrors.Forbidden;
+        if (CurrentUserAccess.RequireUserId(_currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
         // 1. Find the link request
         var linkRequest = await _requestRepository.GetByIdAsync(request.RequestId);
@@ -46,7 +47,7 @@ internal sealed class AcceptLinkRequestCommandHandler
         }
 
         var callerDoctor = await _doctorRepository.GetOwnedDoctorAsync(
-            linkRequest.DoctorId, _currentUser.UserId.Value, cancellationToken);
+            linkRequest.DoctorId, userId, cancellationToken);
         if (callerDoctor is null)
             return AuthErrors.Forbidden;
 

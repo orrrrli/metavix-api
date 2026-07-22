@@ -8,4 +8,5 @@ global using Domain.Models;
 global using ErrorOr;
 global using FluentAssertions;
 global using NSubstitute;
+global using NSubstitute.ExceptionExtensions;
 global using Xunit;

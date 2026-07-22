@@ -18,14 +18,13 @@ public class PatientByIdQueryHandler(
         PatientByIdQuery request,
         CancellationToken cancellationToken)
     {
-        var userIdResult = CurrentUserAccess.RequireUserId(currentUser);
-        if (userIdResult.IsError)
-            return userIdResult.FirstError;
+        if (CurrentUserAccess.RequireUserId(currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
         // The caller is identified by UserId; we don't have the route doctorId
         // in the query. Translate the caller to their doctorId and assert the
         // link exists with the requested patient.
-        var callerDoctorId = await doctorRepository.GetDoctorIdByUserIdAsync(userIdResult.Value);
+        var callerDoctorId = await doctorRepository.GetDoctorIdByUserIdAsync(userId);
         if (callerDoctorId is null)
             return AuthErrors.Forbidden;
 

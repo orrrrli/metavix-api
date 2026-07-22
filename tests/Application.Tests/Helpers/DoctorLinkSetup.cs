@@ -7,10 +7,11 @@ namespace Application.Tests.Helpers;
 /// Pass <paramref name="linked"/> = false to simulate a doctor with no accepted link.
 /// Pass <paramref name="doctorOwned"/> = false to simulate a caller who is not the
 /// named doctor (GetOwnedDoctorAsync returns null).
-/// No intended combinations: only one of <paramref name="linked"/> or
-/// <paramref name="doctorOwned"/> should be false at a time. Both false still wires
-/// up IsAcceptedLinkAsync, so a handler that short-circuits on ownership will show
-/// IsAcceptedLinkAsync as unreached — the same signal as doctorOwned: false alone.
+/// Both flags default to true. Set <paramref name="linked"/> = false to make the
+/// link check fail, or <paramref name="doctorOwned"/> = false to make the ownership
+/// check fail. The (false, false) combination is also valid: ownership fails first
+/// and the link check is never reached — the same signal as doctorOwned: false
+/// alone, by construction.
 /// </summary>
 public static class DoctorLinkSetup
 {

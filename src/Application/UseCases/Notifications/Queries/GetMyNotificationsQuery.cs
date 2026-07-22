@@ -1,4 +1,4 @@
-using Application.Common.Errors;
+using Application.Common.Authorization;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Notifications.Common;
@@ -25,10 +25,10 @@ internal sealed class GetMyNotificationsQueryHandler
         GetMyNotificationsQuery request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
-            return AuthErrors.Forbidden;
+        if (CurrentUserAccess.RequireUserId(_currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
-        var notifications = await _notificationRepository.GetByUserIdAsync(_currentUser.UserId.Value);
+        var notifications = await _notificationRepository.GetByUserIdAsync(userId);
 
         return notifications
             .Select(n => new NotificationResult(n.Id, n.Title, n.Body, n.Type.ToString(), n.IsRead, n.CreatedAt))

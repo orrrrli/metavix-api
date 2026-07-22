@@ -31,10 +31,8 @@ internal sealed class RevokeDoctorAccessCommandHandler
         RevokeDoctorAccessCommand request,
         CancellationToken cancellationToken)
     {
-        var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
-        if (userIdResult.IsError)
-            return userIdResult.FirstError;
-        var userId = userIdResult.Value;
+        if (CurrentUserAccess.RequireUserId(_currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
         // A missing request returns Forbidden (not RequestNotFound) so that
         // "request doesn't exist" and "request exists but isn't your patient"
