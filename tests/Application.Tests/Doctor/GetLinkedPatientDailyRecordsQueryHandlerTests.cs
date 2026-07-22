@@ -22,13 +22,11 @@ public class GetLinkedPatientDailyRecordsQueryHandlerTests
             _dailyRecordRepository, _doctorRepository, _requestRepository, _currentUser);
     }
 
-    private static (Guid UserId, Guid DoctorId, Guid PatientId) Ids() => TestIds.DoctorLink();
-
     [Fact]
     public async Task Handle_WhenLinkedAndHasRecords_ReturnsMappedRecords()
     {
         // Arrange
-        var (userId, doctorId, patientId) = Ids();
+        var (userId, doctorId, patientId) = TestIds.DoctorLink();
         var records = new List<DailyRecord>
         {
             new() { Id = Guid.NewGuid(), PatientId = patientId, RecordDate = new DateOnly(2026, 6, 1) },
@@ -51,7 +49,7 @@ public class GetLinkedPatientDailyRecordsQueryHandlerTests
     {
         // Arrange — a newly linked patient with no daily records yet is a
         // valid empty result, not RecordsNotFound.
-        var (userId, doctorId, patientId) = Ids();
+        var (userId, doctorId, patientId) = TestIds.DoctorLink();
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
 
@@ -68,7 +66,7 @@ public class GetLinkedPatientDailyRecordsQueryHandlerTests
     public async Task Handle_WhenCallerIsNotTheDoctor_ReturnsForbidden()
     {
         // Arrange
-        var (userId, doctorId, patientId) = Ids();
+        var (userId, doctorId, patientId) = TestIds.DoctorLink();
         DoctorLinkSetup.Authorize(
             _currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId, doctorOwned: false);
 
@@ -88,7 +86,7 @@ public class GetLinkedPatientDailyRecordsQueryHandlerTests
     public async Task Handle_WhenNoAcceptedLink_ReturnsForbidden()
     {
         // Arrange
-        var (userId, doctorId, patientId) = Ids();
+        var (userId, doctorId, patientId) = TestIds.DoctorLink();
         DoctorLinkSetup.Authorize(
             _currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId, linked: false);
 
@@ -111,7 +109,7 @@ public class GetLinkedPatientDailyRecordsQueryHandlerTests
         // be swallowed and replaced with CancellationToken.None. GetAllByPatientIdAsync
         // is untested here for token propagation: IDailyRecordRepository's signature
         // doesn't accept one yet (see the TODO on the equivalent Unlink/Revoke call sites).
-        var (userId, doctorId, patientId) = Ids();
+        var (userId, doctorId, patientId) = TestIds.DoctorLink();
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _dailyRecordRepository.GetAllByPatientIdAsync(patientId).Returns([]);
         using var cts = new CancellationTokenSource();

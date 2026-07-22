@@ -27,7 +27,6 @@ internal static class DoctorPatientLinkAuth
         if (doctor is null)
             return AuthErrors.Forbidden;
 
-
         var isLinked = await requestRepository.IsAcceptedLinkAsync(doctorId, patientId, cancellationToken);
         if (!isLinked)
             return AuthErrors.Forbidden;

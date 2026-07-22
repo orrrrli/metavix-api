@@ -20,6 +20,10 @@ internal sealed class MeQueryHandler : IRequestHandler<MeQuery, ErrorOr<MeResult
 
     public async Task<ErrorOr<MeResult>> Handle(MeQuery request, CancellationToken cancellationToken)
     {
+        // Deliberately not CurrentUserAccess.RequireUserId: that helper returns
+        // Forbidden (403), but a missing UserId here means the token itself is
+        // invalid/absent, which is Unauthorized (401) on /auth/me. Do not "clean up"
+        // this divergence without preserving that semantic.
         if (_currentUser.UserId is null)
             return AuthErrors.InvalidCredentials;
 

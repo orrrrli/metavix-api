@@ -7,7 +7,7 @@ using Application.UseCases.Patient.Queries;
 
 namespace Application.UseCases.Patient.Handlers;
 
-public class PatientByIdQueryHandler(
+internal sealed class PatientByIdQueryHandler(
     IPatientRepository patientRepository,
     IDoctorRepository doctorRepository,
     IPatientDoctorRequestRepository requestRepository,
@@ -32,7 +32,11 @@ public class PatientByIdQueryHandler(
         if (!isLinked)
             return AuthErrors.Forbidden;
 
+        // A doctor with an accepted link but a since-deleted patient is treated the
+        // same as "not linked": Forbidden, not NotFound. Returning NotFound here would
+        // let an authenticated doctor distinguish "patient doesn't exist" from
+        // "not linked to me" for any patientId, an enumeration oracle.
         PatientResult? result = await patientRepository.GetPatientByPatientId(request.patientId);
-        return result == null ? (ErrorOr<PatientResult>)PatientErrors.PatientNotFound : (ErrorOr<PatientResult>)result;
+        return result is null ? AuthErrors.Forbidden : result;
     }
 }

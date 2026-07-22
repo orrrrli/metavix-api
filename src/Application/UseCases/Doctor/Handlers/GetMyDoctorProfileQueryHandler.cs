@@ -3,6 +3,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Doctor.Common;
+using Application.UseCases.Doctor.Mappers;
 using Application.UseCases.Doctor.Queries;
 
 namespace Application.UseCases.Doctor.Handlers;
@@ -32,20 +33,6 @@ internal sealed class GetMyDoctorProfileQueryHandler
         if (doctor is null)
             return DoctorErrors.DoctorNotFound;
 
-        return new DoctorProfileResult(
-            doctor.Id,
-            doctor.FirstName,
-            doctor.MiddleName,
-            doctor.PaternalLastName,
-            doctor.MaternalLastName,
-            doctor.LicenseNumber,
-            doctor.Speciality,
-            doctor.Email,
-            doctor.Phone,
-            doctor.Curp,
-            doctor.IneNumber,
-            doctor.IsVerified,
-            doctor.IsActive,
-            doctor.CreatedAt);
+        return DoctorProfileMapper.ToResult(doctor);
     }
 }
