@@ -22,11 +22,10 @@ internal static class PatientAccess
         Guid patientId,
         CancellationToken cancellationToken)
     {
-        var userIdResult = CurrentUserAccess.RequireUserId(currentUser);
-        if (userIdResult.IsError)
-            return userIdResult.FirstError;
+        if (CurrentUserAccess.RequireUserId(currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
-        var patient = await patientRepository.GetOwnedPatientAsync(patientId, userIdResult.Value, cancellationToken);
+        var patient = await patientRepository.GetOwnedPatientAsync(patientId, userId, cancellationToken);
         return patient is null ? AuthErrors.Forbidden : patient;
     }
 }

@@ -1,3 +1,4 @@
+using Application.Common.Authorization;
 using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -17,11 +18,11 @@ public class PatientByDoctorIdQueryHandler(
         PatientByDoctorIdQuery request,
         CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is null)
-            return AuthErrors.Forbidden;
+        if (CurrentUserAccess.RequireUserId(currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
         var callerDoctor = await doctorRepository.GetOwnedDoctorAsync(
-            request.doctorId, currentUser.UserId.Value, cancellationToken);
+            request.doctorId, userId, cancellationToken);
         if (callerDoctor is null)
             return AuthErrors.Forbidden;
 

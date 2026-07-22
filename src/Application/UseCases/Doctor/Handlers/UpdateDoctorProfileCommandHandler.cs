@@ -25,10 +25,8 @@ internal sealed class UpdateDoctorProfileCommandHandler
         UpdateDoctorProfileCommand command,
         CancellationToken cancellationToken)
     {
-        var userIdResult = CurrentUserAccess.RequireUserId(_currentUser);
-        if (userIdResult.IsError)
-            return userIdResult.FirstError;
-        var userId = userIdResult.Value;
+        if (CurrentUserAccess.RequireUserId(_currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
         var doctor = await _doctorRepository.GetByUserIdAsync(userId, cancellationToken);
         if (doctor is null)

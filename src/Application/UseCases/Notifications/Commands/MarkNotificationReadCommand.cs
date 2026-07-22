@@ -1,4 +1,4 @@
-using Application.Common.Errors;
+using Application.Common.Authorization;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 
@@ -24,10 +24,10 @@ internal sealed class MarkNotificationReadCommandHandler
         MarkNotificationReadCommand request,
         CancellationToken cancellationToken)
     {
-        if (_currentUser.UserId is null)
-            return AuthErrors.Forbidden;
+        if (CurrentUserAccess.RequireUserId(_currentUser, out var userId) is { } userIdError)
+            return userIdError;
 
-        await _notificationRepository.MarkReadAsync(request.NotificationId, _currentUser.UserId.Value);
+        await _notificationRepository.MarkReadAsync(request.NotificationId, userId);
 
         return Result.Success;
     }
