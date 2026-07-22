@@ -11,10 +11,24 @@ public interface IPatientRepository
     ///   <item><description><c>GetByIdAsync</c> — 3 call sites: <c>GetLinkedPatientProfileQueryHandler.Handle</c>, <c>AcceptLinkRequestCommandHandler.Handle</c>, <c>UnlinkPatientCommandHandler.Handle</c>.</description></item>
     ///   <item><description><c>UpdateAsync</c> — 4 call sites: <c>UpdatePatientProfileCommandHandler.Handle</c>, <c>AcceptLinkRequestCommandHandler.Handle</c>, <c>UnlinkPatientCommandHandler.Handle</c>, <c>RevokeDoctorAccessCommandHandler.Handle</c>.</description></item>
     /// </list>
-    /// Sibling repositories <c>IDailyRecordRepository</c> and <c>ILabResultRepository</c>
-    /// also still carry CT-less methods (<c>IDailyRecordRepository.GetAllByPatientIdAsync</c>,
-    /// <c>GetByIdAsync</c>, <c>GetLatestByPatientIdAsync</c>; all of <c>ILabResultRepository</c>
-    /// except <c>AddAsync</c>); the pass that retires this remark should sweep them all.
+    /// When the pass that retires this remark lands, every method above should
+    /// take a trailing <c>CancellationToken cancellationToken</c> (no default —
+    /// matches <c>GetByUserIdAsync</c> / <c>GetOwnedPatientAsync</c> below, which
+    /// force callers to propagate the request token). The handler call sites
+    /// already have a <c>cancellationToken</c> in scope, so propagation is
+    /// mechanical.
+    /// Sibling repositories carry the same gap:
+    /// <c>IDailyRecordRepository.GetAllByPatientIdAsync</c>, <c>GetByIdAsync</c>,
+    /// <c>GetLatestByPatientIdAsync</c> (5 call sites across
+    /// EvaluateGoalsCommandHandler, GetLinkedPatientDailyRecordsQueryHandler,
+    /// GetPatientResumenQueryHandler, GetDailyRecordByIdQueryHandler,
+    /// GetPatientDailyRecordsQueryHandler);
+    /// <c>ILabResultRepository.AddAsync</c>, <c>GetAllByPatientIdAsync</c>,
+    /// <c>GetByIdAsync</c>, <c>GetLatestByPatientIdAsync</c> (6 call sites across
+    /// GetPatientLabResultsQueryHandler, GetLabResultByIdQueryHandler,
+    /// AddLabResultCommandHandler, EvaluateGoalsCommandHandler,
+    /// GetLinkedPatientLabResultsQueryHandler, GetPatientResumenQueryHandler).
+    /// They should be swept in the same PR.
     /// </remarks>
     Task<PatientResult?> GetPatientByPatientId(Guid patientId);
     Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId);
