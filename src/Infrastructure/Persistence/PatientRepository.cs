@@ -12,18 +12,6 @@ public class PatientRepository : IPatientRepository
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     }
 
-    public async Task<List<PatientResult>> GetAllPatientByDoctorId(Guid doctorId)
-    {
-        return await _dbContext.Patients
-            .Where(x => x.PrimaryDoctorId == doctorId)
-            .Select(x => new PatientResult(
-                x.Id,
-                x.FirstName,
-                x.LastName,
-                x.MedicalRecordNumber))
-            .ToListAsync();
-    }
-
     public async Task<PatientResult?> GetPatientByPatientId(Guid patientId)
     {
         var patient = await _dbContext.Patients
