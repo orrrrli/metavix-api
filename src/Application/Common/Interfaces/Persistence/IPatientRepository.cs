@@ -6,6 +6,8 @@ namespace Application.Common.Interfaces.Persistence;
 public interface IPatientRepository
 {
     Task<List<PatientResult>> GetAllPatientByDoctorId(Guid doctorId);
+    // TODO: propagate CT — see IDailyRecordRepository / ILabResultRepository for the
+    // repository-wide pass; the only current call site is PatientByIdQueryHandler.
     Task<PatientResult?> GetPatientByPatientId(Guid patientId);
     Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId);
     Task UpdateAsync(Domain.Models.Patient patient);

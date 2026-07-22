@@ -28,14 +28,6 @@ public class DoctorRepository : IDoctorRepository
         return await _dbContext.Doctors.FirstOrDefaultAsync(d => d.Id == doctorId);
     }
 
-    public async Task<Guid?> GetDoctorIdByUserIdAsync(Guid userId)
-    {
-        return await _dbContext.Doctors
-            .Where(d => d.UserId == userId)
-            .Select(d => (Guid?)d.Id)
-            .FirstOrDefaultAsync();
-    }
-
     public async Task<Doctor?> GetByUserIdAsync(
         Guid userId,
         CancellationToken cancellationToken)
