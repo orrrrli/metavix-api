@@ -25,7 +25,7 @@ internal sealed class PatientByIdQueryHandler(
         //    reach the load step below.
         var authError = await DoctorPatientLinkAuth.AuthorizeAsync(
             currentUser, doctorRepository, requestRepository,
-            request.DoctorId, request.patientId, cancellationToken);
+            request.DoctorId, request.PatientId, cancellationToken);
         if (authError is not null)
             return authError.Value;
 
@@ -34,7 +34,9 @@ internal sealed class PatientByIdQueryHandler(
         //    by name. A null here is an inconsistent state (a link pointing
         //    at a missing patient), not an enumeration probe — surface
         //    PatientNotFound honestly rather than masking it as Forbidden.
-        PatientResult? result = await patientRepository.GetPatientByPatientId(request.patientId);
+        // TODO: see IPatientRepository.GetPatientByPatientId — cancellationToken
+        // dropped on this last round-trip; propagate once the method takes a CT.
+        PatientResult? result = await patientRepository.GetPatientByPatientId(request.PatientId);
         if (result is null)
             return PatientErrors.PatientNotFound;
 

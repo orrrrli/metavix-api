@@ -4,4 +4,4 @@ namespace Application.UseCases.Patient.Queries;
 
 public record PatientByIdQuery(
     Guid DoctorId,
-    Guid patientId) : IRequest<ErrorOr<PatientResult>>;
+    Guid PatientId) : IRequest<ErrorOr<PatientResult>>;

@@ -30,10 +30,7 @@ public class PatientByIdQueryHandlerTests
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
         var patient = new PatientResult(patientId, "Jane", "Doe", "MRN-1");
 
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(new Doctor { Id = doctorId });
-        _requestRepository.IsAcceptedLinkAsync(doctorId, patientId, Arg.Any<CancellationToken>()).Returns(true);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _patientRepository.GetPatientByPatientId(patientId).Returns(patient);
 
         // Act
@@ -69,8 +66,9 @@ public class PatientByIdQueryHandlerTests
         var (userId, _, patientId) = TestIds.DoctorLink();
         var otherDoctorId = Guid.NewGuid();
         _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(otherDoctorId, userId, Arg.Any<CancellationToken>())
-            .Returns((Doctor?)null);
+        DoctorLinkSetup.Authorize(
+            _currentUser, _doctorRepository, _requestRepository,
+            userId, otherDoctorId, patientId, doctorOwned: false);
 
         // Act
         var result = await _handler.Handle(new PatientByIdQuery(otherDoctorId, patientId), CancellationToken.None);
@@ -88,10 +86,9 @@ public class PatientByIdQueryHandlerTests
         // Arrange — route doctorId is owned by the caller, but no link
         // exists with this patient, so DoctorPatientLinkAuth returns Forbidden.
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(new Doctor { Id = doctorId });
-        _requestRepository.IsAcceptedLinkAsync(doctorId, patientId, Arg.Any<CancellationToken>()).Returns(false);
+        DoctorLinkSetup.Authorize(
+            _currentUser, _doctorRepository, _requestRepository,
+            userId, doctorId, patientId, linked: false);
 
         // Act
         var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
@@ -112,10 +109,7 @@ public class PatientByIdQueryHandlerTests
         // enumeration probe — surface PatientNotFound honestly, matching
         // GetLinkedPatientProfileQueryHandler.
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
-        _currentUser.UserId.Returns(userId);
-        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>())
-            .Returns(new Doctor { Id = doctorId });
-        _requestRepository.IsAcceptedLinkAsync(doctorId, patientId, Arg.Any<CancellationToken>()).Returns(true);
+        DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
         _patientRepository.GetPatientByPatientId(patientId).Returns((PatientResult?)null);
 
         // Act

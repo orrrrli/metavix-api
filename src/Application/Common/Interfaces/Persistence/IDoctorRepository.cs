@@ -6,7 +6,6 @@ public interface IDoctorRepository
 {
     Task<List<Doctor>> GetAllActiveAsync();
     Task<Doctor?> GetByIdAsync(Guid doctorId);
-    Task<Guid?> GetDoctorIdByUserIdAsync(Guid userId);
 
     /// <remarks>
     /// For "my profile" endpoints: the caller acts on their own doctor record,
