@@ -15,14 +15,14 @@ namespace Application.Common.Interfaces.Persistence;
 /// force callers to propagate the request token). The handler call sites
 /// already have a <c>cancellationToken</c> in scope, so propagation is
 /// mechanical.
-/// Sibling repositories carry the same gap:
-/// <c>IDailyRecordRepository.GetAllByPatientIdAsync</c>, <c>GetByIdAsync</c>,
-/// <c>GetLatestByPatientIdAsync</c>;
-/// <c>ILabResultRepository.AddAsync</c>, <c>GetAllByPatientIdAsync</c>,
-/// <c>GetByIdAsync</c>, <c>GetLatestByPatientIdAsync</c>.
 /// The current call sites for any of the above can be enumerated with
-/// <c>git grep "_\w*Repository\.&lt;Method&gt;"</c> from the repo root.
-/// A repository-wide CT-propagation pass is tracked in PR #266.
+/// <c>git grep "_patientRepository\.GetByIdAsync"</c> from the repo root
+/// (and similar for the other two methods).
+/// TODO: repository-wide CT-propagation pass (sweep all 3 CT-less methods to
+/// trailing <c>CancellationToken cancellationToken</c>, no default; matches
+/// <c>GetByUserIdAsync</c> / <c>GetOwnedPatientAsync</c> below). The same
+/// gap exists on <c>IDailyRecordRepository</c> and <c>ILabResultRepository</c>
+/// — see their own remarks for the per-repo CT-less method list.
 /// </remarks>
 public interface IPatientRepository
 {

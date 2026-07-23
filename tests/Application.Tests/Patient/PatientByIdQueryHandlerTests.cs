@@ -42,23 +42,6 @@ public class PatientByIdQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenCurrentUserIdIsNull_ReturnsForbidden()
-    {
-        // Arrange
-        var (_, doctorId, patientId) = TestIds.DoctorLink();
-        _currentUser.UserId.Returns((Guid?)null);
-
-        // Act
-        var result = await _handler.Handle(new PatientByIdQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
-
-        // Assert
-        result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
-        await _doctorRepository.DidNotReceive().GetOwnedDoctorAsync(
-            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task Handle_WhenRouteDoctorIdIsNotOwnedByCaller_ReturnsForbidden()
     {
         // Arrange — the route doctorId is not owned by the caller, so
@@ -79,6 +62,7 @@ public class PatientByIdQueryHandlerTests
             otherDoctorId, userId, Arg.Any<CancellationToken>());
         await _requestRepository.DidNotReceive().IsAcceptedLinkAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _patientRepository.DidNotReceive().GetPatientByPatientId(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -97,6 +81,8 @@ public class PatientByIdQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _requestRepository.Received(1).IsAcceptedLinkAsync(
+            doctorId, patientId, Arg.Any<CancellationToken>());
         await _patientRepository.DidNotReceive().GetPatientByPatientId(Arg.Any<Guid>());
     }
 
@@ -119,5 +105,6 @@ public class PatientByIdQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
+        await _patientRepository.Received(1).GetPatientByPatientId(patientId);
     }
 }

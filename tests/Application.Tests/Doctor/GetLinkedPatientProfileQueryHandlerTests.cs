@@ -65,6 +65,7 @@ public class GetLinkedPatientProfileQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
+        await _patientRepository.Received(1).GetByIdAsync(patientId);
     }
 
     [Fact]
@@ -121,7 +122,7 @@ public class GetLinkedPatientProfileQueryHandlerTests
         // doesn't accept a CT yet (see the remarks block on IPatientRepository).
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
-        // Stubbed to short-circuit the load; mapper would NRE on null.
+        // Stubbed so the handler reaches the load step; asserted at line 135.
         _patientRepository.GetByIdAsync(patientId).Returns((Patient?)null);
         using var cts = new CancellationTokenSource();
 

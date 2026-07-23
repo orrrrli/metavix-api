@@ -495,13 +495,13 @@ public class DoctorModule : MainModule, ICarterModule
         try
         {
             var command = new CreateClinicalGoalCommand(
-                doctorId,
-                patientId,
-                request.ParameterId,
-                request.CustomOutOfRangeLow,
-                request.CustomAtRiskLow,
-                request.CustomAtRiskHigh,
-                request.CustomOutOfRangeHigh);
+                DoctorId: doctorId,
+                PatientId: patientId,
+                ParameterId: request.ParameterId,
+                CustomOutOfRangeLow: request.CustomOutOfRangeLow,
+                CustomAtRiskLow: request.CustomAtRiskLow,
+                CustomAtRiskHigh: request.CustomAtRiskHigh,
+                CustomOutOfRangeHigh: request.CustomOutOfRangeHigh);
 
             var result = await sender.Send(command);
 
@@ -527,7 +527,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new GetClinicalGoalsQuery(doctorId, patientId));
+            var result = await sender.Send(new GetClinicalGoalsQuery(DoctorId: doctorId, PatientId: patientId));
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
@@ -554,13 +554,13 @@ public class DoctorModule : MainModule, ICarterModule
         try
         {
             var command = new UpdateClinicalGoalCommand(
-                doctorId,
-                patientId,
-                goalId,
-                request.CustomOutOfRangeLow,
-                request.CustomAtRiskLow,
-                request.CustomAtRiskHigh,
-                request.CustomOutOfRangeHigh);
+                DoctorId: doctorId,
+                PatientId: patientId,
+                GoalId: goalId,
+                CustomOutOfRangeLow: request.CustomOutOfRangeLow,
+                CustomAtRiskLow: request.CustomAtRiskLow,
+                CustomAtRiskHigh: request.CustomAtRiskHigh,
+                CustomOutOfRangeHigh: request.CustomOutOfRangeHigh);
 
             var result = await sender.Send(command);
 
@@ -587,7 +587,7 @@ public class DoctorModule : MainModule, ICarterModule
 
         try
         {
-            var result = await sender.Send(new DeleteClinicalGoalCommand(doctorId, patientId, goalId));
+            var result = await sender.Send(new DeleteClinicalGoalCommand(DoctorId: doctorId, PatientId: patientId, GoalId: goalId));
 
             return result.Match(
                 _ => TypedResults.NoContent(),
