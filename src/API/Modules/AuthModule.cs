@@ -245,14 +245,15 @@ public class AuthModule : MainModule, ICarterModule
         ISender sender,
         HttpContext httpContext,
         IConfiguration configuration,
-        [FromBody] RegisterPatientCommand command)
+        [FromBody] RegisterPatientRequest request)
     {
         string fullRoute  = $"{httpContext.Request.Path}";
-        string parametros = $"Email: {command.Email}";
+        string parametros = $"Email: {request.Email}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
         try
         {
+            var command = request.Adapt<RegisterPatientCommand>();
             ErrorOr<RegisterResult> result = await sender.Send(command);
 
             return result.Match(
@@ -277,14 +278,15 @@ public class AuthModule : MainModule, ICarterModule
         ISender sender,
         HttpContext httpContext,
         IConfiguration configuration,
-        [FromBody] RegisterDoctorCommand command)
+        [FromBody] RegisterDoctorRequest request)
     {
         string fullRoute  = $"{httpContext.Request.Path}";
-        string parametros = $"Email: {command.Email}";
+        string parametros = $"Email: {request.Email}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
         try
         {
+            var command = request.Adapt<RegisterDoctorCommand>();
             ErrorOr<RegisterResult> result = await sender.Send(command);
 
             return result.Match(
@@ -308,30 +310,32 @@ public class AuthModule : MainModule, ICarterModule
     private static async Task<IResult> ForgotPassword(
         ISender sender,
         HttpContext httpContext,
-        [FromBody] ForgotPasswordCommand command)
+        [FromBody] ForgotPasswordRequest request)
     {
         string fullRoute = $"{httpContext.Request.Path}";
 
         try
         {
+            var command = request.Adapt<ForgotPasswordCommand>();
             await sender.Send(command);
             return Results.Ok();
         }
         catch (Exception ex)
         {
-            return ApiResults.Error(ex, fullRoute, $"Email: {command.Email}");
+            return ApiResults.Error(ex, fullRoute, $"Email: {request.Email}");
         }
     }
 
     private static async Task<IResult> ResetPassword(
         ISender sender,
         HttpContext httpContext,
-        [FromBody] ResetPasswordCommand command)
+        [FromBody] ResetPasswordRequest request)
     {
         string fullRoute = $"{httpContext.Request.Path}";
 
         try
         {
+            var command = request.Adapt<ResetPasswordCommand>();
             ErrorOr<Unit> result = await sender.Send(command);
 
             return result.Match(
