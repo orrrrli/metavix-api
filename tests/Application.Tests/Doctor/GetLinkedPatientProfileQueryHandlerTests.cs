@@ -34,7 +34,7 @@ public class GetLinkedPatientProfileQueryHandlerTests
 
         // Act
         var result = await _handler.Handle(
-            new GetLinkedPatientProfileQuery(doctorId, patientId), CancellationToken.None);
+            new GetLinkedPatientProfileQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert — assert a couple of mapped fields, not the whole record, so the
         // test stays resilient to future mapper additions. A mapper that returned
@@ -60,11 +60,12 @@ public class GetLinkedPatientProfileQueryHandlerTests
 
         // Act
         var result = await _handler.Handle(
-            new GetLinkedPatientProfileQuery(doctorId, patientId), CancellationToken.None);
+            new GetLinkedPatientProfileQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
+        await _patientRepository.Received(1).GetByIdAsync(patientId);
     }
 
     [Fact]
@@ -79,11 +80,13 @@ public class GetLinkedPatientProfileQueryHandlerTests
 
         // Act
         var result = await _handler.Handle(
-            new GetLinkedPatientProfileQuery(otherDoctorId, patientId), CancellationToken.None);
+            new GetLinkedPatientProfileQuery(DoctorId: otherDoctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _doctorRepository.Received(1).GetOwnedDoctorAsync(
+            otherDoctorId, userId, Arg.Any<CancellationToken>());
         await _requestRepository.DidNotReceive().IsAcceptedLinkAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await _patientRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
@@ -100,7 +103,7 @@ public class GetLinkedPatientProfileQueryHandlerTests
 
         // Act
         var result = await _handler.Handle(
-            new GetLinkedPatientProfileQuery(doctorId, patientId), CancellationToken.None);
+            new GetLinkedPatientProfileQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
@@ -119,14 +122,16 @@ public class GetLinkedPatientProfileQueryHandlerTests
         // doesn't accept a CT yet (see the remarks block on IPatientRepository).
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
+        // Stubbed so the handler reaches the load step; asserted at line 135.
         _patientRepository.GetByIdAsync(patientId).Returns((Patient?)null);
         using var cts = new CancellationTokenSource();
 
         // Act
-        await _handler.Handle(new GetLinkedPatientProfileQuery(doctorId, patientId), cts.Token);
+        await _handler.Handle(new GetLinkedPatientProfileQuery(DoctorId: doctorId, PatientId: patientId), cts.Token);
 
         // Assert
         await _doctorRepository.Received(1).GetOwnedDoctorAsync(doctorId, userId, cts.Token);
         await _requestRepository.Received(1).IsAcceptedLinkAsync(doctorId, patientId, cts.Token);
+        await _patientRepository.Received(1).GetByIdAsync(patientId);
     }
 }

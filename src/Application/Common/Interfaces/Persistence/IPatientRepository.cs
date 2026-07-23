@@ -2,34 +2,30 @@ using Application.UseCases.Patient.Common;
 
 namespace Application.Common.Interfaces.Persistence;
 
+/// <remarks>
+/// CT-less methods (intentionally, for now — repository-wide pass deferred):
+/// <list type="bullet">
+///   <item><description><c>GetPatientByPatientId</c></description></item>
+///   <item><description><c>GetByIdAsync</c></description></item>
+///   <item><description><c>UpdateAsync</c></description></item>
+/// </list>
+/// When the pass that retires this remark lands, every method above should
+/// take a trailing <c>CancellationToken cancellationToken</c> (no default —
+/// matches <c>GetByUserIdAsync</c> / <c>GetOwnedPatientAsync</c> below, which
+/// force callers to propagate the request token). The handler call sites
+/// already have a <c>cancellationToken</c> in scope, so propagation is
+/// mechanical.
+/// The current call sites for any of the above can be enumerated with
+/// <c>git grep "_patientRepository\.GetByIdAsync"</c> from the repo root
+/// (and similar for the other two methods).
+/// TODO: repository-wide CT-propagation pass (sweep all 3 CT-less methods to
+/// trailing <c>CancellationToken cancellationToken</c>, no default; matches
+/// <c>GetByUserIdAsync</c> / <c>GetOwnedPatientAsync</c> below). The same
+/// gap exists on <c>IDailyRecordRepository</c> and <c>ILabResultRepository</c>
+/// — see their own remarks for the per-repo CT-less method list.
+/// </remarks>
 public interface IPatientRepository
 {
-    /// <remarks>
-    /// CT-less methods (intentionally, for now — repository-wide pass deferred):
-    /// <list type="bullet">
-    ///   <item><description><c>GetPatientByPatientId</c> — 1 call site: <c>PatientByIdQueryHandler.Handle</c>.</description></item>
-    ///   <item><description><c>GetByIdAsync</c> — 3 call sites: <c>GetLinkedPatientProfileQueryHandler.Handle</c>, <c>AcceptLinkRequestCommandHandler.Handle</c>, <c>UnlinkPatientCommandHandler.Handle</c>.</description></item>
-    ///   <item><description><c>UpdateAsync</c> — 4 call sites: <c>UpdatePatientProfileCommandHandler.Handle</c>, <c>AcceptLinkRequestCommandHandler.Handle</c>, <c>UnlinkPatientCommandHandler.Handle</c>, <c>RevokeDoctorAccessCommandHandler.Handle</c>.</description></item>
-    /// </list>
-    /// When the pass that retires this remark lands, every method above should
-    /// take a trailing <c>CancellationToken cancellationToken</c> (no default —
-    /// matches <c>GetByUserIdAsync</c> / <c>GetOwnedPatientAsync</c> below, which
-    /// force callers to propagate the request token). The handler call sites
-    /// already have a <c>cancellationToken</c> in scope, so propagation is
-    /// mechanical.
-    /// Sibling repositories carry the same gap:
-    /// <c>IDailyRecordRepository.GetAllByPatientIdAsync</c>, <c>GetByIdAsync</c>,
-    /// <c>GetLatestByPatientIdAsync</c> (5 call sites across
-    /// EvaluateGoalsCommandHandler, GetLinkedPatientDailyRecordsQueryHandler,
-    /// GetPatientResumenQueryHandler, GetDailyRecordByIdQueryHandler,
-    /// GetPatientDailyRecordsQueryHandler);
-    /// <c>ILabResultRepository.AddAsync</c>, <c>GetAllByPatientIdAsync</c>,
-    /// <c>GetByIdAsync</c>, <c>GetLatestByPatientIdAsync</c> (6 call sites across
-    /// GetPatientLabResultsQueryHandler, GetLabResultByIdQueryHandler,
-    /// AddLabResultCommandHandler, EvaluateGoalsCommandHandler,
-    /// GetLinkedPatientLabResultsQueryHandler, GetPatientResumenQueryHandler).
-    /// They should be swept in the same PR.
-    /// </remarks>
     Task<PatientResult?> GetPatientByPatientId(Guid patientId);
     Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId);
     Task UpdateAsync(Domain.Models.Patient patient);
