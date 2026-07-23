@@ -19,6 +19,7 @@ using Application.UseCases.LabResult.Common;
 using Application.UseCases.ClinicalGoals.Commands;
 using Application.UseCases.ClinicalGoals.Common;
 using Application.UseCases.ClinicalGoals.Queries;
+using Contracts.Doctor.Request;
 using Contracts.LinkRequest.Request;
 using Contracts.Patient.Request;
 using Contracts.Patient.Response;
@@ -181,13 +182,14 @@ public class DoctorModule : MainModule, ICarterModule
     private static async Task<IResult> UpdateMyProfile(
         ISender sender,
         HttpContext httpContext,
-        [FromBody] UpdateDoctorProfileCommand command)
+        [FromBody] UpdateDoctorProfileRequest request)
     {
         string fullRoute = httpContext.Request.Path;
         LoggingHelper.LogRequest(fullRoute, string.Empty);
 
         try
         {
+            var command = request.Adapt<UpdateDoctorProfileCommand>();
             var result = await sender.Send(command);
 
             return result.Match(
