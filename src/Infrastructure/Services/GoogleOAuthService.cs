@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using Application.Common.Interfaces.Services;
-using Application.Common.Settings;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
@@ -16,18 +15,14 @@ public sealed class GoogleOAuthService : IGoogleOAuthService
     private readonly GoogleOAuthSettings   _settings;
     private readonly IMemoryCache          _cache;
 
-    public string FrontendUrl { get; }
-
     public GoogleOAuthService(
         HttpClient http,
         IOptions<GoogleOAuthSettings> settings,
-        IOptions<AppSettings> appSettings,
         IMemoryCache cache)
     {
-        _http       = http;
-        _settings   = settings.Value;
-        FrontendUrl = appSettings.Value.AppBaseUrl;
-        _cache      = cache;
+        _http     = http;
+        _settings = settings.Value;
+        _cache    = cache;
     }
 
     public string BuildAuthorizationUrl(string role, out string state)

@@ -5,10 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 using API.Common;
 using API.Helpers;
 using Application.Common.Interfaces.Services;
+using Application.Common.Settings;
 using Application.UseCases.Auth.Commands;
 using Application.UseCases.Auth.Common;
 using Application.UseCases.Auth.Queries;
 using Contracts.Auth;
+using Microsoft.Extensions.Options;
 
 namespace API.Modules;
 
@@ -365,9 +367,10 @@ public class AuthModule : MainModule, ICarterModule
         ISender sender,
         HttpContext httpContext,
         IGoogleOAuthService googleOAuthService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IOptions<AppSettings> appSettings)
     {
-        string frontendUrl = googleOAuthService.FrontendUrl;
+        string frontendUrl = appSettings.Value.AppBaseUrl;
 
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
             return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
