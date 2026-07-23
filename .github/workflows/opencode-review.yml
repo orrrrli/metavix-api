@@ -20,13 +20,29 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Read review prompt
+      - name: Assemble review prompt with project context
         id: prompt
         run: |
           {
-            echo 'text<<EOF'
+            echo 'text<<PROMPT_BLOCK_END'
             cat .github/opencode-review-prompt.md
-            echo EOF
+            echo ''
+            echo '--- BEGIN PROJECT CONTEXT (authoritative, do not re-cite) ---'
+            echo ''
+            echo '## business-rules.md'
+            cat .github/reviewer-context/business-rules.md
+            echo ''
+            echo '## conventions.md'
+            cat .github/reviewer-context/conventions.md
+            echo ''
+            echo '## handler-authorship-context.md'
+            cat .github/reviewer-context/handler-authorship-context.md
+            echo ''
+            echo '## dont-flag.md'
+            cat .github/reviewer-context/dont-flag.md
+            echo ''
+            echo '--- END PROJECT CONTEXT ---'
+            echo PROMPT_BLOCK_END
           } >> "$GITHUB_OUTPUT"
       - uses: anomalyco/opencode/github@latest
         env:
