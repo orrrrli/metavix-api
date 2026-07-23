@@ -394,6 +394,9 @@ public class AuthModule : MainModule, ICarterModule
 
             return Results.Redirect($"{appBaseUrl}/auth/callback");
         }
+        // Empty catch is intentional: any failure in the OAuth flow must redirect to
+        // /login?error=oauth_failed. The contract is "never surface an exception,
+        // always redirect" — adding logging here is tracked as a follow-up.
         catch
         {
             return Results.Redirect($"{appBaseUrl}/login?error=oauth_failed");
