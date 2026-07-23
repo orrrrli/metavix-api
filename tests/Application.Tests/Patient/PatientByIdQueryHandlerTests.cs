@@ -34,7 +34,7 @@ public class PatientByIdQueryHandlerTests
         _patientRepository.GetPatientByPatientId(patientId).Returns(patient);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
@@ -49,7 +49,7 @@ public class PatientByIdQueryHandlerTests
         _currentUser.UserId.Returns((Guid?)null);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
@@ -70,11 +70,13 @@ public class PatientByIdQueryHandlerTests
             userId: userId, doctorId: otherDoctorId, patientId: patientId, doctorOwned: false);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(otherDoctorId, patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(DoctorId: otherDoctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
+        await _doctorRepository.Received(1).GetOwnedDoctorAsync(
+            otherDoctorId, userId, Arg.Any<CancellationToken>());
         await _requestRepository.DidNotReceive().IsAcceptedLinkAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
@@ -90,7 +92,7 @@ public class PatientByIdQueryHandlerTests
             userId, doctorId, patientId, linked: false);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
@@ -112,7 +114,7 @@ public class PatientByIdQueryHandlerTests
         _patientRepository.GetPatientByPatientId(patientId).Returns((PatientResult?)null);
 
         // Act
-        var result = await _handler.Handle(new PatientByIdQuery(doctorId, patientId), CancellationToken.None);
+        var result = await _handler.Handle(new PatientByIdQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeTrue();
