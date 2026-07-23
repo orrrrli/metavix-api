@@ -2,7 +2,7 @@ using System.Text;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
 using Application.Common.Interfaces.Services;
-using Contracts.Settings;
+using Application.Common.Settings;
 using Infrastructure.HealthChecks;
 using Infrastructure.Persistence;
 using Infrastructure.Security;
@@ -33,6 +33,8 @@ public static class DependencyInjection
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<ILoginAttemptTracker, LoginAttemptTracker>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        services.Configure<AppSettings>(configuration.GetSection(AppSettings.SectionName));
 
         services.Configure<BrevoSettings>(configuration.GetSection(BrevoSettings.SectionName));
         services.AddHttpClient<IEmailService, BrevoEmailService>();
