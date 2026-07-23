@@ -3,7 +3,7 @@ using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Auth.Commands;
 using Domain.Models;
-using Contracts.Settings;
+using Application.Common.Settings;
 using Microsoft.Extensions.Options;
 
 namespace Application.UseCases.Auth.Handlers;
@@ -22,13 +22,13 @@ internal sealed class ForgotPasswordCommandHandler
         IPasswordResetTokenRepository tokenRepository,
         IEmailService emailService,
         TimeProvider timeProvider,
-        IOptions<BrevoSettings> brevoSettings)
+        IOptions<AppSettings> appSettings)
     {
         _userRepository   = userRepository;
         _tokenRepository  = tokenRepository;
         _emailService     = emailService;
         _timeProvider     = timeProvider;
-        _appBaseUrl       = brevoSettings.Value.AppBaseUrl;
+        _appBaseUrl       = appSettings.Value.AppBaseUrl;
     }
 
     public async Task<ErrorOr<Unit>> Handle(

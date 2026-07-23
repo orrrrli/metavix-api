@@ -1,6 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\Domain\Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Doctor\Request\" />
     <Folder Include="Doctor\Response\" />
     <Folder Include="Patient\Request\" />

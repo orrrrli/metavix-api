@@ -24,6 +24,10 @@ using Application.UseCases.Patient.Commands;
 using Application.UseCases.Patient.Common;
 using Application.UseCases.Patient.Queries;
 using Contracts.Patient.Request;
+using Contracts.LinkRequest.Request;
+using Contracts.DailyRecord.Request;
+using Contracts.LabResult.Request;
+using Contracts.InsulinDm1.Request;
 using Domain.Enums;
 
 namespace API.Modules;
@@ -251,14 +255,15 @@ public class PatientModule : MainModule, ICarterModule
     private static async Task<IResult> SendLinkRequest(
         ISender sender,
         HttpContext httpContext,
-        [FromBody] SendLinkRequestCommand command)
+        [FromBody] SendLinkRequestRequest request)
     {
         string fullRoute = $"{httpContext.Request.Path}";
-        string parametros = $"PatientId: {command.PatientId}, DoctorId: {command.DoctorId}";
+        string parametros = $"PatientId: {request.PatientId}, DoctorId: {request.DoctorId}";
         LoggingHelper.LogRequest(fullRoute, parametros);
 
         try
         {
+            var command = request.Adapt<SendLinkRequestCommand>();
             ErrorOr<LinkRequestResult> result = await sender.Send(command);
 
             return result.Match(
@@ -300,7 +305,7 @@ public class PatientModule : MainModule, ICarterModule
         ISender sender,
         HttpContext httpContext,
         [FromRoute] Guid patientId,
-        [FromBody] AddDailyRecordCommand command)
+        [FromBody] AddDailyRecordRequest request)
     {
         string fullRoute = $"{httpContext.Request.Path}";
         string parametros = $"PatientId: {patientId}";
@@ -308,8 +313,8 @@ public class PatientModule : MainModule, ICarterModule
 
         try
         {
-            var commandWithId = command with { PatientId = patientId };
-            ErrorOr<DailyRecordResult> result = await sender.Send(commandWithId);
+            var command = request.Adapt<AddDailyRecordCommand>() with { PatientId = patientId };
+            ErrorOr<DailyRecordResult> result = await sender.Send(command);
 
             return result.Match(
                 value => TypedResults.Created($"/api/patient/{patientId}/record/daily/{value.Id}", new ApiSuccessResponse<DailyRecordResult> { Data = value }),
@@ -400,7 +405,7 @@ public class PatientModule : MainModule, ICarterModule
         ISender sender,
         HttpContext httpContext,
         [FromRoute] Guid patientId,
-        [FromBody] AddLabResultCommand command)
+        [FromBody] AddLabResultRequest request)
     {
         string fullRoute = $"{httpContext.Request.Path}";
         string parametros = $"PatientId: {patientId}";
@@ -408,8 +413,8 @@ public class PatientModule : MainModule, ICarterModule
 
         try
         {
-            var commandWithId = command with { PatientId = patientId };
-            ErrorOr<LabResultResult> result = await sender.Send(commandWithId);
+            var command = request.Adapt<AddLabResultCommand>() with { PatientId = patientId };
+            ErrorOr<LabResultResult> result = await sender.Send(command);
 
             return result.Match(
                 value => TypedResults.Created($"/api/patient/{patientId}/records/lab/{value.Id}", new ApiSuccessResponse<LabResultResult> { Data = value }),
@@ -474,7 +479,7 @@ public class PatientModule : MainModule, ICarterModule
         ISender sender,
         HttpContext httpContext,
         [FromRoute] Guid patientId,
-        [FromBody] UpsertInsulinProfileCommand command)
+        [FromBody] UpsertInsulinProfileRequest request)
     {
         string fullRoute = $"{httpContext.Request.Path}";
         string parametros = $"PatientId: {patientId}";
@@ -482,8 +487,8 @@ public class PatientModule : MainModule, ICarterModule
 
         try
         {
-            var commandWithId = command with { PatientId = patientId };
-            var result = await sender.Send(commandWithId);
+            var command = request.Adapt<UpsertInsulinProfileCommand>() with { PatientId = patientId };
+            var result = await sender.Send(command);
 
             return result.Match(
                 value => ApiResults.Success(value, fullRoute),
@@ -522,7 +527,7 @@ public class PatientModule : MainModule, ICarterModule
         ISender sender,
         HttpContext httpContext,
         [FromRoute] Guid patientId,
-        [FromBody] AddInsulinRecordCommand command)
+        [FromBody] AddInsulinRecordRequest request)
     {
         string fullRoute = $"{httpContext.Request.Path}";
         string parametros = $"PatientId: {patientId}";
@@ -530,8 +535,8 @@ public class PatientModule : MainModule, ICarterModule
 
         try
         {
-            var commandWithId = command with { PatientId = patientId };
-            ErrorOr<InsulinDm1RecordResult> result = await sender.Send(commandWithId);
+            var command = request.Adapt<AddInsulinRecordCommand>() with { PatientId = patientId };
+            ErrorOr<InsulinDm1RecordResult> result = await sender.Send(command);
 
             return result.Match(
                 value => TypedResults.Created($"/api/patient/{patientId}/insulin-dm1/records/{value.Id}", new ApiSuccessResponse<InsulinDm1RecordResult> { Data = value }),
