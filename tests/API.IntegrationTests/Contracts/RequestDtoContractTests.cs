@@ -90,6 +90,71 @@ public class RequestDtoContractTests
             .Should().BeTrue();
     }
 
+    // SendLinkRequestRequest.PatientId travels in the body with no route param to
+    // cross-check it against — the only guard against an authenticated patient
+    // impersonating another patient is PatientAccess.RequireOwnedPatientAsync inside
+    // SendLinkRequestCommandHandler. This proves that guard actually rejects a
+    // foreign PatientId instead of trusting the body.
+    [Fact]
+    public async Task SendLinkRequest_RejectsBodyPatientId_WhenNotOwnedByCaller()
+    {
+        var (_, ownPatientId) = await SeedPatientAsync();
+        var (otherPatientUserId, _) = await SeedPatientAsync();
+        var (_, doctorId) = await SeedDoctorAsync();
+
+        // Authenticated as otherPatientUserId, but the body claims ownPatientId.
+        var client = CreateAuthenticatedClient(otherPatientUserId);
+
+        string frontendBody = $$"""
+        { "patientId": "{{ownPatientId}}", "doctorId": "{{doctorId}}" }
+        """;
+
+        var response = await client.PostAsync(
+            "/api/v1/patient/requests-link",
+            new StringContent(frontendBody, Encoding.UTF8, "application/json"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
+            "a patient must not be able to send a link request on behalf of a PatientId they don't own");
+
+        await using var db = CreateDbContext();
+        (await db.PatientDoctorRequests.AnyAsync(r =>
+            r.PatientId == ownPatientId && r.DoctorId == doctorId))
+            .Should().BeFalse();
+    }
+
+    // AddDailyRecordRequest deliberately has no PatientId property (route is the
+    // only source), so a "patientId" in the body is an unknown field that
+    // System.Text.Json silently ignores before the handler ever runs. This proves
+    // that a spoofed body field has no effect — the persisted record always uses
+    // the route's patientId.
+    [Fact]
+    public async Task AddDailyRecord_IgnoresPatientIdInBody_UsesRoutePatientIdInstead()
+    {
+        var (userId, routePatientId) = await SeedPatientAsync();
+        var (_, foreignPatientId) = await SeedPatientAsync();
+        var client = CreateAuthenticatedClient(userId);
+
+        string frontendBody = $$"""
+        {
+          "patientId": "{{foreignPatientId}}",
+          "recordDate": "2026-07-22",
+          "recordTime": "08:30:00"
+        }
+        """;
+
+        var response = await client.PostAsync(
+            $"/api/v1/patient/{routePatientId}/records/daily",
+            new StringContent(frontendBody, Encoding.UTF8, "application/json"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        await using var db = CreateDbContext();
+        var record = await db.DailyRecords.SingleAsync(r => r.PatientId == routePatientId);
+        record.PatientId.Should().Be(routePatientId);
+        (await db.DailyRecords.AnyAsync(r => r.PatientId == foreignPatientId))
+            .Should().BeFalse();
+    }
+
     // --- Helpers ---
 
     private async Task<(Guid UserId, Guid PatientId)> SeedPatientAsync()

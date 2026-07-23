@@ -5,10 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 using API.Common;
 using API.Helpers;
 using Application.Common.Interfaces.Services;
+using Application.Common.Settings;
 using Application.UseCases.Auth.Commands;
 using Application.UseCases.Auth.Common;
 using Application.UseCases.Auth.Queries;
 using Contracts.Auth;
+using Microsoft.Extensions.Options;
 
 namespace API.Modules;
 
@@ -359,18 +361,22 @@ public class AuthModule : MainModule, ICarterModule
         return Results.Redirect(authUrl);
     }
 
+    // AppBaseUrl uses IOptions<AppSettings> instead of IConfiguration (unlike the cookie
+    // helpers below) because it's shared with Application (ForgotPasswordCommandHandler) via
+    // the AppSettings contract; cookie keys are local to this file only.
     private static async Task<IResult> HandleGoogleCallback(
         [FromQuery] string? code,
         [FromQuery] string? state,
         ISender sender,
         HttpContext httpContext,
         IGoogleOAuthService googleOAuthService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IOptions<AppSettings> appSettings)
     {
-        string frontendUrl = googleOAuthService.FrontendUrl;
+        string appBaseUrl = appSettings.Value.AppBaseUrl;
 
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
-            return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+            return Results.Redirect($"{appBaseUrl}/login?error=oauth_failed");
 
         try
         {
@@ -378,7 +384,7 @@ public class AuthModule : MainModule, ICarterModule
                 new GoogleCallbackCommand(code, state));
 
             if (result.IsError)
-                return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+                return Results.Redirect($"{appBaseUrl}/login?error=oauth_failed");
 
             LoginResult login = result.Value;
 
@@ -386,11 +392,11 @@ public class AuthModule : MainModule, ICarterModule
             httpContext.Response.Cookies.Append("refresh_token", login.RefreshToken, RefreshTokenCookie(configuration));
             httpContext.Response.Cookies.Append(SessionCookieName, "1",             SessionCookie(configuration));
 
-            return Results.Redirect($"{frontendUrl}/auth/callback");
+            return Results.Redirect($"{appBaseUrl}/auth/callback");
         }
         catch
         {
-            return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+            return Results.Redirect($"{appBaseUrl}/login?error=oauth_failed");
         }
     }
 

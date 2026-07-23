@@ -15,8 +15,6 @@ public sealed class GoogleOAuthService : IGoogleOAuthService
     private readonly GoogleOAuthSettings   _settings;
     private readonly IMemoryCache          _cache;
 
-    public string FrontendUrl => _settings.FrontendUrl;
-
     public GoogleOAuthService(
         HttpClient http,
         IOptions<GoogleOAuthSettings> settings,
