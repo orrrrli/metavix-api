@@ -370,10 +370,10 @@ public class AuthModule : MainModule, ICarterModule
         IConfiguration configuration,
         IOptions<AppSettings> appSettings)
     {
-        string frontendUrl = appSettings.Value.AppBaseUrl;
+        string appBaseUrl = appSettings.Value.AppBaseUrl;
 
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
-            return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+            return Results.Redirect($"{appBaseUrl}/login?error=oauth_failed");
 
         try
         {
@@ -381,7 +381,7 @@ public class AuthModule : MainModule, ICarterModule
                 new GoogleCallbackCommand(code, state));
 
             if (result.IsError)
-                return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+                return Results.Redirect($"{appBaseUrl}/login?error=oauth_failed");
 
             LoginResult login = result.Value;
 
@@ -389,11 +389,11 @@ public class AuthModule : MainModule, ICarterModule
             httpContext.Response.Cookies.Append("refresh_token", login.RefreshToken, RefreshTokenCookie(configuration));
             httpContext.Response.Cookies.Append(SessionCookieName, "1",             SessionCookie(configuration));
 
-            return Results.Redirect($"{frontendUrl}/auth/callback");
+            return Results.Redirect($"{appBaseUrl}/auth/callback");
         }
         catch
         {
-            return Results.Redirect($"{frontendUrl}/login?error=oauth_failed");
+            return Results.Redirect($"{appBaseUrl}/login?error=oauth_failed");
         }
     }
 
