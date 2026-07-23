@@ -5,7 +5,8 @@ using Contracts.Patient.Request;
 
 namespace API.IntegrationTests.PatientProfile;
 
-public class UpdatePatientProfileIntegrationTests : IClassFixture<CustomWebApplicationFactory>
+[Collection(IntegrationTestCollection.Name)]
+public class UpdatePatientProfileIntegrationTests
 {
     private readonly CustomWebApplicationFactory _factory;
 

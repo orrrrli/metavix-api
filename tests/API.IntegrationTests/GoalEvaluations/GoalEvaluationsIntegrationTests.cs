@@ -2,7 +2,8 @@ using System.Net.Http.Json;
 
 namespace API.IntegrationTests.GoalEvaluations;
 
-public class GoalEvaluationsIntegrationTests : IClassFixture<CustomWebApplicationFactory>
+[Collection(IntegrationTestCollection.Name)]
+public class GoalEvaluationsIntegrationTests
 {
     private readonly CustomWebApplicationFactory _factory;
 
