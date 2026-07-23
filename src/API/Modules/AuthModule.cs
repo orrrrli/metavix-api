@@ -361,6 +361,9 @@ public class AuthModule : MainModule, ICarterModule
         return Results.Redirect(authUrl);
     }
 
+    // AppBaseUrl uses IOptions<AppSettings> instead of IConfiguration (unlike the cookie
+    // helpers below) because it's shared with Application (ForgotPasswordCommandHandler) via
+    // the AppSettings contract; cookie keys are local to this file only.
     private static async Task<IResult> HandleGoogleCallback(
         [FromQuery] string? code,
         [FromQuery] string? state,
