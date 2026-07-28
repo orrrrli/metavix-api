@@ -3,6 +3,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Patient.Common;
+using Application.UseCases.Patient.Mappers;
 using Application.UseCases.Patient.Queries;
 using MediatR;
 
@@ -28,11 +29,7 @@ public class PatientByDoctorIdQueryHandler(
 
         var accepted = await requestRepository.GetAcceptedByDoctorIdAsync(request.doctorId);
 
-        var result = accepted.Select(r => new PatientResult(
-            r.Patient.Id,
-            r.Patient.FirstName,
-            r.Patient.LastName,
-            r.Patient.MedicalRecordNumber)).ToList();
+        var result = accepted.Select(r => PatientResultMapper.ToResult(r.Patient)).ToList();
 
         return result;
     }

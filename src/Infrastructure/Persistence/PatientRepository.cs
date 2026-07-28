@@ -1,5 +1,4 @@
 using Application.Common.Interfaces.Persistence;
-using Application.UseCases.Patient.Common;
 
 namespace Infrastructure.Persistence;
 
@@ -10,20 +9,6 @@ public class PatientRepository : IPatientRepository
     public PatientRepository(AppDbContext dbContext)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    }
-
-    public async Task<PatientResult?> GetPatientByPatientId(Guid patientId)
-    {
-        var patient = await _dbContext.Patients
-            .FirstOrDefaultAsync(x => x.Id == patientId);
-
-        if (patient is null) return null;
-
-        return new PatientResult(
-            patient.Id,
-            patient.FirstName,
-            patient.LastName,
-            patient.MedicalRecordNumber);
     }
 
     public async Task<Patient?> GetByIdAsync(Guid patientId)

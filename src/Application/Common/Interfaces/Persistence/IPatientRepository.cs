@@ -1,11 +1,8 @@
-using Application.UseCases.Patient.Common;
-
 namespace Application.Common.Interfaces.Persistence;
 
 /// <remarks>
 /// CT-less methods (intentionally, for now — repository-wide pass deferred):
 /// <list type="bullet">
-///   <item><description><c>GetPatientByPatientId</c></description></item>
 ///   <item><description><c>GetByIdAsync</c></description></item>
 ///   <item><description><c>UpdateAsync</c></description></item>
 /// </list>
@@ -15,10 +12,10 @@ namespace Application.Common.Interfaces.Persistence;
 /// force callers to propagate the request token). The handler call sites
 /// already have a <c>cancellationToken</c> in scope, so propagation is
 /// mechanical.
-/// The current call sites for any of the above can be enumerated with
+/// The current call sites for either of the above can be enumerated with
 /// <c>git grep "_patientRepository\.GetByIdAsync"</c> from the repo root
-/// (and similar for the other two methods).
-/// TODO: repository-wide CT-propagation pass (sweep all 3 CT-less methods to
+/// (and similarly for <c>UpdateAsync</c>).
+/// TODO: repository-wide CT-propagation pass (sweep both CT-less methods to
 /// trailing <c>CancellationToken cancellationToken</c>, no default; matches
 /// <c>GetByUserIdAsync</c> / <c>GetOwnedPatientAsync</c> below). The same
 /// gap exists on <c>IDailyRecordRepository</c> and <c>ILabResultRepository</c>
@@ -26,7 +23,6 @@ namespace Application.Common.Interfaces.Persistence;
 /// </remarks>
 public interface IPatientRepository
 {
-    Task<PatientResult?> GetPatientByPatientId(Guid patientId);
     Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId);
     Task UpdateAsync(Domain.Models.Patient patient);
     Task<Guid?> GetPatientIdByUserIdAsync(Guid userId);
