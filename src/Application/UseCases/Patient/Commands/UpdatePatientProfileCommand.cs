@@ -9,4 +9,4 @@ public sealed record UpdatePatientProfileCommand(
     decimal? HeightCm,
     string? Phone,
     DateOnly? PregnancyStartDate,
-    DateOnly? PregnancyDueDate) : ITransactionalCommand<ErrorOr<PatientProfileResult>>;
+    DateOnly? PregnancyDueDate) : ICommand<ErrorOr<PatientProfileResult>>;

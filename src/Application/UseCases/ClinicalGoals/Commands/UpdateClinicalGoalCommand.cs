@@ -10,4 +10,4 @@ public sealed record UpdateClinicalGoalCommand(
     decimal? CustomOutOfRangeLow,
     decimal? CustomAtRiskLow,
     decimal? CustomAtRiskHigh,
-    decimal? CustomOutOfRangeHigh) : ITransactionalCommand<ErrorOr<ClinicalGoalResult>>;
+    decimal? CustomOutOfRangeHigh) : ICommand<ErrorOr<ClinicalGoalResult>>;

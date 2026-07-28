@@ -11,4 +11,4 @@ public sealed record RegisterDoctorCommand(
     string Email,
     string Password,
     string LicenseNumber,
-    string Speciality) : ITransactionalCommand<ErrorOr<RegisterResult>>;
+    string Speciality) : ICommand<ErrorOr<RegisterResult>>;

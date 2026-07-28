@@ -15,4 +15,4 @@ public sealed record AddLabResultCommand(
     decimal? Bun,
     string? EgoProteins,
     string? EgoGlucose,
-    string? Notes) : ITransactionalCommand<ErrorOr<LabResultResult>>;
+    string? Notes) : ICommand<ErrorOr<LabResultResult>>;

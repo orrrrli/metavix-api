@@ -11,4 +11,4 @@ public sealed record AddInsulinRecordCommand(
     decimal? TotalCarbs,
     decimal? DoseApplied,
     string? MealDescription,
-    string? HowIFelt) : ITransactionalCommand<ErrorOr<InsulinDm1RecordResult>>;
+    string? HowIFelt) : ICommand<ErrorOr<InsulinDm1RecordResult>>;

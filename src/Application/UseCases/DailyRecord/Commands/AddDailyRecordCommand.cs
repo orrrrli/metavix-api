@@ -21,4 +21,4 @@ public sealed record AddDailyRecordCommand(
     decimal? WeightKg,
     int? WaistCm,
     string? Notes,
-    List<GlucoseReading>? GlucoseReadings) : ITransactionalCommand<ErrorOr<DailyRecordResult>>;
+    List<GlucoseReading>? GlucoseReadings) : ICommand<ErrorOr<DailyRecordResult>>;

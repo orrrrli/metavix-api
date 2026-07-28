@@ -4,4 +4,4 @@ namespace Application.UseCases.InsulinDm1.Commands;
 
 public sealed record DeleteInsulinRecordCommand(
     Guid PatientId,
-    Guid RecordId) : ITransactionalCommand<ErrorOr<Deleted>>;
+    Guid RecordId) : ICommand<ErrorOr<Deleted>>;

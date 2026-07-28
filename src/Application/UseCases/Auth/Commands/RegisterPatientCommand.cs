@@ -7,4 +7,4 @@ public sealed record RegisterPatientCommand(
     string FirstName,
     string LastName,
     string Email,
-    string Password) : ITransactionalCommand<ErrorOr<RegisterResult>>;
+    string Password) : ICommand<ErrorOr<RegisterResult>>;

@@ -14,8 +14,11 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 
         // Registration order = pipeline order (MediatR 11 has no AddOpenBehavior).
-        // Validation runs before the transaction opens.
+        // Validation runs before persistence. ICommand and ITransactionalCommand
+        // are mutually exclusive sibling markers (see their remarks), so a given
+        // request only ever matches one of PersistenceBehavior/TransactionBehavior.
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(PersistenceBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
 
         services.AddSingleton<IEgfrCalculator, EgfrCalculator>();

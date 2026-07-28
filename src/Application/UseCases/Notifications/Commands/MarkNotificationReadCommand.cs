@@ -5,7 +5,7 @@ using Application.Common.Messaging;
 
 namespace Application.UseCases.Notifications.Commands;
 
-public sealed record MarkNotificationReadCommand(Guid NotificationId) : ITransactionalCommand<ErrorOr<Success>>;
+public sealed record MarkNotificationReadCommand(Guid NotificationId) : ICommand<ErrorOr<Success>>;
 
 internal sealed class MarkNotificationReadCommandHandler
     : IRequestHandler<MarkNotificationReadCommand, ErrorOr<Success>>

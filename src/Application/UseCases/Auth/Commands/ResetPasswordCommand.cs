@@ -4,4 +4,4 @@ namespace Application.UseCases.Auth.Commands;
 
 public sealed record ResetPasswordCommand(
     string Token,
-    string NewPassword) : ITransactionalCommand<ErrorOr<Unit>>;
+    string NewPassword) : ICommand<ErrorOr<Unit>>;

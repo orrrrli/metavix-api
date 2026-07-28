@@ -10,4 +10,4 @@ public sealed record UpsertInsulinProfileCommand(
     int? SensitivityFactor,
     int? TargetGlucose,
     string? DoctorName,
-    string? DoctorPhone) : ITransactionalCommand<ErrorOr<InsulinDm1ProfileResult>>;
+    string? DoctorPhone) : ICommand<ErrorOr<InsulinDm1ProfileResult>>;

@@ -5,4 +5,4 @@ namespace Application.UseCases.LinkRequest.Commands;
 
 public sealed record SendLinkRequestCommand(
     Guid PatientId,
-    Guid DoctorId) : ITransactionalCommand<ErrorOr<LinkRequestResult>>;
+    Guid DoctorId) : ICommand<ErrorOr<LinkRequestResult>>;
