@@ -116,6 +116,7 @@ public static class DependencyInjection
             }
         });
 
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddRepositories();
         services
