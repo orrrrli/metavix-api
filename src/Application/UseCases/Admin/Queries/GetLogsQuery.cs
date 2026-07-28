@@ -1,5 +1,6 @@
 using Application.Common.Models;
 using Application.UseCases.Admin.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.Admin.Queries;
 
@@ -10,4 +11,4 @@ public record GetLogsQuery(
     DateTime? From,
     DateTime? To,
     int Page,
-    int PageSize) : IRequest<ErrorOr<PaginatedResult<LogEntryResult>>>;
+    int PageSize) : IQuery<ErrorOr<PaginatedResult<LogEntryResult>>>;

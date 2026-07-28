@@ -1,10 +1,11 @@
 using Application.Common.Authorization;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.Notifications.Commands;
 
-public sealed record MarkNotificationReadCommand(Guid NotificationId) : IRequest<ErrorOr<Success>>;
+public sealed record MarkNotificationReadCommand(Guid NotificationId) : ITransactionalCommand<ErrorOr<Success>>;
 
 internal sealed class MarkNotificationReadCommandHandler
     : IRequestHandler<MarkNotificationReadCommand, ErrorOr<Success>>

@@ -1,4 +1,5 @@
 using Application.UseCases.MrnSuggestion.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.MrnSuggestion.Queries;
 
@@ -9,4 +10,4 @@ namespace Application.UseCases.MrnSuggestion.Queries;
 /// DB index when the value is finally accepted.
 /// </summary>
 public sealed record GetMrnSuggestionQuery(
-    int Year) : IRequest<ErrorOr<MrnSuggestionResult>>;
+    int Year) : IQuery<ErrorOr<MrnSuggestionResult>>;
