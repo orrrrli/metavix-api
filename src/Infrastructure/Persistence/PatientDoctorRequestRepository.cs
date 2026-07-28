@@ -16,12 +16,16 @@ public class PatientDoctorRequestRepository : IPatientDoctorRequestRepository
     public async Task AddAsync(PatientDoctorRequest request)
     {
         await _dbContext.PatientDoctorRequests.AddAsync(request);
-        await _dbContext.SaveChangesAsync();
     }
 
+    // AsTracking: callers (Accept/Reject/Revoke/Unlink handlers) mutate the
+    // returned request's state via Accept()/Reject()/Revoke()/Unlink() and
+    // rely on MarkForUpdate + IUnitOfWork.FlushAsync — see AppDbContext's
+    // global QueryTrackingBehavior.NoTracking default.
     public async Task<PatientDoctorRequest?> GetByIdAsync(Guid id)
     {
         return await _dbContext.PatientDoctorRequests
+            .AsTracking()
             .FirstOrDefaultAsync(r => r.Id == id);
     }
 
@@ -77,34 +81,19 @@ public class PatientDoctorRequestRepository : IPatientDoctorRequestRepository
                         && r.Status == RequestStatus.Accepted, cancellationToken);
     }
 
-    public async Task<bool> UpdateAsync(PatientDoctorRequest request)
+    public void MarkForUpdate(PatientDoctorRequest request)
     {
-        // GetByIdAsync loads tracked entities (no AsNoTracking), so Accept /
-        // Reject / Revoke mutate 2-3 properties and the change tracker already
-        // knows which columns changed — it will emit a targeted UPDATE. Calling
-        // .Update() here would instead mark every property Modified and rewrite
-        // all columns. Only attach when the instance is detached.
+        // request is already tracked (loaded via GetByIdAsync, AsTracking),
+        // so the change tracker already knows which columns Accept/Reject/
+        // Revoke/Unlink changed — it will emit a targeted UPDATE without
+        // needing an explicit .Update() call.
         var entry = _dbContext.Entry(request);
-        if (entry.State == EntityState.Detached)
-            _dbContext.PatientDoctorRequests.Update(request);
 
         // Bump the optimistic-concurrency token so the emitted UPDATE both
         // writes a new Version and carries `WHERE "Version" = @original` (EF
         // uses the original value it read). A concurrent writer that already
-        // committed leaves @original stale → zero rows updated → conflict.
+        // committed leaves @original stale → zero rows updated → the caller's
+        // IUnitOfWork.FlushAsync throws ConcurrencyConflictException.
         entry.Property<long>("Version").CurrentValue += 1;
-
-        try
-        {
-            await _dbContext.SaveChangesAsync();
-            return true;
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // A concurrent caller committed a competing transition first (the
-            // xmin token no longer matches). The handler translates false into
-            // the appropriate not-in-expected-state error.
-            return false;
-        }
     }
 }

@@ -1,3 +1,4 @@
+using Application.Common.Exceptions;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Handlers;
 
@@ -12,6 +13,8 @@ public class RevokeDoctorAccessCommandHandlerTests
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
+    private readonly IUnitOfWork _unitOfWork =
+        Substitute.For<IUnitOfWork>();
 
     private readonly RevokeDoctorAccessCommandHandler _handler;
 
@@ -21,9 +24,8 @@ public class RevokeDoctorAccessCommandHandlerTests
             _requestRepository,
             _patientRepository,
             _currentUser,
-            _timeProvider);
-
-        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
+            _timeProvider,
+            _unitOfWork);
     }
 
     [Fact]
@@ -52,10 +54,11 @@ public class RevokeDoctorAccessCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Status.Should().Be("Revoked");
-        await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
-            r.Status == RequestStatus.Revoked && r.ResolvedAt == now));
-        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.PrimaryDoctorId == null && p.MedicalRecordNumber == mrn));
+        linkRequest.Status.Should().Be(RequestStatus.Revoked);
+        linkRequest.ResolvedAt.Should().Be(now);
+        _requestRepository.Received(1).MarkForUpdate(linkRequest);
+        patient.PrimaryDoctorId.Should().BeNull();
+        patient.MedicalRecordNumber.Should().Be(mrn);
     }
 
     [Fact]
@@ -81,8 +84,8 @@ public class RevokeDoctorAccessCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(LinkRequestErrors.NotAccepted.Code);
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        await _unitOfWork.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -107,7 +110,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
         await _patientRepository.DidNotReceive().GetOwnedPatientAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
     }
 
     [Fact]
@@ -133,7 +136,7 @@ public class RevokeDoctorAccessCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
     }
 
     [Fact]
@@ -161,8 +164,8 @@ public class RevokeDoctorAccessCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        await _unitOfWork.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -203,5 +206,33 @@ public class RevokeDoctorAccessCommandHandlerTests
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
         await _requestRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenFlushThrowsConcurrencyConflict_ReturnsNotAcceptedWithoutMutatingPatient()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
+        var patient = TestEntities.Patient(patientId, primaryDoctorId: doctorId);
+
+        _currentUser.UserId.Returns(userId);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _patientRepository.GetOwnedPatientAsync(patientId, userId, Arg.Any<CancellationToken>())
+            .Returns(patient);
+        _unitOfWork.FlushAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
+
+        // Act
+        var result = await _handler.Handle(new RevokeDoctorAccessCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be(LinkRequestErrors.NotAccepted.Code);
+        patient.PrimaryDoctorId.Should().Be(doctorId);
     }
 }

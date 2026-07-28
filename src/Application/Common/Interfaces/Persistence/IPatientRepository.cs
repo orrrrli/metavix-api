@@ -4,7 +4,6 @@ namespace Application.Common.Interfaces.Persistence;
 /// CT-less methods (intentionally, for now — repository-wide pass deferred):
 /// <list type="bullet">
 ///   <item><description><c>GetByIdAsync</c></description></item>
-///   <item><description><c>UpdateAsync</c></description></item>
 /// </list>
 /// When the pass that retires this remark lands, every method above should
 /// take a trailing <c>CancellationToken cancellationToken</c> (no default —
@@ -23,8 +22,11 @@ namespace Application.Common.Interfaces.Persistence;
 /// </remarks>
 public interface IPatientRepository
 {
+    // No UpdateAsync: GetByIdAsync/GetOwnedPatientAsync return tracked
+    // entities (AsTracking, since AppDbContext defaults to NoTracking
+    // globally) — PersistenceBehavior commits mutations via IUnitOfWork
+    // after the handler returns success.
     Task<Domain.Models.Patient?> GetByIdAsync(Guid patientId);
-    Task UpdateAsync(Domain.Models.Patient patient);
     Task<Guid?> GetPatientIdByUserIdAsync(Guid userId);
 
     /// <remarks>

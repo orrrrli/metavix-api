@@ -15,7 +15,6 @@ public class DailyRecordRepository : IDailyRecordRepository
     public async Task AddAsync(DailyRecord record, CancellationToken cancellationToken = default)
     {
         await _dbContext.DailyRecords.AddAsync(record, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<List<DailyRecord>> GetAllByPatientIdAsync(Guid patientId)

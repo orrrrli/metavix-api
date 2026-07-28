@@ -256,7 +256,6 @@ public class UpdatePatientProfileHandlerTests
 
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
         _notificationRepository.DidNotReceive().Stage(Arg.Any<Notification>());
     }
 

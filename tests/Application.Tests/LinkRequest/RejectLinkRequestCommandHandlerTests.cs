@@ -1,3 +1,4 @@
+using Application.Common.Exceptions;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Handlers;
 using Domain.Models;
@@ -13,6 +14,8 @@ public class RejectLinkRequestCommandHandlerTests
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
+    private readonly IUnitOfWork _unitOfWork =
+        Substitute.For<IUnitOfWork>();
 
     private readonly RejectLinkRequestCommandHandler _handler;
 
@@ -22,9 +25,8 @@ public class RejectLinkRequestCommandHandlerTests
             _requestRepository,
             _doctorRepository,
             _currentUser,
-            _timeProvider);
-
-        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
+            _timeProvider,
+            _unitOfWork);
     }
 
     [Fact]
@@ -51,8 +53,10 @@ public class RejectLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Status.Should().Be("Rejected");
-        await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
-            r.Status == RequestStatus.Rejected && r.ResolvedAt == now));
+        linkRequest.Status.Should().Be(RequestStatus.Rejected);
+        linkRequest.ResolvedAt.Should().Be(now);
+        _requestRepository.Received(1).MarkForUpdate(linkRequest);
+        await _unitOfWork.Received(1).FlushAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -77,7 +81,8 @@ public class RejectLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("LinkRequest.NotPending");
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        await _unitOfWork.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -102,7 +107,33 @@ public class RejectLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("Auth.Forbidden");
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        await _unitOfWork.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task Handle_WhenFlushThrowsConcurrencyConflict_ReturnsNotPending()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var doctorId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Pending);
+        var doctor = TestEntities.Doctor(doctorId, userId);
+
+        _currentUser.UserId.Returns(userId);
+        _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
+        _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
+        _unitOfWork.FlushAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
+
+        // Act
+        var result = await _handler.Handle(new RejectLinkRequestCommand(requestId), CancellationToken.None);
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("LinkRequest.NotPending");
+    }
 }

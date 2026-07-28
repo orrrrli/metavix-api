@@ -14,9 +14,9 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 
         // Registration order = pipeline order (MediatR 11 has no AddOpenBehavior).
-        // Validation runs before the transactional unit of work opens.
+        // Validation runs before the transaction opens.
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(PersistenceBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
 
         services.AddSingleton<IEgfrCalculator, EgfrCalculator>();
         return services;

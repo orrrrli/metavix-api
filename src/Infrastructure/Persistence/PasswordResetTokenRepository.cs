@@ -15,19 +15,21 @@ public class PasswordResetTokenRepository : IPasswordResetTokenRepository
     public async Task AddAsync(PasswordResetToken token)
     {
         await _dbContext.PasswordResetTokens.AddAsync(token);
-        await _dbContext.SaveChangesAsync();
     }
 
+    // AsTracking: ResetPasswordCommandHandler passes the returned token
+    // straight to MarkAsUsedAsync — see AppDbContext's global
+    // QueryTrackingBehavior.NoTracking default.
     public async Task<PasswordResetToken?> GetByTokenHashAsync(string tokenHash)
     {
         return await _dbContext.PasswordResetTokens
+            .AsTracking()
             .FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
     }
 
-    public async Task MarkAsUsedAsync(PasswordResetToken token)
+    public Task MarkAsUsedAsync(PasswordResetToken token)
     {
         token.UsedAt = DateTime.UtcNow;
-        _dbContext.PasswordResetTokens.Update(token);
-        await _dbContext.SaveChangesAsync();
+        return Task.CompletedTask;
     }
 }

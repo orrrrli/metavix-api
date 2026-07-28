@@ -14,7 +14,6 @@ public class GoalEvaluationRepository : IGoalEvaluationRepository
     public async Task AddAsync(GoalEvaluation evaluation)
     {
         await _dbContext.GoalEvaluations.AddAsync(evaluation);
-        await _dbContext.SaveChangesAsync();
     }
 
     public async Task<GoalEvaluation?> GetLatestByPatientIdAsync(Guid patientId)

@@ -15,7 +15,6 @@ public class LabResultRepository : ILabResultRepository
     public async Task AddAsync(LabResult result)
     {
         await _dbContext.LabResults.AddAsync(result);
-        await _dbContext.SaveChangesAsync();
     }
 
     public async Task<List<LabResult>> GetAllByPatientIdAsync(Guid patientId)
