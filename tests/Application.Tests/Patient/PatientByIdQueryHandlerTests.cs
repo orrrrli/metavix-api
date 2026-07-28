@@ -28,17 +28,23 @@ public class PatientByIdQueryHandlerTests
     {
         // Arrange
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
-        var patient = new PatientResult(patientId, "Jane", "Doe", "MRN-1");
+        var patient = new Patient
+        {
+            Id = patientId,
+            FirstName = "Jane",
+            LastName = "Doe",
+            MedicalRecordNumber = "MRN-1",
+        };
 
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
-        _patientRepository.GetPatientByPatientId(patientId).Returns(patient);
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
 
         // Act
         var result = await _handler.Handle(new PatientByIdQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
 
         // Assert
         result.IsError.Should().BeFalse();
-        result.Value.Should().Be(patient);
+        result.Value.Should().Be(new PatientResult(patientId, "Jane", "Doe", "MRN-1"));
     }
 
     [Fact]
@@ -62,7 +68,7 @@ public class PatientByIdQueryHandlerTests
             otherDoctorId, userId, Arg.Any<CancellationToken>());
         await _requestRepository.DidNotReceive().IsAcceptedLinkAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _patientRepository.DidNotReceive().GetPatientByPatientId(Arg.Any<Guid>());
+        await _patientRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -83,7 +89,7 @@ public class PatientByIdQueryHandlerTests
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
         await _requestRepository.Received(1).IsAcceptedLinkAsync(
             doctorId, patientId, Arg.Any<CancellationToken>());
-        await _patientRepository.DidNotReceive().GetPatientByPatientId(Arg.Any<Guid>());
+        await _patientRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -97,7 +103,7 @@ public class PatientByIdQueryHandlerTests
         // GetLinkedPatientProfileQueryHandler.
         var (userId, doctorId, patientId) = TestIds.DoctorLink();
         DoctorLinkSetup.Authorize(_currentUser, _doctorRepository, _requestRepository, userId, doctorId, patientId);
-        _patientRepository.GetPatientByPatientId(patientId).Returns((PatientResult?)null);
+        _patientRepository.GetByIdAsync(patientId).Returns((Patient?)null);
 
         // Act
         var result = await _handler.Handle(new PatientByIdQuery(DoctorId: doctorId, PatientId: patientId), CancellationToken.None);
@@ -105,6 +111,6 @@ public class PatientByIdQueryHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
-        await _patientRepository.Received(1).GetPatientByPatientId(patientId);
+        await _patientRepository.Received(1).GetByIdAsync(patientId);
     }
 }

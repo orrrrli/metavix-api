@@ -3,6 +3,7 @@ using Application.Common.Errors;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Patient.Common;
+using Application.UseCases.Patient.Mappers;
 using Application.UseCases.Patient.Queries;
 
 namespace Application.UseCases.Patient.Handlers;
@@ -34,10 +35,10 @@ internal sealed class PatientByIdQueryHandler(
         //    by name. A null here is an inconsistent state (a link pointing
         //    at a missing patient), not an enumeration probe — surface
         //    PatientNotFound honestly rather than masking it as Forbidden.
-        PatientResult? result = await patientRepository.GetPatientByPatientId(request.PatientId);
-        if (result is null)
+        var patient = await patientRepository.GetByIdAsync(request.PatientId);
+        if (patient is null)
             return PatientErrors.PatientNotFound;
 
-        return result;
+        return PatientResultMapper.ToResult(patient);
     }
 }
