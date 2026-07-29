@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Application.Common.Interfaces.Persistence;
-using Application.Common.Interfaces.Services;
+using Application.Common.Outbox;
 using Application.UseCases.Auth.Commands;
+using Application.UseCases.Auth.Outbox;
 using Domain.Models;
 using Application.Common.Settings;
 using Microsoft.Extensions.Options;
@@ -13,20 +15,20 @@ internal sealed class ForgotPasswordCommandHandler
 {
     private readonly IUserRepository               _userRepository;
     private readonly IPasswordResetTokenRepository _tokenRepository;
-    private readonly IEmailService                 _emailService;
+    private readonly IOutboxRepository             _outboxRepository;
     private readonly TimeProvider                  _timeProvider;
     private readonly string                        _appBaseUrl;
 
     public ForgotPasswordCommandHandler(
         IUserRepository userRepository,
         IPasswordResetTokenRepository tokenRepository,
-        IEmailService emailService,
+        IOutboxRepository outboxRepository,
         TimeProvider timeProvider,
         IOptions<AppSettings> appSettings)
     {
         _userRepository   = userRepository;
         _tokenRepository  = tokenRepository;
-        _emailService     = emailService;
+        _outboxRepository = outboxRepository;
         _timeProvider     = timeProvider;
         _appBaseUrl       = appSettings.Value.AppBaseUrl;
     }
@@ -55,7 +57,18 @@ internal sealed class ForgotPasswordCommandHandler
         string fullName  = user.Patient?.FirstName ?? user.Doctor?.FirstName ?? user.Email;
         string resetLink = $"{_appBaseUrl}/reset-password?token={rawToken}";
 
-        await _emailService.SendPasswordResetEmailAsync(user.Email, fullName, resetLink);
+        var payload = new PasswordResetEmailPayload(user.Email, fullName, resetLink);
+
+        // Tracked on the same DbContext as the token above — PersistenceBehavior's
+        // single trailing SaveChangesAsync commits both rows atomically. The email
+        // is only ever sent once OutboxProcessorService observes the committed row.
+        await _outboxRepository.AddAsync(new OutboxMessage
+        {
+            Id        = Guid.NewGuid(),
+            Type      = OutboxMessageTypes.PasswordResetEmail,
+            Payload   = JsonSerializer.Serialize(payload),
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
+        }, cancellationToken);
 
         return Unit.Value;
     }

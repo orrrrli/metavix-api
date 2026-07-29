@@ -2,8 +2,10 @@ using System.Text;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Security;
 using Application.Common.Interfaces.Services;
+using Application.Common.Outbox;
 using Application.Common.Settings;
 using Infrastructure.HealthChecks;
+using Infrastructure.Outbox;
 using Infrastructure.Persistence;
 using Infrastructure.Security;
 using Infrastructure.Services;
@@ -38,6 +40,9 @@ public static class DependencyInjection
 
         services.Configure<BrevoSettings>(configuration.GetSection(BrevoSettings.SectionName));
         services.AddHttpClient<IEmailService, BrevoEmailService>();
+
+        services.AddScoped<IOutboxMessageHandler, PasswordResetEmailOutboxHandler>();
+        services.AddHostedService<OutboxProcessorService>();
 
         services.Configure<GoogleOAuthSettings>(configuration.GetSection(GoogleOAuthSettings.SectionName));
         services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();

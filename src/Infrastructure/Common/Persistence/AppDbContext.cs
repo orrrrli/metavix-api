@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<GoalEvaluation> GoalEvaluations => Set<GoalEvaluation>();
     public DbSet<GoalEvaluationItem> GoalEvaluationItems => Set<GoalEvaluationItem>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -221,6 +222,14 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(n => n.PatientId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // OutboxMessage configuration
+        modelBuilder.Entity<OutboxMessage>(entity =>
+        {
+            entity.HasIndex(m => new { m.ProcessedAt, m.CreatedAt });
+            entity.Property(m => m.Type).HasMaxLength(100).IsRequired();
+            entity.Property(m => m.Payload).IsRequired();
         });
     }
 }
