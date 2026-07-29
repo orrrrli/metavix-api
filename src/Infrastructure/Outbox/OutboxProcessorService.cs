@@ -19,11 +19,16 @@ public sealed class OutboxProcessorService : BackgroundService
     private const int MaxAttempts = 5;
 
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<OutboxProcessorService> _logger;
 
-    public OutboxProcessorService(IServiceScopeFactory scopeFactory, ILogger<OutboxProcessorService> logger)
+    public OutboxProcessorService(
+        IServiceScopeFactory scopeFactory,
+        TimeProvider timeProvider,
+        ILogger<OutboxProcessorService> logger)
     {
         _scopeFactory = scopeFactory;
+        _timeProvider = timeProvider;
         _logger       = logger;
     }
 
@@ -45,6 +50,7 @@ public sealed class OutboxProcessorService : BackgroundService
             .ToDictionary(h => h.Type);
 
         var messages = await dbContext.OutboxMessages
+            .AsTracking()
             .Where(m => m.ProcessedAt == null && m.Attempts < MaxAttempts)
             .OrderBy(m => m.CreatedAt)
             .Take(BatchSize)
@@ -54,16 +60,18 @@ public sealed class OutboxProcessorService : BackgroundService
         {
             if (!handlers.TryGetValue(message.Type, out var handler))
             {
+                message.Attempts++;
+                message.LastError = $"No IOutboxMessageHandler registered for type '{message.Type}'.";
                 _logger.LogWarning(
-                    "No IOutboxMessageHandler registered for outbox message type {MessageType} (id {MessageId})",
-                    message.Type, message.Id);
+                    "No IOutboxMessageHandler registered for outbox message type {MessageType} (id {MessageId}), attempt {Attempt}/{MaxAttempts}",
+                    message.Type, message.Id, message.Attempts, MaxAttempts);
                 continue;
             }
 
             try
             {
                 await handler.HandleAsync(message.Payload, cancellationToken);
-                message.ProcessedAt = DateTime.UtcNow;
+                message.ProcessedAt = _timeProvider.GetUtcNow().UtcDateTime;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
