@@ -24,27 +24,29 @@ public class ClinicalGoalRepository : IClinicalGoalRepository
         return await _dbContext.ClinicalGoals.FirstOrDefaultAsync(g => g.Id == id);
     }
 
+    // AsTracking: callers (Update/Delete handlers) mutate or remove the
+    // returned goal and rely on PersistenceBehavior to commit — see
+    // AppDbContext's global QueryTrackingBehavior.NoTracking default.
     public async Task<ClinicalGoal?> GetOwnedAsync(Guid goalId, Guid patientId, Guid doctorId)
     {
-        return await _dbContext.ClinicalGoals.FirstOrDefaultAsync(
+        return await _dbContext.ClinicalGoals.AsTracking().FirstOrDefaultAsync(
             g => g.Id == goalId && g.PatientId == patientId && g.DoctorId == doctorId);
     }
 
     public async Task AddAsync(ClinicalGoal goal)
     {
         await _dbContext.ClinicalGoals.AddAsync(goal);
-        await _dbContext.SaveChangesAsync();
     }
 
-    public async Task UpdateAsync(ClinicalGoal goal)
-    {
-        _dbContext.ClinicalGoals.Update(goal);
-        await _dbContext.SaveChangesAsync();
-    }
+    // No-op body: goal is already tracked (loaded via GetByIdAsync/GetOwnedAsync,
+    // no AsNoTracking), so EF's change tracker already recorded the mutated
+    // properties. PersistenceBehavior commits via IUnitOfWork after the handler
+    // returns success — see Application.Common.Behaviors.PersistenceBehavior.
+    public Task UpdateAsync(ClinicalGoal goal) => Task.CompletedTask;
 
-    public async Task DeleteAsync(ClinicalGoal goal)
+    public Task DeleteAsync(ClinicalGoal goal)
     {
         _dbContext.ClinicalGoals.Remove(goal);
-        await _dbContext.SaveChangesAsync();
+        return Task.CompletedTask;
     }
 }

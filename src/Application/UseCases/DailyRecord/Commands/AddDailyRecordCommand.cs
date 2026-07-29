@@ -1,5 +1,6 @@
 using Application.UseCases.DailyRecord.Common;
 using Domain.Enums;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.DailyRecord.Commands;
 
@@ -20,4 +21,4 @@ public sealed record AddDailyRecordCommand(
     decimal? WeightKg,
     int? WaistCm,
     string? Notes,
-    List<GlucoseReading>? GlucoseReadings) : IRequest<ErrorOr<DailyRecordResult>>;
+    List<GlucoseReading>? GlucoseReadings) : ICommand<ErrorOr<DailyRecordResult>>;

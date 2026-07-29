@@ -1,5 +1,6 @@
 using Application.Common.Authorization;
 using Application.Common.Errors;
+using Application.Common.Exceptions;
 using Application.Common.Generators;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
@@ -17,19 +18,22 @@ internal sealed class AcceptLinkRequestCommandHandler
     private readonly IDoctorRepository _doctorRepository;
     private readonly ICurrentUserService _currentUser;
     private readonly TimeProvider _timeProvider;
+    private readonly IUnitOfWork _unitOfWork;
 
     public AcceptLinkRequestCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
         ICurrentUserService currentUser,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IUnitOfWork unitOfWork)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
         _currentUser = currentUser;
         _timeProvider = timeProvider;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -99,22 +103,29 @@ internal sealed class AcceptLinkRequestCommandHandler
             assignedMrn = candidate;
         }
 
-        // 5. Accept the request. UpdateAsync returns false when a concurrent
-        //    acceptance won the optimistic-concurrency race — treat it as
-        //    NotPending and skip the patient mutation so the link isn't applied
-        //    twice.
+        // 5. Accept the request, then flush immediately (inside the
+        //    transaction TransactionBehavior opened) to detect a concurrent
+        //    acceptance before touching the patient — treat a conflict the
+        //    same as NotPending so the link isn't applied twice.
         if (!linkRequest.Accept(now.UtcDateTime))
         {
             return LinkRequestErrors.NotPending;
         }
-        if (!await _requestRepository.UpdateAsync(linkRequest))
+        _requestRepository.MarkForUpdate(linkRequest);
+        try
+        {
+            await _unitOfWork.FlushAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
         {
             return LinkRequestErrors.NotPending;
         }
 
-        // 6. Link the patient to the doctor and assign the MRN
+        // 6. Link the patient to the doctor and assign the MRN. patient was
+        //    loaded via GetByIdAsync (AsTracking) above — the mutation is
+        //    picked up by EF's change tracker and committed by the final
+        //    SaveChangesAsync + commit in TransactionBehavior.
         patient.AssignDoctorAndMrn(linkRequest.DoctorId, assignedMrn, now.UtcDateTime);
-        await _patientRepository.UpdateAsync(patient);
 
         return new LinkRequestResult(
             linkRequest.Id,

@@ -1,4 +1,5 @@
 using Application.UseCases.Patient.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.Patient.Commands;
 
@@ -8,4 +9,4 @@ public sealed record UpdatePatientProfileCommand(
     decimal? HeightCm,
     string? Phone,
     DateOnly? PregnancyStartDate,
-    DateOnly? PregnancyDueDate) : IRequest<ErrorOr<PatientProfileResult>>;
+    DateOnly? PregnancyDueDate) : ICommand<ErrorOr<PatientProfileResult>>;

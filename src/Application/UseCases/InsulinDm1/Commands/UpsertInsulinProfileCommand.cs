@@ -1,4 +1,5 @@
 using Application.UseCases.InsulinDm1.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.InsulinDm1.Commands;
 
@@ -9,4 +10,4 @@ public sealed record UpsertInsulinProfileCommand(
     int? SensitivityFactor,
     int? TargetGlucose,
     string? DoctorName,
-    string? DoctorPhone) : IRequest<ErrorOr<InsulinDm1ProfileResult>>;
+    string? DoctorPhone) : ICommand<ErrorOr<InsulinDm1ProfileResult>>;

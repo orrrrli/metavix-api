@@ -1,5 +1,6 @@
 using Application.Common.Authorization;
 using Application.Common.Errors;
+using Application.Common.Exceptions;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LinkRequest.Commands;
@@ -15,19 +16,22 @@ internal sealed class UnlinkPatientCommandHandler
     private readonly IDoctorRepository _doctorRepository;
     private readonly ICurrentUserService _currentUser;
     private readonly TimeProvider _timeProvider;
+    private readonly IUnitOfWork _unitOfWork;
 
     public UnlinkPatientCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IPatientRepository patientRepository,
         IDoctorRepository doctorRepository,
         ICurrentUserService currentUser,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IUnitOfWork unitOfWork)
     {
         _requestRepository = requestRepository;
         _patientRepository = patientRepository;
         _doctorRepository = doctorRepository;
         _currentUser = currentUser;
         _timeProvider = timeProvider;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -52,27 +56,33 @@ internal sealed class UnlinkPatientCommandHandler
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         // NotAccepted is returned identically whether Unlink() rejected the
-        // state transition or the persisted write lost a concurrency race —
+        // state transition or the flushed write lost a concurrency race —
         // callers don't need to distinguish "wrong state" from "stale write".
+        // Flushing immediately (inside the transaction TransactionBehavior
+        // opened) detects the conflict before the patient is touched.
         if (!linkRequest.Unlink(now))
         {
             return LinkRequestErrors.NotAccepted;
         }
-        if (!await _requestRepository.UpdateAsync(linkRequest))
+        _requestRepository.MarkForUpdate(linkRequest);
+        try
+        {
+            await _unitOfWork.FlushAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
         {
             return LinkRequestErrors.NotAccepted;
         }
 
         // Unlike Revoke, the patient is loaded after persistence, so a missing
         // patient is a no-op rather than Forbidden.
-        // TODO: neither IPatientRepository.GetByIdAsync nor UpdateAsync accept a
-        // CancellationToken yet; thread it through both once the interface is
+        // TODO: IPatientRepository.GetByIdAsync doesn't accept a
+        // CancellationToken yet; thread it through once the interface is
         // extended (same gap in RevokeDoctorAccessCommandHandler).
         var patient = await _patientRepository.GetByIdAsync(linkRequest.PatientId);
         if (patient is not null)
         {
             patient.DetachPrimaryDoctor(linkRequest.DoctorId, clearMrn: true, now);
-            await _patientRepository.UpdateAsync(patient);
         }
 
         return new LinkRequestResult(

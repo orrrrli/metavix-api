@@ -1,6 +1,7 @@
 using Application.UseCases.Patient.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.Patient.Queries;
 
 public sealed record GetPatientResumenQuery(
-    Guid PatientId) : IRequest<ErrorOr<PatientResumenResult>>;
+    Guid PatientId) : IQuery<ErrorOr<PatientResumenResult>>;

@@ -1,3 +1,4 @@
+using Application.Common.Exceptions;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Handlers;
 using Domain.Models;
@@ -15,6 +16,8 @@ public class UnlinkPatientCommandHandlerTests
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
+    private readonly IUnitOfWork _unitOfWork =
+        Substitute.For<IUnitOfWork>();
 
     private readonly UnlinkPatientCommandHandler _handler;
 
@@ -25,9 +28,8 @@ public class UnlinkPatientCommandHandlerTests
             _patientRepository,
             _doctorRepository,
             _currentUser,
-            _timeProvider);
-
-        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
+            _timeProvider,
+            _unitOfWork);
     }
 
     [Fact]
@@ -54,11 +56,11 @@ public class UnlinkPatientCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
         result.Value.Status.Should().Be("Unlinked");
-        await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
-            r.Status == RequestStatus.Unlinked && r.ResolvedAt == now));
-        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.PrimaryDoctorId == null &&
-            p.MedicalRecordNumber == null));
+        linkRequest.Status.Should().Be(RequestStatus.Unlinked);
+        linkRequest.ResolvedAt.Should().Be(now);
+        _requestRepository.Received(1).MarkForUpdate(linkRequest);
+        patient.PrimaryDoctorId.Should().BeNull();
+        patient.MedicalRecordNumber.Should().BeNull();
     }
 
     [Fact]
@@ -83,8 +85,8 @@ public class UnlinkPatientCommandHandlerTests
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(LinkRequestErrors.NotAccepted.Code);
         await _doctorRepository.Received(1).GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>());
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        await _unitOfWork.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
         linkRequest.Status.Should().Be(RequestStatus.Pending);
     }
 
@@ -107,7 +109,7 @@ public class UnlinkPatientCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(AuthErrors.Forbidden.Code);
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
     }
 
     [Fact]
@@ -131,7 +133,7 @@ public class UnlinkPatientCommandHandlerTests
         // even existed would still pass a looser assertion; pin the short-circuit.
         await _doctorRepository.DidNotReceive().GetOwnedDoctorAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
     }
 
     [Fact]
@@ -157,21 +159,22 @@ public class UnlinkPatientCommandHandlerTests
         // Act
         var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
 
-        // Assert — pins the actual state transition, not just "some UpdateAsync
-        // happened" (a swap to Revoke() would otherwise still pass this test).
+        // Assert — pins the actual state transition, not just "some
+        // MarkForUpdate happened" (a swap to Revoke() would otherwise still
+        // pass this test).
         result.IsError.Should().BeFalse();
-        await _requestRepository.Received(1).UpdateAsync(
-            Arg.Is<PatientDoctorRequest>(r => r.Status == RequestStatus.Unlinked));
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        linkRequest.Status.Should().Be(RequestStatus.Unlinked);
+        _requestRepository.Received(1).MarkForUpdate(linkRequest);
     }
 
     [Fact]
-    public async Task Handle_WhenUpdateAsyncFails_ReturnsNotAcceptedWithoutTouchingPatient()
+    public async Task Handle_WhenFlushThrowsConcurrencyConflict_ReturnsNotAcceptedWithoutTouchingPatient()
     {
         // Arrange — the request transitions in memory (Unlink() succeeds) but
-        // persistence loses a concurrency race, so UpdateAsync returns false.
-        // The patient must not be touched: only a persisted transition should
-        // trigger the doctor detach.
+        // the intermediate flush loses a concurrency race, so FlushAsync
+        // throws ConcurrencyConflictException. The patient must not be
+        // touched: only a persisted transition should trigger the doctor
+        // detach.
         var (userId, doctorId, patientId, requestId) = TestIds.LinkRequest();
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId, RequestStatus.Accepted);
@@ -180,7 +183,8 @@ public class UnlinkPatientCommandHandlerTests
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(false);
+        _unitOfWork.FlushAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
 
         // Act
         var result = await _handler.Handle(new UnlinkPatientCommand(requestId), CancellationToken.None);
@@ -189,13 +193,12 @@ public class UnlinkPatientCommandHandlerTests
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(LinkRequestErrors.NotAccepted.Code);
         await _patientRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
 
     [Fact]
     public async Task Handle_WhenPatientLookupThrowsAfterRequestPersisted_PropagatesException()
     {
-        // Arrange — the request transition already persisted successfully;
+        // Arrange — the request transition already flushed successfully;
         // if the subsequent patient lookup throws (e.g. a DB error), the
         // handler has no null-check to fall back on and the exception must
         // propagate rather than being silently swallowed as a no-op.
@@ -215,8 +218,8 @@ public class UnlinkPatientCommandHandlerTests
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
-        await _requestRepository.Received(1).UpdateAsync(
-            Arg.Is<PatientDoctorRequest>(r => r.Status == RequestStatus.Unlinked));
+        linkRequest.Status.Should().Be(RequestStatus.Unlinked);
+        _requestRepository.Received(1).MarkForUpdate(linkRequest);
     }
 
     [Fact]
@@ -234,6 +237,5 @@ public class UnlinkPatientCommandHandlerTests
         await _requestRepository.DidNotReceive().GetByIdAsync(Arg.Any<Guid>());
         await _doctorRepository.DidNotReceive().GetOwnedDoctorAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
     }
 }

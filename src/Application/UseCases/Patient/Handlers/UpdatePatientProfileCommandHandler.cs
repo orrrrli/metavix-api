@@ -100,8 +100,6 @@ internal sealed class UpdatePatientProfileCommandHandler
             });
         }
 
-        await _patientRepository.UpdateAsync(patient);
-
         return PatientProfileMapper.ToResult(patient);
     }
 }

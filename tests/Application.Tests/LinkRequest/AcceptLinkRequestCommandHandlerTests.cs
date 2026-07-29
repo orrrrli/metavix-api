@@ -1,3 +1,4 @@
+using Application.Common.Exceptions;
 using Application.UseCases.LinkRequest.Commands;
 using Application.UseCases.LinkRequest.Common;
 using Application.UseCases.LinkRequest.Handlers;
@@ -15,6 +16,8 @@ public class AcceptLinkRequestCommandHandlerTests
     private readonly ICurrentUserService _currentUser =
         Substitute.For<ICurrentUserService>();
     private readonly FakeTimeProvider _timeProvider = new();
+    private readonly IUnitOfWork _unitOfWork =
+        Substitute.For<IUnitOfWork>();
 
     private readonly AcceptLinkRequestCommandHandler _handler;
 
@@ -25,11 +28,8 @@ public class AcceptLinkRequestCommandHandlerTests
             _patientRepository,
             _doctorRepository,
             _currentUser,
-            _timeProvider);
-
-        // Default: the persist succeeds (no concurrency conflict). Individual
-        // tests override with Returns(false) to exercise the lost-race path.
-        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(true);
+            _timeProvider,
+            _unitOfWork);
     }
 
     [Fact]
@@ -63,10 +63,9 @@ public class AcceptLinkRequestCommandHandlerTests
         result.IsError.Should().BeFalse();
         result.Value.RequestId.Should().Be(requestId);
         result.Value.Status.Should().Be("Accepted");
-        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.MedicalRecordNumber == mrn));
-        await _requestRepository.Received(1).UpdateAsync(Arg.Is<PatientDoctorRequest>(r =>
-            r.Status == RequestStatus.Accepted));
+        patient.MedicalRecordNumber.Should().Be(mrn);
+        linkRequest.Status.Should().Be(RequestStatus.Accepted);
+        _requestRepository.Received(1).MarkForUpdate(linkRequest);
     }
 
     [Fact]
@@ -81,11 +80,12 @@ public class AcceptLinkRequestCommandHandlerTests
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _patientRepository.GetByIdAsync(patientId).Returns(TestEntities.Patient(patientId));
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
         _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(true);
 
         // Act
@@ -95,8 +95,9 @@ public class AcceptLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("LinkRequest.MrnAlreadyAssigned");
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        patient.MedicalRecordNumber.Should().NotBe(mrn);
+        linkRequest.Status.Should().Be(RequestStatus.Pending);
     }
 
     [Fact]
@@ -127,8 +128,8 @@ public class AcceptLinkRequestCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeFalse();
-        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.MedicalRecordNumber == mrn && p.PrimaryDoctorId == doctorId));
+        patient.MedicalRecordNumber.Should().Be(mrn);
+        patient.PrimaryDoctorId.Should().Be(doctorId);
     }
 
     [Fact]
@@ -160,8 +161,8 @@ public class AcceptLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be(PatientErrors.PatientNotFound.Code);
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        await _unitOfWork.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
         linkRequest.Status.Should().Be(RequestStatus.Pending);
     }
 
@@ -192,8 +193,8 @@ public class AcceptLinkRequestCommandHandlerTests
 
         // Assert
         result.IsError.Should().BeFalse();
-        await _patientRepository.Received(1).UpdateAsync(Arg.Is<Patient>(p =>
-            p.MedicalRecordNumber == "MRN-20260711-120000000" && p.PrimaryDoctorId == doctorId));
+        patient.MedicalRecordNumber.Should().Be("MRN-20260711-120000000");
+        patient.PrimaryDoctorId.Should().Be(doctorId);
     }
 
     [Fact]
@@ -231,9 +232,9 @@ public class AcceptLinkRequestCommandHandlerTests
     public async Task Handle_WhenConcurrentAcceptWinsRace_ReturnsNotPendingWithoutLinkingPatient()
     {
         // Arrange — the in-memory state is Pending, but a concurrent acceptance
-        // committed first, so UpdateAsync reports an optimistic-concurrency
-        // conflict (false). The handler must bail out as NotPending and never
-        // apply the patient link twice.
+        // committed first, so the intermediate FlushAsync throws
+        // ConcurrencyConflictException. The handler must bail out as
+        // NotPending and never apply the patient link.
         var userId = Guid.NewGuid();
         var doctorId = Guid.NewGuid();
         var patientId = Guid.NewGuid();
@@ -242,13 +243,15 @@ public class AcceptLinkRequestCommandHandlerTests
 
         var linkRequest = TestEntities.LinkRequest(requestId, patientId, doctorId);
         var doctor = TestEntities.Doctor(doctorId, licenseNumber: "12345678", isVerified: true);
+        var patient = TestEntities.Patient(patientId);
 
         _currentUser.UserId.Returns(userId);
         _doctorRepository.GetOwnedDoctorAsync(doctorId, userId, Arg.Any<CancellationToken>()).Returns(doctor);
         _requestRepository.GetByIdAsync(requestId).Returns(linkRequest);
-        _patientRepository.GetByIdAsync(patientId).Returns(TestEntities.Patient(patientId));
+        _patientRepository.GetByIdAsync(patientId).Returns(patient);
         _patientRepository.ExistsByMedicalRecordNumberAsync(mrn, Arg.Any<CancellationToken>()).Returns(false);
-        _requestRepository.UpdateAsync(Arg.Any<PatientDoctorRequest>()).Returns(false);
+        _unitOfWork.FlushAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
 
         // Act
         var result = await _handler.Handle(new AcceptLinkRequestCommand(requestId, mrn), CancellationToken.None);
@@ -256,7 +259,7 @@ public class AcceptLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("LinkRequest.NotPending");
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        patient.MedicalRecordNumber.Should().NotBe(mrn);
     }
 
     [Fact]
@@ -282,7 +285,7 @@ public class AcceptLinkRequestCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("LinkRequest.NotPending");
-        await _requestRepository.DidNotReceive().UpdateAsync(Arg.Any<PatientDoctorRequest>());
-        await _patientRepository.DidNotReceive().UpdateAsync(Arg.Any<Patient>());
+        _requestRepository.DidNotReceive().MarkForUpdate(Arg.Any<PatientDoctorRequest>());
+        await _unitOfWork.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
     }
 }

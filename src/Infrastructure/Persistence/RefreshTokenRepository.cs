@@ -15,32 +15,33 @@ public class RefreshTokenRepository : IRefreshTokenRepository
     public async Task AddAsync(RefreshToken token)
     {
         await _dbContext.RefreshTokens.AddAsync(token);
-        await _dbContext.SaveChangesAsync();
     }
 
+    // AsTracking: LoginCommandHandler/RefreshCommandHandler/LogoutCommandHandler
+    // pass the returned token straight to RevokeAsync — see AppDbContext's
+    // global QueryTrackingBehavior.NoTracking default.
     public async Task<RefreshToken?> GetByTokenAsync(string token)
     {
         return await _dbContext.RefreshTokens
+            .AsTracking()
             .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.Token == token);
     }
 
-    public async Task RevokeAsync(RefreshToken token)
+    public Task RevokeAsync(RefreshToken token)
     {
         token.IsRevoked = true;
-        _dbContext.RefreshTokens.Update(token);
-        await _dbContext.SaveChangesAsync();
+        return Task.CompletedTask;
     }
 
     public async Task RevokeAllForUserAsync(Guid userId)
     {
         List<RefreshToken> tokens = await _dbContext.RefreshTokens
+            .AsTracking()
             .Where(r => r.UserId == userId && !r.IsRevoked)
             .ToListAsync();
 
         foreach (RefreshToken token in tokens)
             token.IsRevoked = true;
-
-        await _dbContext.SaveChangesAsync();
     }
 }

@@ -12,11 +12,11 @@ public interface IPatientDoctorRequestRepository
     Task<List<PatientDoctorRequest>> GetAcceptedByDoctorIdAsync(Guid doctorId);
     Task<bool> HasPendingRequestAsync(Guid patientId, Guid doctorId);
     Task<bool> IsAcceptedLinkAsync(Guid doctorId, Guid patientId, CancellationToken cancellationToken = default);
-    /// <summary>
-    /// Persists a state transition on a tracked request. Returns false when an
-    /// optimistic-concurrency conflict is detected (another caller committed a
-    /// competing transition first) so the handler can surface the right
-    /// not-in-expected-state error instead of double-applying the change.
-    /// </summary>
-    Task<bool> UpdateAsync(PatientDoctorRequest request);
+
+    /// <remarks>
+    /// Bumps the optimistic-concurrency Version token on a tracked request.
+    /// The caller must flush (IUnitOfWork.FlushAsync) to actually detect a
+    /// conflict — see Application.Common.Exceptions.ConcurrencyConflictException.
+    /// </remarks>
+    void MarkForUpdate(PatientDoctorRequest request);
 }

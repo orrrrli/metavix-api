@@ -1,5 +1,6 @@
 using Application.Common.Authorization;
 using Application.Common.Errors;
+using Application.Common.Exceptions;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.LinkRequest.Commands;
@@ -14,17 +15,20 @@ internal sealed class RejectLinkRequestCommandHandler
     private readonly IDoctorRepository _doctorRepository;
     private readonly ICurrentUserService _currentUser;
     private readonly TimeProvider _timeProvider;
+    private readonly IUnitOfWork _unitOfWork;
 
     public RejectLinkRequestCommandHandler(
         IPatientDoctorRequestRepository requestRepository,
         IDoctorRepository doctorRepository,
         ICurrentUserService currentUser,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IUnitOfWork unitOfWork)
     {
         _requestRepository = requestRepository;
         _doctorRepository = doctorRepository;
         _currentUser = currentUser;
         _timeProvider = timeProvider;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<ErrorOr<LinkRequestResult>> Handle(
@@ -46,12 +50,18 @@ internal sealed class RejectLinkRequestCommandHandler
         if (callerDoctor is null)
             return AuthErrors.Forbidden;
 
-        // 2. Reject the request (fails if not pending)
+        // 2. Reject the request (fails if not pending), then flush to detect
+        //    a concurrent transition that already won the race.
         if (!linkRequest.Reject(_timeProvider.GetUtcNow().UtcDateTime))
         {
             return LinkRequestErrors.NotPending;
         }
-        if (!await _requestRepository.UpdateAsync(linkRequest))
+        _requestRepository.MarkForUpdate(linkRequest);
+        try
+        {
+            await _unitOfWork.FlushAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
         {
             return LinkRequestErrors.NotPending;
         }

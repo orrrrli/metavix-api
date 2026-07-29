@@ -2,10 +2,11 @@ using Application.Common.Authorization;
 using Application.Common.Interfaces.Persistence;
 using Application.Common.Interfaces.Services;
 using Application.UseCases.Notifications.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.Notifications.Queries;
 
-public sealed record GetMyNotificationsQuery : IRequest<ErrorOr<List<NotificationResult>>>;
+public sealed record GetMyNotificationsQuery : IQuery<ErrorOr<List<NotificationResult>>>;
 
 internal sealed class GetMyNotificationsQueryHandler
     : IRequestHandler<GetMyNotificationsQuery, ErrorOr<List<NotificationResult>>>

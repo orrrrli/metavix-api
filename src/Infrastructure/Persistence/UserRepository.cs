@@ -19,9 +19,13 @@ public class UserRepository : IUserRepository
             .FirstOrDefaultAsync(u => u.Email == email);
     }
 
+    // AsTracking: ResetPasswordCommandHandler mutates the returned user and
+    // passes it to UpdateAsync — see AppDbContext's global
+    // QueryTrackingBehavior.NoTracking default.
     public async Task<Domain.Models.User?> GetByIdAsync(Guid id)
     {
         return await _dbContext.Users
+            .AsTracking()
             .Include(u => u.Doctor)
             .Include(u => u.Patient)
             .FirstOrDefaultAsync(u => u.Id == id);
@@ -35,12 +39,7 @@ public class UserRepository : IUserRepository
     public async Task AddAsync(Domain.Models.User user)
     {
         await _dbContext.Users.AddAsync(user);
-        await _dbContext.SaveChangesAsync();
     }
 
-    public async Task UpdateAsync(Domain.Models.User user)
-    {
-        _dbContext.Users.Update(user);
-        await _dbContext.SaveChangesAsync();
-    }
+    public Task UpdateAsync(Domain.Models.User user) => Task.CompletedTask;
 }

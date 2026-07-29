@@ -1,4 +1,5 @@
 using Application.UseCases.ClinicalGoals.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.ClinicalGoals.Commands;
 
@@ -9,4 +10,4 @@ public sealed record UpdateClinicalGoalCommand(
     decimal? CustomOutOfRangeLow,
     decimal? CustomAtRiskLow,
     decimal? CustomAtRiskHigh,
-    decimal? CustomOutOfRangeHigh) : IRequest<ErrorOr<ClinicalGoalResult>>;
+    decimal? CustomOutOfRangeHigh) : ICommand<ErrorOr<ClinicalGoalResult>>;

@@ -1,4 +1,5 @@
 using Application.UseCases.InsulinDm1.Common;
+using Application.Common.Messaging;
 
 namespace Application.UseCases.InsulinDm1.Commands;
 
@@ -10,4 +11,4 @@ public sealed record AddInsulinRecordCommand(
     decimal? TotalCarbs,
     decimal? DoseApplied,
     string? MealDescription,
-    string? HowIFelt) : IRequest<ErrorOr<InsulinDm1RecordResult>>;
+    string? HowIFelt) : ICommand<ErrorOr<InsulinDm1RecordResult>>;

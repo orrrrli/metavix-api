@@ -28,13 +28,12 @@ public class NotificationRepository : INotificationRepository
     public async Task MarkReadAsync(Guid notificationId, Guid userId)
     {
         var notification = await _dbContext.Notifications
+            .AsTracking()
             .FirstOrDefaultAsync(n => n.Id == notificationId && n.RecipientUserId == userId);
 
         if (notification is null)
             return;
 
         notification.IsRead = true;
-        _dbContext.Notifications.Update(notification);
-        await _dbContext.SaveChangesAsync();
     }
 }
