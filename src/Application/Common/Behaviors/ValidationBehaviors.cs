@@ -39,10 +39,10 @@ public class ValidationBehavior<TRequest, TResponse>(IValidator<TRequest>? valid
     }
 
     /// <summary>
-    /// TResponse is always ErrorOr&lt;TValue&gt; at the call sites MediatR builds, but the
+    /// TResponse is always <see cref="ErrorOr{TValue}"/> at the call sites MediatR builds, but
     /// TValue isn't visible in this behavior's own generic parameters (MediatR's open-generic
     /// registration only supplies TRequest/TResponse). This extracts TValue from the closed
-    /// TResponse at runtime and compiles a typed delegate to ErrorOrFactory.From&lt;TValue&gt;,
+    /// TResponse at runtime and compiles a typed delegate to <see cref="ErrorOrFactory.From{TValue}(List{Error})"/>,
     /// cached per TResponse so the reflection cost is paid once, not per request.
     /// </summary>
     private static Func<List<Error>, TResponse> BuildConverter(Type responseType)
